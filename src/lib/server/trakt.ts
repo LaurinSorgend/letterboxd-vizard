@@ -11,6 +11,7 @@ async function traktGet(path: string): Promise<unknown> {
 	const response = await fetch(BASE + path, {
 		headers: {
 			'Content-Type': 'application/json',
+			'User-Agent': 'letterboxd-vizard (+https://codeberg.org/LaurinS/letterboxd-vizard)',
 			'trakt-api-version': '2',
 			'trakt-api-key': env.TRAKT_CLIENT_ID ?? ''
 		}
