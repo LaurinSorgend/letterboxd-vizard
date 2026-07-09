@@ -228,13 +228,13 @@
 	}
 	.pair {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		gap: 32px;
 		align-items: start;
 	}
 	@media (max-width: 900px) {
 		.pair {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 	.unmatched summary {

@@ -55,6 +55,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		min-width: 0;
 	}
 	a:hover {
 		text-decoration: underline;
