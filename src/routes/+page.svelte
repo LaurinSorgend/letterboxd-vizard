@@ -4,6 +4,20 @@
 	import { page } from '$app/state';
 	import FileDrop from '$lib/FileDrop.svelte';
 	import WorldMap from '$lib/viz/WorldMap.svelte';
+	import Columns from '$lib/viz/Columns.svelte';
+	import RankedBars from '$lib/viz/RankedBars.svelte';
+	import RatingGaps from '$lib/viz/RatingGaps.svelte';
+	import StatTiles from '$lib/viz/StatTiles.svelte';
+	import { aggregateCountries } from '$lib/viz/countries';
+	import {
+		byGenre,
+		byLanguage,
+		byPerson,
+		ratingHistogram,
+		releaseDecades,
+		totalRuntimeMinutes,
+		watchesPerYear
+	} from '$lib/viz/stats';
 	import { parseExport } from '$lib/ingest/parse';
 	import { enrichFilms } from '$lib/ingest/enrich';
 	import type { EnrichedFilm, LetterboxdData } from '$lib/types';
@@ -16,6 +30,20 @@
 	let errorMessage: string | null = $state(null);
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
+
+	const tiles = $derived.by(() => {
+		const ratings = films.map((f) => f.rating).filter((r): r is number => r !== null);
+		const avg = ratings.length
+			? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(2)
+			: '—';
+		const hours = Math.round(totalRuntimeMinutes(films) / 60);
+		return [
+			{ label: 'Films watched', value: String(films.length) },
+			{ label: 'Hours watched', value: hours.toLocaleString('en') },
+			{ label: 'Countries', value: String(aggregateCountries(films).size) },
+			{ label: 'Your average rating', value: avg }
+		];
+	});
 
 	onMount(async () => {
 		if (dev && page.url.searchParams.has('demo')) {
@@ -71,9 +99,64 @@
 			{/if}
 		</div>
 	{:else}
+		<StatTiles {tiles} />
+
 		<section>
 			<h2>Your films around the world</h2>
 			<WorldMap {films} />
+		</section>
+
+		<section>
+			<h2>Rating habits</h2>
+			<div class="pair">
+				<div>
+					<h3>How you rate</h3>
+					<Columns data={ratingHistogram(films)} description="Number of films per rating step" />
+				</div>
+				<RatingGaps {films} />
+			</div>
+		</section>
+
+		<section>
+			<h2>Through the years</h2>
+			<div class="pair">
+				<div>
+					<h3>Watches per year (diary)</h3>
+					<Columns data={watchesPerYear(films)} description="Diary entries per year" />
+				</div>
+				<div>
+					<h3>Films by release decade</h3>
+					<Columns data={releaseDecades(films)} description="Films per release decade" />
+				</div>
+			</div>
+		</section>
+
+		<section>
+			<h2>Genres &amp; languages</h2>
+			<div class="pair">
+				<div>
+					<h3>Genres</h3>
+					<RankedBars data={byGenre(films)} showAvg description="Films and average rating per genre" />
+				</div>
+				<div>
+					<h3>Original language</h3>
+					<RankedBars data={byLanguage(films)} showAvg description="Films and average rating per language" />
+				</div>
+			</div>
+		</section>
+
+		<section>
+			<h2>People</h2>
+			<div class="pair">
+				<div>
+					<h3>Most-watched directors</h3>
+					<RankedBars data={byPerson(films, 'directors')} showAvg description="Films and average rating per director" />
+				</div>
+				<div>
+					<h3>Most-watched actors</h3>
+					<RankedBars data={byPerson(films, 'cast')} showAvg description="Films and average rating per actor" />
+				</div>
+			</div>
 		</section>
 
 		{#if unmatched.length > 0}
@@ -128,6 +211,20 @@
 	}
 	section {
 		margin-bottom: 32px;
+	}
+	section:first-of-type {
+		margin-top: 24px;
+	}
+	.pair {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 32px;
+		align-items: start;
+	}
+	@media (max-width: 900px) {
+		.pair {
+			grid-template-columns: 1fr;
+		}
 	}
 	.unmatched summary {
 		cursor: pointer;
