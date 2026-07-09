@@ -183,7 +183,7 @@
 			<ul>
 				{#each topFilms(selected, selected.films.length) as film (film.uri)}
 					<li>
-						<a href={film.uri} target="_blank" rel="noopener">{film.name}</a>
+						<a href={film.uri} target="_blank" rel="noopener" title={film.name}>{film.name}</a>
 						<span class="meta">{film.year ?? ''}</span>
 						{#if film.rating !== null}<span class="value">{film.rating}</span>{/if}
 					</li>
