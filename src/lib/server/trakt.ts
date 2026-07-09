@@ -1,0 +1,50 @@
+import { env } from '$env/dynamic/private';
+import { getRelatedCached, putRelatedCached, type RelatedMovie } from './cache';
+
+const BASE = 'https://api.trakt.tv';
+
+export function traktAvailable(): boolean {
+	return Boolean(env.TRAKT_CLIENT_ID);
+}
+
+async function traktGet(path: string): Promise<unknown> {
+	const response = await fetch(BASE + path, {
+		headers: {
+			'Content-Type': 'application/json',
+			'trakt-api-version': '2',
+			'trakt-api-key': env.TRAKT_CLIENT_ID ?? ''
+		}
+	});
+	if (!response.ok) throw new Error(`Trakt ${path} failed: ${response.status}`);
+	return response.json();
+}
+
+interface TraktMovie {
+	title: string;
+	year: number | null;
+	rating?: number;
+	ids: { slug: string; tmdb: number | null };
+}
+
+/** Related movies for a TMDB id, cached in SQLite for a week. */
+export async function relatedMovies(tmdbId: number): Promise<RelatedMovie[]> {
+	const cached = getRelatedCached(tmdbId);
+	if (cached) return cached;
+
+	const found = (await traktGet(`/search/tmdb/${tmdbId}?type=movie`)) as { movie: TraktMovie }[];
+	const slug = found[0]?.movie.ids.slug;
+	let related: RelatedMovie[] = [];
+	if (slug) {
+		const movies = (await traktGet(`/movies/${slug}/related?limit=15&extended=full`)) as TraktMovie[];
+		related = movies
+			.filter((m) => m.ids.tmdb !== null)
+			.map((m) => ({
+				tmdbId: m.ids.tmdb as number,
+				title: m.title,
+				year: m.year,
+				traktRating: m.rating ?? null
+			}));
+	}
+	putRelatedCached(tmdbId, related);
+	return related;
+}

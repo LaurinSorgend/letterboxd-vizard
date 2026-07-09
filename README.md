@@ -19,6 +19,13 @@ npm run dev
 Get a free TMDB API key at themoviedb.org → Settings → API. Both v3 keys and v4 read
 access tokens work.
 
+Optional extras in `.env`:
+
+- `TRAKT_CLIENT_ID` (trakt.tv → Settings → Your API Apps) enables the
+  "You might like" recommendations section.
+- `TVDB_API_KEY` (thetvdb.com/api-information) adds a last-resort series lookup
+  for titles TMDB doesn't know; without it, TMDB's own TV search is still used.
+
 Get your Letterboxd export at letterboxd.com → Settings → Data → Export your data.
 
 ## Production

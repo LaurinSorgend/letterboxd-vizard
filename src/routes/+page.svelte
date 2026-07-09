@@ -8,6 +8,7 @@
 	import Columns from '$lib/viz/Columns.svelte';
 	import RankedBars from '$lib/viz/RankedBars.svelte';
 	import RatingGaps from '$lib/viz/RatingGaps.svelte';
+	import Recommendations from '$lib/viz/Recommendations.svelte';
 	import StatTiles from '$lib/viz/StatTiles.svelte';
 	import { aggregateCountries } from '$lib/viz/countries';
 	import {
@@ -162,6 +163,8 @@
 				</div>
 			</div>
 		</section>
+
+		<Recommendations {films} />
 
 		{#if unmatched.length > 0}
 			<details class="unmatched">

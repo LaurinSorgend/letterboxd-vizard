@@ -25,6 +25,11 @@ db.exec(`
 		cache_key TEXT PRIMARY KEY,
 		fetched_at INTEGER NOT NULL
 	);
+	CREATE TABLE IF NOT EXISTS trakt_related (
+		tmdb_id INTEGER PRIMARY KEY,
+		data TEXT NOT NULL,
+		fetched_at INTEGER NOT NULL
+	);
 `);
 
 const selectMovie = db.prepare('SELECT data FROM movies WHERE cache_key = ?');
@@ -50,4 +55,27 @@ export function getCached(key: string): TmdbMovie | null | undefined {
 export function putCached(key: string, movie: TmdbMovie | null): void {
 	if (movie) insertMovie.run(key, movie.tmdbId, JSON.stringify(movie), Date.now());
 	else insertMiss.run(key, Date.now());
+}
+
+const RELATED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const selectRelated = db.prepare('SELECT data, fetched_at FROM trakt_related WHERE tmdb_id = ?');
+const insertRelated = db.prepare(
+	'INSERT OR REPLACE INTO trakt_related (tmdb_id, data, fetched_at) VALUES (?, ?, ?)'
+);
+
+export interface RelatedMovie {
+	tmdbId: number;
+	title: string;
+	year: number | null;
+	traktRating: number | null;
+}
+
+export function getRelatedCached(tmdbId: number): RelatedMovie[] | undefined {
+	const hit = selectRelated.get(tmdbId) as { data: string; fetched_at: number } | undefined;
+	if (!hit || Date.now() - hit.fetched_at >= RELATED_TTL_MS) return undefined;
+	return JSON.parse(hit.data) as RelatedMovie[];
+}
+
+export function putRelatedCached(tmdbId: number, related: RelatedMovie[]): void {
+	insertRelated.run(tmdbId, JSON.stringify(related), Date.now());
 }
