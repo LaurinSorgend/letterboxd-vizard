@@ -4,7 +4,6 @@
 	import { geoNaturalEarth1, geoPath } from 'd3-geo';
 	import { feature } from 'topojson-client';
 	import type { Topology, GeometryCollection } from 'topojson-specification';
-	import worldUrl from 'world-atlas/countries-50m.json?url';
 	import { aggregateCountries, numericToAlpha2, type CountryStat } from './countries';
 	import {
 		countThresholds,
@@ -36,7 +35,7 @@
 	const binLabels = $derived(metric === 'count' ? countBinLabels(thresholds) : ratingBinLabels());
 
 	onMount(async () => {
-		const topo = (await (await fetch(worldUrl)).json()) as Topology<{
+		const topo = (await import('world-atlas/countries-50m.json')).default as unknown as Topology<{
 			countries: GeometryCollection<{ name: string }>;
 		}>;
 		const world = feature(topo, topo.objects.countries);
