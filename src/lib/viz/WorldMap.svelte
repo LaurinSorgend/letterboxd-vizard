@@ -4,6 +4,7 @@
 	import { geoNaturalEarth1, geoPath } from 'd3-geo';
 	import { feature } from 'topojson-client';
 	import type { Topology, GeometryCollection } from 'topojson-specification';
+	import CountryRec from './CountryRec.svelte';
 	import { aggregateCountries, numericToAlpha2, type CountryStat } from './countries';
 	import {
 		countThresholds,
@@ -30,6 +31,17 @@
 	let container: HTMLElement | undefined = $state();
 
 	const stats = $derived(aggregateCountries(films));
+	const watchedIds = $derived(
+		films.filter((f) => f.tmdb && f.tmdb.tmdbId > 0).map((f) => f.tmdb!.tmdbId)
+	);
+
+	let presetApplied = false;
+	$effect(() => {
+		const want = page.url.searchParams.get('country');
+		if (presetApplied || !want) return;
+		presetApplied = true;
+		selected = stats.get(want) ?? null;
+	});
 	const maxCount = $derived(Math.max(1, ...[...stats.values()].map((s) => s.count)));
 	const thresholds = $derived(metric === 'count' ? countThresholds(maxCount) : RATING_THRESHOLDS);
 	const binLabels = $derived(metric === 'count' ? countBinLabels(thresholds) : ratingBinLabels());
@@ -179,6 +191,9 @@
 	{#if selected}
 		<div class="panel">
 			<h3>{selected.name} — {selected.count} film{selected.count === 1 ? '' : 's'}</h3>
+			{#key selected.code}
+				<CountryRec stat={selected} exclude={watchedIds} />
+			{/key}
 			<ul>
 				{#each topFilms(selected, selected.films.length) as film (film.uri)}
 					<li>

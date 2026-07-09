@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { EnrichedFilm, TmdbMovie } from '$lib/types';
+	import { pickDiverseSeeds } from './seeds';
 
 	let { films }: { films: EnrichedFilm[] } = $props();
 
@@ -19,11 +20,7 @@
 
 	async function load(current: EnrichedFilm[]) {
 		const watched = current.filter((f) => f.tmdb && f.tmdb.tmdbId > 0);
-		const seeds = watched
-			.filter((f) => f.rating !== null && f.rating >= 3.5 && f.tmdb?.mediaType === 'movie')
-			.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-			.slice(0, 25)
-			.map((f) => ({ tmdbId: f.tmdb!.tmdbId, rating: f.rating! }));
+		const seeds = pickDiverseSeeds(current, 25);
 		if (seeds.length === 0) {
 			status = 'hidden';
 			return;
