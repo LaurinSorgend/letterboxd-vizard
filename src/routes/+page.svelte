@@ -180,9 +180,16 @@
 </main>
 
 <footer>
+	<nav aria-label="Project links">
+		<a href="https://codeberg.org/LaurinS/letterboxd-vizard">Source code</a>
+		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/issues">Report an issue</a>
+		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/pulls">Contribute</a>
+	</nav>
 	<p>
 		Film metadata from <a href="https://www.themoviedb.org">TMDB</a>. This product uses the TMDB
-		API but is not endorsed or certified by TMDB.
+		API but is not endorsed or certified by TMDB. Recommendations powered by
+		<a href="https://trakt.tv">Trakt</a>. Some series data from
+		<a href="https://thetvdb.com">TheTVDB</a>.
 	</p>
 </footer>
 
@@ -252,6 +259,11 @@
 		border-top: 1px solid var(--border);
 		font-size: 0.75rem;
 		color: var(--fg-muted);
+	}
+	footer nav {
+		display: flex;
+		gap: 16px;
+		margin-bottom: 8px;
 	}
 	@media (max-width: 640px) {
 		.unmatched ul {
