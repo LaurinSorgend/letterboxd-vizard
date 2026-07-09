@@ -1,42 +1,31 @@
-# sv
+# Letterboxd Vizard
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Drop your Letterboxd data-export zip and get visualizations of your film history:
+world maps of how many films you watched per country and how you rate them, rating
+habits vs TMDB, watches over time, genres, languages, directors and actors.
 
-## Creating a project
+Your export is parsed entirely in the browser — only film titles and years are sent
+to the server to look up metadata on TMDB. Lookups are cached in SQLite so each film
+is fetched from TMDB at most once, no matter how many users analyze it.
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
+## Setup
 
 ```sh
-# recreate this project
-npx sv@0.16.2 create --template minimal --types ts --install npm app-tmp
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+npm install
+cp .env.example .env   # put your TMDB API key in .env
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
+Get a free TMDB API key at themoviedb.org → Settings → API. Both v3 keys and v4 read
+access tokens work.
 
-To create a production version of your app:
+Get your Letterboxd export at letterboxd.com → Settings → Data → Export your data.
+
+## Production
 
 ```sh
 npm run build
+node build
 ```
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Runs a Node server (adapter-node). The TMDB cache lives in `data/cache.db`.

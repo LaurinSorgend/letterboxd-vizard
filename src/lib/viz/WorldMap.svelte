@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { geoNaturalEarth1, geoPath } from 'd3-geo';
 	import { feature } from 'topojson-client';
 	import type { Topology, GeometryCollection } from 'topojson-specification';
@@ -22,7 +23,9 @@
 
 	type Shape = { code: string | undefined; d: string; centroid: [number, number] };
 	let shapes: Shape[] = $state([]);
-	let metric: 'count' | 'rating' = $state('count');
+	let metric: 'count' | 'rating' = $state(
+		page.url.searchParams.get('metric') === 'rating' ? 'rating' : 'count'
+	);
 	let selected: CountryStat | null = $state(null);
 	let hover: { stat: CountryStat; x: number; y: number } | null = $state(null);
 	let container: HTMLElement | undefined = $state();
