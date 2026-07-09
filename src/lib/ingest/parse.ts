@@ -30,13 +30,14 @@ export function parseExport(zipBytes: Uint8Array): LetterboxdData {
 		throw new Error('watched.csv not found — is this a Letterboxd data export zip?');
 	}
 
+	// Diary and review rows carry per-entry URIs, so films merge by name + year.
 	const films = new Map<string, Film>();
 	const get = (row: Row): Film => {
-		const uri = row['Letterboxd URI'];
-		let film = films.get(uri);
+		const key = `${row['Name']}::${row['Year']}`;
+		let film = films.get(key);
 		if (!film) {
 			film = {
-				uri,
+				uri: row['Letterboxd URI'],
 				name: row['Name'],
 				year: toYear(row['Year']),
 				rating: null,
@@ -46,7 +47,7 @@ export function parseExport(zipBytes: Uint8Array): LetterboxdData {
 				rewatch: false,
 				tags: []
 			};
-			films.set(uri, film);
+			films.set(key, film);
 		}
 		return film;
 	};
