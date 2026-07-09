@@ -6,6 +6,7 @@ export interface BarDatum {
 	avg: number | null;
 	image?: string | null;
 	href?: string;
+	films?: EnrichedFilm[];
 }
 
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
@@ -18,28 +19,41 @@ function avgRating(films: EnrichedFilm[]): number | null {
 
 /** Counts per rating step 0.5–5; steps with no films included. */
 export function ratingHistogram(films: EnrichedFilm[]): BarDatum[] {
-	const counts = new Map<number, number>();
-	for (let r = 0.5; r <= 5; r += 0.5) counts.set(r, 0);
+	const groups = new Map<number, EnrichedFilm[]>();
+	for (let r = 0.5; r <= 5; r += 0.5) groups.set(r, []);
 	for (const film of films) {
-		if (film.rating !== null) counts.set(film.rating, (counts.get(film.rating) ?? 0) + 1);
+		if (film.rating !== null) groups.get(film.rating)?.push(film);
 	}
-	return [...counts].map(([rating, count]) => ({ label: String(rating), count, avg: null }));
+	return [...groups].map(([rating, group]) => ({
+		label: String(rating),
+		count: group.length,
+		avg: null,
+		films: group
+	}));
 }
 
 /** Diary watch events per calendar year, gaps filled with zeros. */
 export function watchesPerYear(films: EnrichedFilm[]): BarDatum[] {
 	const counts = new Map<number, number>();
+	const groups = new Map<number, Set<EnrichedFilm>>();
 	for (const film of films) {
 		for (const date of film.watchedDates) {
 			const year = Number.parseInt(date.slice(0, 4), 10);
-			if (Number.isFinite(year)) counts.set(year, (counts.get(year) ?? 0) + 1);
+			if (!Number.isFinite(year)) continue;
+			counts.set(year, (counts.get(year) ?? 0) + 1);
+			(groups.get(year) ?? groups.set(year, new Set()).get(year))!.add(film);
 		}
 	}
 	if (counts.size === 0) return [];
 	const years = [...counts.keys()];
 	const result: BarDatum[] = [];
 	for (let y = Math.min(...years); y <= Math.max(...years); y++) {
-		result.push({ label: String(y), count: counts.get(y) ?? 0, avg: null });
+		result.push({
+			label: String(y),
+			count: counts.get(y) ?? 0,
+			avg: null,
+			films: [...(groups.get(y) ?? [])]
+		});
 	}
 	return result;
 }
@@ -55,7 +69,12 @@ export function releaseDecades(films: EnrichedFilm[]): BarDatum[] {
 	}
 	return [...groups]
 		.sort(([a], [b]) => a - b)
-		.map(([decade, group]) => ({ label: `${decade}s`, count: group.length, avg: avgRating(group) }));
+		.map(([decade, group]) => ({
+			label: `${decade}s`,
+			count: group.length,
+			avg: avgRating(group),
+			films: group
+		}));
 }
 
 export function totalRuntimeMinutes(films: EnrichedFilm[]): number {
@@ -70,7 +89,7 @@ function grouped(films: EnrichedFilm[], keysOf: (f: EnrichedFilm) => string[]): 
 		}
 	}
 	return [...groups]
-		.map(([label, group]) => ({ label, count: group.length, avg: avgRating(group) }))
+		.map(([label, group]) => ({ label, count: group.length, avg: avgRating(group), films: group }))
 		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
@@ -122,7 +141,8 @@ export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): Bar
 			count: group.films.length,
 			avg: avgRating(group.films),
 			image: group.profilePath ? `https://image.tmdb.org/t/p/w45${group.profilePath}` : null,
-			href: `https://letterboxd.com/${kind}/${letterboxdSlug(name)}/`
+			href: `https://letterboxd.com/${kind}/${letterboxdSlug(name)}/`,
+			films: group.films
 		}))
 		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }

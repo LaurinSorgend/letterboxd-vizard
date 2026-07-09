@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FilmList from './FilmList.svelte';
 	import type { BarDatum } from './stats';
 
 	let {
@@ -9,12 +10,20 @@
 	}: { data: BarDatum[]; limit?: number; showAvg?: boolean; description: string } = $props();
 
 	let expanded = $state(false);
+	let selectedLabel: string | null = $state(null);
 	const rows = $derived(expanded ? data : data.slice(0, limit));
 	const max = $derived(Math.max(1, ...rows.map((d) => d.count)));
 	const hasImages = $derived(data.some((d) => d.image !== undefined));
+	const selected = $derived(
+		selectedLabel === null ? null : (data.find((d) => d.label === selectedLabel) ?? null)
+	);
+
+	function toggle(label: string) {
+		selectedLabel = selectedLabel === label ? null : label;
+	}
 </script>
 
-<div class="chart" class:with-images={hasImages} role="img" aria-label={description}>
+<div class="chart" class:with-images={hasImages} role="group" aria-label={description}>
 	{#each rows as d (d.label)}
 		{#if hasImages}
 			<span class="pic">
@@ -30,19 +39,35 @@
 				{d.label}
 			{/if}
 		</span>
-		<div class="track" title="{d.label}: {d.count}{d.avg !== null ? `, avg ${d.avg.toFixed(1)}` : ''}">
-			<div class="bar" style="width: {(d.count / max) * 100}%"></div>
-			<span class="val">{d.count}</span>
-		</div>
+		{#if d.films}
+			<button
+				type="button"
+				class="track"
+				aria-pressed={selectedLabel === d.label}
+				title="{d.label}: {d.count}{d.avg !== null ? `, avg ${d.avg.toFixed(1)}` : ''} — click to list films"
+				onclick={() => toggle(d.label)}
+			>
+				<span class="bar" style="width: {(d.count / max) * 100}%"></span>
+				<span class="val">{d.count}</span>
+			</button>
+		{:else}
+			<div class="track" title="{d.label}: {d.count}{d.avg !== null ? `, avg ${d.avg.toFixed(1)}` : ''}">
+				<span class="bar" style="width: {(d.count / max) * 100}%"></span>
+				<span class="val">{d.count}</span>
+			</div>
+		{/if}
 		{#if showAvg}
 			<span class="avg">{d.avg !== null ? `★ ${d.avg.toFixed(1)}` : '—'}</span>
 		{/if}
 	{/each}
 </div>
 {#if data.length > limit}
-	<button type="button" onclick={() => (expanded = !expanded)}>
+	<button type="button" class="more" onclick={() => (expanded = !expanded)}>
 		{expanded ? 'Show fewer' : `Show all (${data.length})`}
 	</button>
+{/if}
+{#if selected?.films}
+	<FilmList title={selected.label} films={selected.films} />
 {/if}
 
 <style>
@@ -88,6 +113,16 @@
 		align-items: center;
 		gap: 6px;
 	}
+	button.track {
+		font: inherit;
+		padding: 0;
+		margin: 0;
+		background: transparent;
+		border: none;
+		text-align: left;
+		cursor: pointer;
+		border-radius: 4px;
+	}
 	.bar {
 		height: 14px;
 		min-width: 2px;
@@ -96,6 +131,9 @@
 	}
 	.track:hover .bar {
 		filter: brightness(1.15);
+	}
+	button.track[aria-pressed='true'] .bar {
+		box-shadow: 0 0 0 1.5px var(--fg);
 	}
 	.val {
 		font-size: 0.75rem;
@@ -108,7 +146,7 @@
 		font-variant-numeric: tabular-nums;
 		justify-self: end;
 	}
-	button {
+	.more {
 		margin-top: 8px;
 		padding: 4px 12px;
 		font: inherit;
@@ -119,7 +157,7 @@
 		border-radius: 4px;
 		cursor: pointer;
 	}
-	button:hover {
+	.more:hover {
 		background: var(--surface);
 	}
 </style>
