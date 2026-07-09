@@ -4,7 +4,7 @@ Drop your Letterboxd data-export zip and get visualizations of your film history
 world maps of how many films you watched per country and how you rate them, rating
 habits vs TMDB, watches over time, genres, languages, directors and actors.
 
-Your export is parsed entirely in the browser — only film titles and years are sent
+Your export is parsed entirely in the browser - only film titles and years are sent
 to the server to look up metadata on TMDB. Lookups are cached in SQLite so each film
 is fetched from TMDB at most once, no matter how many users analyze it.
 
@@ -27,6 +27,11 @@ Optional extras in `.env`:
   for titles TMDB doesn't know; without it, TMDB's own TV search is still used.
 
 Get your Letterboxd export at letterboxd.com → Settings → Data → Export your data.
+
+## AI disclaimer
+
+This project was largely written with the help of an AI coding assistant
+(Claude Code), guided, reviewed and tested by a human.
 
 ## Production
 

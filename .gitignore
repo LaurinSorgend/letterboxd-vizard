@@ -32,6 +32,7 @@ letterboxd-*-utc.zip
 # Claude
 .claude
 CLAUDE.md
+DESIGN.md
 
 # Local demo data
 /static/demo-export.zip
