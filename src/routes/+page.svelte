@@ -3,6 +3,7 @@
 	import { dev } from '$app/environment';
 	import { page } from '$app/state';
 	import FileDrop from '$lib/FileDrop.svelte';
+	import ThemeSwitch from '$lib/ThemeSwitch.svelte';
 	import WorldMap from '$lib/viz/WorldMap.svelte';
 	import Columns from '$lib/viz/Columns.svelte';
 	import RankedBars from '$lib/viz/RankedBars.svelte';
@@ -73,12 +74,15 @@
 
 <main>
 	<header>
-		<h1>Letterboxd Vizard</h1>
-		{#if data?.profile && phase === 'ready'}
-			<p class="sub">
-				{data.profile.givenName || data.profile.username} · {films.length} films watched
-			</p>
-		{/if}
+		<div>
+			<h1>Letterboxd Vizard</h1>
+			{#if data?.profile && phase === 'ready'}
+				<p class="sub">
+					{data.profile.givenName || data.profile.username} · {films.length} films watched
+				</p>
+			{/if}
+		</div>
+		<ThemeSwitch />
 	</header>
 
 	{#if phase === 'idle'}
@@ -187,6 +191,10 @@
 	}
 	header {
 		margin-bottom: 24px;
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 16px;
 	}
 	h1 {
 		margin: 0;

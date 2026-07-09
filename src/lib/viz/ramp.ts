@@ -1,9 +1,11 @@
 /**
- * Sequential 5-step ramps built from Catppuccin mixes (validated with the
- * dataviz palette checker, --ordinal, for both surfaces). Index 0 = lowest bin.
+ * Sequential 5-step Viridis samples per theme (DESIGN.md data-scale exception).
+ * Light: t 0.65→0.05 (more = darker); dark: t 0.30→0.95 (more = lighter).
+ * Monotone lightness, step gaps, and surface contrast validated with the
+ * dataviz palette checker (--ordinal). Index 0 = lowest bin.
  */
-export const RAMP_LIGHT = ['#7ea9fa', '#6e95e3', '#5e81cc', '#4f6eb6', '#405ba0'];
-export const RAMP_DARK = ['#48587d', '#586e9a', '#6884b9', '#789cd9', '#89b4fa'];
+export const RAMP_LIGHT = ['#2fb47c', '#21918c', '#2f6c8e', '#414487', '#471365'];
+export const RAMP_DARK = ['#355f8d', '#24868e', '#26ad81', '#6ece58', '#dfe318'];
 export const BIN_COUNT = 5;
 
 export const RATING_THRESHOLDS = [3, 3.5, 4, 4.5];

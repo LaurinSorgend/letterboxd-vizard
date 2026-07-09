@@ -212,20 +212,25 @@
 </section>
 
 <style>
-	/* Sequential Catppuccin-blue ramps, validated for both surfaces (see ramp.ts). */
-	.bin-0 { fill: #7ea9fa; background: #7ea9fa; }
-	.bin-1 { fill: #6e95e3; background: #6e95e3; }
-	.bin-2 { fill: #5e81cc; background: #5e81cc; }
-	.bin-3 { fill: #4f6eb6; background: #4f6eb6; }
-	.bin-4 { fill: #405ba0; background: #405ba0; }
+	/* Viridis ramps per theme, validated for both surfaces (see ramp.ts). */
+	.bin-0 { fill: #2fb47c; background: #2fb47c; }
+	.bin-1 { fill: #21918c; background: #21918c; }
+	.bin-2 { fill: #2f6c8e; background: #2f6c8e; }
+	.bin-3 { fill: #414487; background: #414487; }
+	.bin-4 { fill: #471365; background: #471365; }
 
 	@media (prefers-color-scheme: dark) {
-		.bin-0 { fill: #48587d; background: #48587d; }
-		.bin-1 { fill: #586e9a; background: #586e9a; }
-		.bin-2 { fill: #6884b9; background: #6884b9; }
-		.bin-3 { fill: #789cd9; background: #789cd9; }
-		.bin-4 { fill: #89b4fa; background: #89b4fa; }
+		:global(:root:not([data-theme='light'])) .bin-0 { fill: #355f8d; background: #355f8d; }
+		:global(:root:not([data-theme='light'])) .bin-1 { fill: #24868e; background: #24868e; }
+		:global(:root:not([data-theme='light'])) .bin-2 { fill: #26ad81; background: #26ad81; }
+		:global(:root:not([data-theme='light'])) .bin-3 { fill: #6ece58; background: #6ece58; }
+		:global(:root:not([data-theme='light'])) .bin-4 { fill: #dfe318; background: #dfe318; }
 	}
+	:global(:root[data-theme='dark']) .bin-0 { fill: #355f8d; background: #355f8d; }
+	:global(:root[data-theme='dark']) .bin-1 { fill: #24868e; background: #24868e; }
+	:global(:root[data-theme='dark']) .bin-2 { fill: #26ad81; background: #26ad81; }
+	:global(:root[data-theme='dark']) .bin-3 { fill: #6ece58; background: #6ece58; }
+	:global(:root[data-theme='dark']) .bin-4 { fill: #dfe318; background: #dfe318; }
 
 	.nodata { fill: var(--bg-secondary); background: var(--bg-secondary); }
 	.few { fill: var(--surface); background: var(--surface); }
