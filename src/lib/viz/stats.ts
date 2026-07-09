@@ -4,6 +4,8 @@ export interface BarDatum {
 	label: string;
 	count: number;
 	avg: number | null;
+	image?: string | null;
+	href?: string;
 }
 
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
@@ -87,8 +89,42 @@ export function byLanguage(films: EnrichedFilm[]): BarDatum[] {
 	});
 }
 
+/** Letterboxd person-page slug: lowercase, diacritics stripped, hyphens. */
+function letterboxdSlug(name: string): string {
+	return name
+		.normalize('NFD')
+		.replace(/\p{Diacritic}/gu, '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+}
+
 export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): BarDatum[] {
-	return grouped(films, (f) => f.tmdb?.[role] ?? []);
+	const groups = new Map<string, { films: EnrichedFilm[]; profilePath: string | null }>();
+	for (const film of films) {
+		const seen = new Set<string>();
+		for (const person of film.tmdb?.[role] ?? []) {
+			if (seen.has(person.name)) continue;
+			seen.add(person.name);
+			let group = groups.get(person.name);
+			if (!group) {
+				group = { films: [], profilePath: null };
+				groups.set(person.name, group);
+			}
+			group.profilePath ??= person.profilePath;
+			group.films.push(film);
+		}
+	}
+	const kind = role === 'directors' ? 'director' : 'actor';
+	return [...groups]
+		.map(([name, group]) => ({
+			label: name,
+			count: group.films.length,
+			avg: avgRating(group.films),
+			image: group.profilePath ? `https://image.tmdb.org/t/p/w45${group.profilePath}` : null,
+			href: `https://letterboxd.com/${kind}/${letterboxdSlug(name)}/`
+		}))
+		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 export interface RatingGap {

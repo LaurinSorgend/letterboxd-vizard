@@ -1,13 +1,15 @@
 import { env } from '$env/dynamic/private';
-import type { TmdbMovie } from '$lib/types';
+import type { Person, TmdbMovie } from '$lib/types';
+import { lookupSeriesOnTvdb } from './tvdb';
 
 const BASE = 'https://api.themoviedb.org/3';
 
 interface SearchResult {
 	id: number;
-	title: string;
+	title?: string;
+	name?: string;
 	release_date?: string;
-	popularity: number;
+	first_air_date?: string;
 }
 
 function apiKey(): string {
@@ -34,68 +36,117 @@ async function tmdbGet(path: string, params: Record<string, string>): Promise<un
 }
 
 function releaseYear(result: SearchResult): number | null {
-	const year = Number.parseInt(result.release_date?.slice(0, 4) ?? '', 10);
+	const date = result.release_date ?? result.first_air_date;
+	const year = Number.parseInt(date?.slice(0, 4) ?? '', 10);
 	return Number.isFinite(year) ? year : null;
 }
 
-async function search(name: string, year: number | null): Promise<SearchResult | null> {
+async function searchWithYear(
+	kind: 'movie' | 'tv',
+	name: string,
+	year: number
+): Promise<SearchResult | null> {
+	const yearParam = kind === 'movie' ? 'primary_release_year' : 'first_air_date_year';
+	const { results } = (await tmdbGet(`/search/${kind}`, {
+		query: name,
+		[yearParam]: String(year)
+	})) as { results: SearchResult[] };
+	return results[0] ?? null;
+}
+
+async function searchLoose(
+	kind: 'movie' | 'tv',
+	name: string,
+	year: number | null
+): Promise<{ result: SearchResult; yearMatch: boolean } | null> {
+	const { results } = (await tmdbGet(`/search/${kind}`, { query: name })) as {
+		results: SearchResult[];
+	};
+	if (results.length === 0) return null;
 	if (year !== null) {
-		const byYear = (await tmdbGet('/search/movie', {
-			query: name,
-			primary_release_year: String(year)
-		})) as { results: SearchResult[] };
-		if (byYear.results.length > 0) return byYear.results[0];
-	}
-	const any = (await tmdbGet('/search/movie', { query: name })) as { results: SearchResult[] };
-	if (any.results.length === 0) return null;
-	if (year !== null) {
-		const near = any.results.find((r) => {
+		const near = results.find((r) => {
 			const ry = releaseYear(r);
 			return ry !== null && Math.abs(ry - year) <= 1;
 		});
-		if (near) return near;
+		if (near) return { result: near, yearMatch: true };
 	}
-	return any.results[0];
+	return { result: results[0], yearMatch: year === null };
+}
+
+interface CreditPerson {
+	id: number;
+	name: string;
+	job?: string;
+	profile_path?: string | null;
 }
 
 interface Details {
 	id: number;
-	title: string;
+	title?: string;
+	name?: string;
 	release_date?: string;
+	first_air_date?: string;
 	production_countries?: { iso_3166_1: string }[];
 	origin_country?: string[];
 	genres?: { name: string }[];
 	runtime?: number | null;
+	episode_run_time?: number[];
 	original_language?: string;
 	vote_average?: number;
 	poster_path?: string | null;
-	credits?: {
-		cast?: { name: string }[];
-		crew?: { name: string; job: string }[];
+	created_by?: CreditPerson[];
+	credits?: { cast?: CreditPerson[]; crew?: CreditPerson[] };
+}
+
+function toPerson(p: CreditPerson): Person {
+	return { name: p.name, tmdbId: p.id, profilePath: p.profile_path ?? null };
+}
+
+function dedupe(people: Person[]): Person[] {
+	return [...new Map(people.map((p) => [p.name, p])).values()];
+}
+
+async function fetchRecord(kind: 'movie' | 'tv', id: number): Promise<TmdbMovie> {
+	const d = (await tmdbGet(`/${kind}/${id}`, { append_to_response: 'credits' })) as Details;
+	const crewDirectors = d.credits?.crew?.filter((p) => p.job === 'Director') ?? [];
+	const directors = kind === 'tv' && crewDirectors.length === 0 ? (d.created_by ?? []) : crewDirectors;
+	return {
+		tmdbId: d.id,
+		mediaType: kind,
+		title: d.title ?? d.name ?? '',
+		year: Number.parseInt((d.release_date ?? d.first_air_date)?.slice(0, 4) ?? '', 10) || null,
+		countries: d.production_countries?.map((c) => c.iso_3166_1) ?? [],
+		originCountries: d.origin_country ?? [],
+		genres: d.genres?.map((g) => g.name) ?? [],
+		runtime: d.runtime ?? d.episode_run_time?.[0] ?? null,
+		originalLanguage: d.original_language ?? null,
+		voteAverage: d.vote_average ?? null,
+		posterPath: d.poster_path ?? null,
+		directors: dedupe(directors.map(toPerson)),
+		cast: d.credits?.cast?.slice(0, 10).map(toPerson) ?? []
 	};
 }
 
-/** Resolves a Letterboxd (title, year) pair to a compact TMDB record, or null if unmatched. */
+/**
+ * Resolves a Letterboxd (title, year) pair to a compact metadata record, or null.
+ * Year-respecting matches win before wrong-year fallbacks:
+ * movie@year → tv@year → movie±1 → tv±1 → any movie → any tv → TheTVDB.
+ */
 export async function lookupMovie(name: string, year: number | null): Promise<TmdbMovie | null> {
-	const match = await search(name, year);
-	if (!match) return null;
+	if (year !== null) {
+		const movie = await searchWithYear('movie', name, year);
+		if (movie) return fetchRecord('movie', movie.id);
+		const tv = await searchWithYear('tv', name, year);
+		if (tv) return fetchRecord('tv', tv.id);
+	}
 
-	const details = (await tmdbGet(`/movie/${match.id}`, {
-		append_to_response: 'credits'
-	})) as Details;
+	const movieLoose = await searchLoose('movie', name, year);
+	if (movieLoose?.yearMatch) return fetchRecord('movie', movieLoose.result.id);
+	const tvLoose = await searchLoose('tv', name, year);
+	if (tvLoose?.yearMatch) return fetchRecord('tv', tvLoose.result.id);
 
-	return {
-		tmdbId: details.id,
-		title: details.title,
-		year: Number.parseInt(details.release_date?.slice(0, 4) ?? '', 10) || null,
-		countries: details.production_countries?.map((c) => c.iso_3166_1) ?? [],
-		originCountries: details.origin_country ?? [],
-		genres: details.genres?.map((g) => g.name) ?? [],
-		runtime: details.runtime ?? null,
-		originalLanguage: details.original_language ?? null,
-		voteAverage: details.vote_average ?? null,
-		posterPath: details.poster_path ?? null,
-		directors: [...new Set(details.credits?.crew?.filter((p) => p.job === 'Director').map((p) => p.name) ?? [])],
-		cast: details.credits?.cast?.slice(0, 10).map((p) => p.name) ?? []
-	};
+	if (movieLoose) return fetchRecord('movie', movieLoose.result.id);
+	if (tvLoose) return fetchRecord('tv', tvLoose.result.id);
+
+	return lookupSeriesOnTvdb(name, year);
 }

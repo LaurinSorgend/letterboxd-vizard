@@ -18,7 +18,9 @@
 			<ul>
 				{#each list.rows as row (row.film.uri)}
 					<li>
-						<span class="name" title={row.film.name}>{row.film.name}</span>
+						<a class="name" href={row.film.uri} target="_blank" rel="noopener" title={row.film.name}>
+							{row.film.name}
+						</a>
 						<span class="nums">
 							you <strong>{row.yours}</strong> · TMDB <strong>{row.tmdb.toFixed(1)}</strong>
 						</span>
@@ -57,6 +59,11 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		color: var(--accent);
+		text-decoration: none;
+	}
+	.name:hover {
+		text-decoration: underline;
 	}
 	.nums {
 		color: var(--fg-secondary);

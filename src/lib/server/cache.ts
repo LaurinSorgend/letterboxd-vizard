@@ -5,9 +5,15 @@ import type { TmdbMovie } from '$lib/types';
 const DATA_DIR = 'data';
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+const SCHEMA_VERSION = 2;
+
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new Database(`${DATA_DIR}/cache.db`);
 db.pragma('journal_mode = WAL');
+if ((db.pragma('user_version', { simple: true }) as number) < SCHEMA_VERSION) {
+	db.exec('DROP TABLE IF EXISTS movies; DROP TABLE IF EXISTS misses;');
+	db.pragma(`user_version = ${SCHEMA_VERSION}`);
+}
 db.exec(`
 	CREATE TABLE IF NOT EXISTS movies (
 		cache_key TEXT PRIMARY KEY,

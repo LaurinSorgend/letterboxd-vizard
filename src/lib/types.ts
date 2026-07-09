@@ -25,9 +25,18 @@ export interface LetterboxdData {
 	profile: Profile | null;
 }
 
-/** Compact TMDB record stored in the server cache and returned by /api/enrich. */
+export interface Person {
+	name: string;
+	tmdbId: number | null;
+	/** TMDB profile image path (e.g. /abc.jpg), null if none. */
+	profilePath: string | null;
+}
+
+/** Compact metadata record stored in the server cache and returned by /api/enrich. */
 export interface TmdbMovie {
+	/** Negative ids are TheTVDB ids (mediaType 'tv' with no TMDB match). */
 	tmdbId: number;
+	mediaType: 'movie' | 'tv';
 	title: string;
 	year: number | null;
 	/** ISO 3166-1 alpha-2 codes. */
@@ -37,9 +46,10 @@ export interface TmdbMovie {
 	runtime: number | null;
 	originalLanguage: string | null;
 	voteAverage: number | null;
+	/** TMDB image path, or a full URL for TheTVDB artwork. */
 	posterPath: string | null;
-	directors: string[];
-	cast: string[];
+	directors: Person[];
+	cast: Person[];
 }
 
 export interface EnrichRequestItem {

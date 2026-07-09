@@ -183,7 +183,7 @@
 			<ul>
 				{#each topFilms(selected, selected.films.length) as film (film.uri)}
 					<li>
-						{film.name}
+						<a href={film.uri} target="_blank" rel="noopener">{film.name}</a>
 						<span class="meta">{film.year ?? ''}</span>
 						{#if film.rating !== null}<span class="value">{film.rating}</span>{/if}
 					</li>
@@ -282,6 +282,8 @@
 	.panel ul { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 24px; }
 	.panel li { display: flex; gap: 8px; padding: 2px 0; break-inside: avoid; }
 	.panel .meta { color: var(--fg-muted); }
+	.panel a { color: var(--accent); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.panel a:hover { text-decoration: underline; }
 	.panel .value { margin-left: auto; font-variant-numeric: tabular-nums; }
 
 	details { margin-top: 12px; }
