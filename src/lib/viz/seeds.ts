@@ -57,6 +57,43 @@ export function pickDiverseSeeds(films: EnrichedFilm[], count: number): Seed[] {
 	return picked.map(toSeed);
 }
 
+const FAVORITE_RATING = 4;
+const MIN_GENRE_FAVORITES = 4;
+const GENRE_SEEDS = 12;
+
+function favorites(films: EnrichedFilm[]): EnrichedFilm[] {
+	return films.filter(
+		(f) =>
+			f.rating !== null &&
+			f.rating >= FAVORITE_RATING &&
+			f.tmdb?.mediaType === 'movie' &&
+			f.tmdb.tmdbId > 0
+	);
+}
+
+/** The genres with the most favourite (4+) movies, best-loved first. */
+export function favoriteGenres(films: EnrichedFilm[], count: number): string[] {
+	const counts = new Map<string, number>();
+	for (const film of favorites(films)) {
+		for (const genre of new Set(film.tmdb!.genres)) {
+			counts.set(genre, (counts.get(genre) ?? 0) + 1);
+		}
+	}
+	return [...counts]
+		.filter(([, n]) => n >= MIN_GENRE_FAVORITES)
+		.sort((a, b) => b[1] - a[1])
+		.slice(0, count)
+		.map(([genre]) => genre);
+}
+
+/** The highest-rated favourites of a genre, tie order shuffled so rows vary between visits. */
+export function pickGenreSeeds(films: EnrichedFilm[], genre: string): Seed[] {
+	return shuffled(favorites(films).filter((f) => f.tmdb!.genres.includes(genre)))
+		.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+		.slice(0, GENRE_SEEDS)
+		.map(toSeed);
+}
+
 /** Random sample of a country's watched movies, liked ones only. */
 export function pickCountrySeeds(films: EnrichedFilm[], count: number): Seed[] {
 	const pool = films.filter(

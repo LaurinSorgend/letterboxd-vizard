@@ -1,46 +1,69 @@
 <script lang="ts">
 	import { imageUrl } from './images';
 	import { fetchRecommendations, type Recommendation } from './recommend';
-	import { pickDiverseSeeds, watchedTmdbIds } from './seeds';
-	import type { EnrichedFilm } from '$lib/types';
+	import { favoriteGenres, pickDiverseSeeds, pickGenreSeeds, watchedTmdbIds } from './seeds';
+	import type { EnrichedFilm, Seed } from '$lib/types';
+
+	const GENRE_ROWS = 3;
+	const GENRE_ROW_SIZE = 10;
 
 	let { films }: { films: EnrichedFilm[] } = $props();
 
-	let recommendations: Recommendation[] = $state([]);
+	let general: Recommendation[] = $state([]);
+	let genreRows: { genre: string; recommendations: Recommendation[] }[] = $state([]);
 
 	$effect(() => {
 		void load(films);
 	});
 
 	async function load(current: EnrichedFilm[]) {
-		try {
-			recommendations = await fetchRecommendations(pickDiverseSeeds(current, 25), watchedTmdbIds(current));
-		} catch {
-			recommendations = [];
-		}
+		const watched = watchedTmdbIds(current);
+		const safeFetch = (seeds: Seed[]) => fetchRecommendations(seeds, watched).catch(() => []);
+		const genres = favoriteGenres(current, GENRE_ROWS);
+		const [main, ...perGenre] = await Promise.all([
+			safeFetch(pickDiverseSeeds(current, 25)),
+			...genres.map((genre) => safeFetch(pickGenreSeeds(current, genre)))
+		]);
+		general = main;
+		const seen = new Set(main.map((r) => r.tmdbId));
+		genreRows = genres.flatMap((genre, i) => {
+			const fresh = perGenre[i].filter((r) => !seen.has(r.tmdbId)).slice(0, GENRE_ROW_SIZE);
+			for (const rec of fresh) seen.add(rec.tmdbId);
+			return fresh.length > 0 ? [{ genre, recommendations: fresh }] : [];
+		});
 	}
 </script>
 
-{#if recommendations.length > 0}
+{#snippet posterGrid(recommendations: Recommendation[])}
+	<ul>
+		{#each recommendations as rec (rec.tmdbId)}
+			{@const poster = imageUrl(rec.posterPath, 'w154')}
+			<li>
+				<a href="https://letterboxd.com/tmdb/{rec.tmdbId}" target="_blank" rel="noopener">
+					{#if poster}
+						<img src={poster} alt="" loading="lazy" width="92" height="138" />
+					{:else}
+						<span class="placeholder" aria-hidden="true">🎬</span>
+					{/if}
+					<span class="title">{rec.title}</span>
+					<span class="year">{rec.year ?? ''}</span>
+				</a>
+			</li>
+		{/each}
+	</ul>
+{/snippet}
+
+{#if general.length > 0 || genreRows.length > 0}
 	<section>
 		<h2>You might like</h2>
 		<p class="note">Based on Trakt's related films for your highest-rated movies.</p>
-		<ul>
-			{#each recommendations as rec (rec.tmdbId)}
-				{@const poster = imageUrl(rec.posterPath, 'w154')}
-				<li>
-					<a href="https://letterboxd.com/tmdb/{rec.tmdbId}" target="_blank" rel="noopener">
-						{#if poster}
-							<img src={poster} alt="" loading="lazy" width="92" height="138" />
-						{:else}
-							<span class="placeholder" aria-hidden="true">🎬</span>
-						{/if}
-						<span class="title">{rec.title}</span>
-						<span class="year">{rec.year ?? ''}</span>
-					</a>
-				</li>
-			{/each}
-		</ul>
+		{#if general.length > 0}
+			{@render posterGrid(general)}
+		{/if}
+		{#each genreRows as row (row.genre)}
+			<h3>Because you love {row.genre}</h3>
+			{@render posterGrid(row.recommendations)}
+		{/each}
 	</section>
 {/if}
 
@@ -49,6 +72,9 @@
 		font-size: 0.875rem;
 		color: var(--fg-muted);
 		margin: 0 0 12px;
+	}
+	h3 {
+		margin: 24px 0 12px;
 	}
 	ul {
 		list-style: none;
