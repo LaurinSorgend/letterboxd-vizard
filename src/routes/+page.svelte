@@ -10,8 +10,9 @@
 	import RatingGaps from '$lib/viz/RatingGaps.svelte';
 	import Recommendations from '$lib/viz/Recommendations.svelte';
 	import StatTiles from '$lib/viz/StatTiles.svelte';
-	import { aggregateCountries } from '$lib/viz/countries';
+	import { effectiveCountries } from '$lib/viz/countries';
 	import {
+		avgRating,
 		byGenre,
 		byLanguage,
 		byPerson,
@@ -33,17 +34,18 @@
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
 
+	const initialMetric = page.url.searchParams.get('metric') === 'rating' ? 'rating' : 'count';
+	const presetCountry = page.url.searchParams.get('country');
+
 	const tiles = $derived.by(() => {
-		const ratings = films.map((f) => f.rating).filter((r): r is number => r !== null);
-		const avg = ratings.length
-			? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(2)
-			: '—';
+		const avg = avgRating(films);
 		const hours = Math.round(totalRuntimeMinutes(films) / 60);
+		const countries = new Set(films.flatMap((f) => (f.tmdb ? effectiveCountries(f.tmdb) : [])));
 		return [
 			{ label: 'Films watched', value: String(films.length) },
 			{ label: 'Hours watched', value: hours.toLocaleString('en') },
-			{ label: 'Countries', value: String(aggregateCountries(films).size) },
-			{ label: 'Your average rating', value: avg }
+			{ label: 'Countries', value: String(countries.size) },
+			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) : '—' }
 		];
 	});
 
@@ -108,7 +110,7 @@
 
 		<section>
 			<h2>Your films around the world</h2>
-			<WorldMap {films} />
+			<WorldMap {films} {initialMetric} {presetCountry} />
 		</section>
 
 		<section>

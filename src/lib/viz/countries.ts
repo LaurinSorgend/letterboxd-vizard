@@ -1,5 +1,6 @@
 import codes from './country-codes.json';
-import type { EnrichedFilm } from '$lib/types';
+import { avgRating } from './stats';
+import type { EnrichedFilm, TmdbMovie } from '$lib/types';
 
 /** ISO 3166-1 numeric (world-atlas feature id) → alpha-2 (TMDB country code). */
 export const numericToAlpha2 = codes as Record<string, string>;
@@ -12,6 +13,11 @@ export function countryName(alpha2: string): string {
 	} catch {
 		return alpha2;
 	}
+}
+
+/** The countries a record is attributed to: production countries, else origin countries. */
+export function effectiveCountries(record: Pick<TmdbMovie, 'countries' | 'originCountries'>): string[] {
+	return record.countries.length ? record.countries : record.originCountries;
 }
 
 export interface CountryStat {
@@ -28,8 +34,7 @@ export function aggregateCountries(films: EnrichedFilm[]): Map<string, CountrySt
 	const stats = new Map<string, CountryStat>();
 	for (const film of films) {
 		if (!film.tmdb) continue;
-		const countries = film.tmdb.countries.length ? film.tmdb.countries : film.tmdb.originCountries;
-		for (const code of new Set(countries)) {
+		for (const code of new Set(effectiveCountries(film.tmdb))) {
 			let stat = stats.get(code);
 			if (!stat) {
 				stat = { code, name: countryName(code), films: [], count: 0, ratedCount: 0, avg: null };
@@ -40,11 +45,8 @@ export function aggregateCountries(films: EnrichedFilm[]): Map<string, CountrySt
 		}
 	}
 	for (const stat of stats.values()) {
-		const ratings = stat.films.map((f) => f.rating).filter((r): r is number => r !== null);
-		stat.ratedCount = ratings.length;
-		if (ratings.length > 0) {
-			stat.avg = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
-		}
+		stat.ratedCount = stat.films.filter((f) => f.rating !== null).length;
+		stat.avg = avgRating(stat.films);
 	}
 	return stats;
 }

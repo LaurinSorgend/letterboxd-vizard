@@ -57,7 +57,11 @@ export interface EnrichRequestItem {
 	year: number | null;
 }
 
-export type EnrichResult = { movie: TmdbMovie } | { movie: null };
+/** A watched film sent to /api/recommend as a recommendation seed. */
+export interface Seed {
+	tmdbId: number;
+	rating: number;
+}
 
 /** A film joined with its TMDB metadata (null if TMDB had no match). */
 export interface EnrichedFilm extends Film {

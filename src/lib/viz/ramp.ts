@@ -1,14 +1,7 @@
-/**
- * Sequential 5-step Viridis samples per theme (DESIGN.md data-scale exception).
- * Light: t 0.65→0.05 (more = darker); dark: t 0.30→0.95 (more = lighter).
- * Monotone lightness, step gaps, and surface contrast validated with the
- * dataviz palette checker (--ordinal). Index 0 = lowest bin.
- */
-export const RAMP_LIGHT = ['#2fb47c', '#21918c', '#2f6c8e', '#414487', '#471365'];
-export const RAMP_DARK = ['#355f8d', '#24868e', '#26ad81', '#6ece58', '#dfe318'];
-export const BIN_COUNT = 5;
+/* Bin colors live in app.css (--map-bin-0…4); this module owns thresholds and labels. */
 
 export const RATING_THRESHOLDS = [3, 3.5, 4, 4.5];
+export const RATING_BIN_LABELS = ['< 3', '3–3.4', '3.5–3.9', '4–4.4', '4.5+'];
 
 /** Four geometric thresholds between 2 and max, giving 5 count bins. */
 export function countThresholds(max: number): number[] {
@@ -34,8 +27,4 @@ export function countBinLabels(thresholds: number[]): string[] {
 		if (hi === null) return `${lo}+`;
 		return hi === lo ? `${lo}` : `${lo}–${hi}`;
 	});
-}
-
-export function ratingBinLabels(): string[] {
-	return ['< 3', '3–3.4', '3.5–3.9', '4–4.4', '4.5+'];
 }

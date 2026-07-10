@@ -1,14 +1,29 @@
 import { json, error } from '@sveltejs/kit';
 import pLimit from 'p-limit';
+import { cacheKey, getCached, putCached } from '$lib/server/cache';
+import { fetchRecord } from '$lib/server/tmdb';
 import { relatedMovies, traktAvailable } from '$lib/server/trakt';
+import { effectiveCountries } from '$lib/viz/countries';
+import type { Seed, TmdbMovie } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 const MAX_SEEDS = 25;
+const MAX_RESULTS = 20;
 const limit = pLimit(5);
 
-interface Seed {
-	tmdbId: number;
-	rating: number;
+/** TMDB record for a known id, reusing the title/year cache when it holds the same film. */
+async function movieRecord(tmdbId: number, title: string, year: number | null): Promise<TmdbMovie | null> {
+	const key = cacheKey(title, year);
+	const cached = getCached(key);
+	if (cached && cached.tmdbId === tmdbId) return cached;
+	try {
+		const record = await limit(() => fetchRecord('movie', tmdbId));
+		if (!cached) putCached(key, record);
+		return record;
+	} catch (cause) {
+		console.error(`tmdb details failed for ${tmdbId}`, cause);
+		return null;
+	}
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -48,8 +63,20 @@ export const POST: RequestHandler = async ({ request }) => {
 		)
 	);
 
-	const results = [...scores.values()]
+	const ranked = [...scores.values()]
 		.sort((a, b) => b.score - a.score || (b.traktRating ?? 0) - (a.traktRating ?? 0))
-		.slice(0, 20);
+		.slice(0, MAX_RESULTS);
+	const results = await Promise.all(
+		ranked.map(async ({ tmdbId, title, year }) => {
+			const record = await movieRecord(tmdbId, title, year);
+			return {
+				tmdbId,
+				title,
+				year,
+				posterPath: record?.posterPath ?? null,
+				countries: record ? effectiveCountries(record) : []
+			};
+		})
+	);
 	return json({ available: true, results });
 };

@@ -1,3 +1,4 @@
+import { imageUrl } from './images';
 import type { EnrichedFilm } from '$lib/types';
 
 export interface BarDatum {
@@ -6,12 +7,13 @@ export interface BarDatum {
 	avg: number | null;
 	image?: string | null;
 	href?: string;
-	films?: EnrichedFilm[];
+	films: EnrichedFilm[];
 }
 
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
 
-function avgRating(films: EnrichedFilm[]): number | null {
+/** Mean of the non-null ratings, or null if nothing is rated. */
+export function avgRating(films: EnrichedFilm[]): number | null {
 	const ratings = films.map((f) => f.rating).filter((r): r is number => r !== null);
 	if (ratings.length === 0) return null;
 	return ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
@@ -140,7 +142,7 @@ export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): Bar
 			label: name,
 			count: group.films.length,
 			avg: avgRating(group.films),
-			image: group.profilePath ? `https://image.tmdb.org/t/p/w45${group.profilePath}` : null,
+			image: imageUrl(group.profilePath, 'w45'),
 			href: `https://letterboxd.com/${kind}/${letterboxdSlug(name)}/`,
 			films: group.films
 		}))

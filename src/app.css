@@ -39,6 +39,19 @@
 	--success: var(--ctp-green);
 	--warning: var(--ctp-yellow);
 	--error: var(--ctp-red);
+
+	/*
+	 * World-map bins: sequential 5-step Viridis samples per theme (DESIGN.md
+	 * data-scale exception). Light: t 0.65→0.05 (more = darker); dark:
+	 * t 0.30→0.95 (more = lighter). Monotone lightness, step gaps, and surface
+	 * contrast validated with the dataviz palette checker (--ordinal).
+	 * Index 0 = lowest bin.
+	 */
+	--map-bin-0: #2fb47c;
+	--map-bin-1: #21918c;
+	--map-bin-2: #2f6c8e;
+	--map-bin-3: #414487;
+	--map-bin-4: #471365;
 }
 
 /* Mocha applies when the OS is dark (unless overridden to light) or when forced dark. */
@@ -67,6 +80,12 @@
 		--ctp-sapphire: #74c7ec;
 		--ctp-sky: #89dceb;
 		--ctp-mauve: #cba6f7;
+
+		--map-bin-0: #355f8d;
+		--map-bin-1: #24868e;
+		--map-bin-2: #26ad81;
+		--map-bin-3: #6ece58;
+		--map-bin-4: #dfe318;
 	}
 }
 
@@ -94,6 +113,12 @@
 	--ctp-sapphire: #74c7ec;
 	--ctp-sky: #89dceb;
 	--ctp-mauve: #cba6f7;
+
+	--map-bin-0: #355f8d;
+	--map-bin-1: #24868e;
+	--map-bin-2: #26ad81;
+	--map-bin-3: #6ece58;
+	--map-bin-4: #dfe318;
 }
 
 * {

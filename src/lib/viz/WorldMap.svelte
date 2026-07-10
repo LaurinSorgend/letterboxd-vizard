@@ -1,16 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/state';
 	import { geoNaturalEarth1, geoPath } from 'd3-geo';
 	import { feature } from 'topojson-client';
 	import type { Topology, GeometryCollection } from 'topojson-specification';
 	import CountryRec from './CountryRec.svelte';
+	import FilmList from './FilmList.svelte';
 	import { aggregateCountries, numericToAlpha2, type CountryStat } from './countries';
+	import { watchedTmdbIds } from './seeds';
 	import {
 		countThresholds,
 		countBinLabels,
-		ratingBinLabels,
 		binIndex,
+		RATING_BIN_LABELS,
 		RATING_THRESHOLDS
 	} from './ramp';
 	import type { EnrichedFilm } from '$lib/types';
@@ -19,32 +20,36 @@
 	const WIDTH = 960;
 	const HEIGHT = 480;
 
-	let { films }: { films: EnrichedFilm[] } = $props();
+	let {
+		films,
+		initialMetric = 'count',
+		presetCountry = null
+	}: {
+		films: EnrichedFilm[];
+		initialMetric?: 'count' | 'rating';
+		presetCountry?: string | null;
+	} = $props();
 
 	type Shape = { code: string | undefined; d: string; centroid: [number, number] };
 	let shapes: Shape[] = $state([]);
-	let metric: 'count' | 'rating' = $state(
-		page.url.searchParams.get('metric') === 'rating' ? 'rating' : 'count'
-	);
-	let selected: CountryStat | null = $state(null);
-	let hover: { stat: CountryStat; x: number; y: number } | null = $state(null);
+	// svelte-ignore state_referenced_locally -- URL presets are initial values by design
+	let metric: 'count' | 'rating' = $state(initialMetric);
 	let container: HTMLElement | undefined = $state();
 
 	const stats = $derived(aggregateCountries(films));
-	const watchedIds = $derived(
-		films.filter((f) => f.tmdb && f.tmdb.tmdbId > 0).map((f) => f.tmdb!.tmdbId)
-	);
+	const watchedIds = $derived(watchedTmdbIds(films));
 
-	let presetApplied = false;
-	$effect(() => {
-		const want = page.url.searchParams.get('country');
-		if (presetApplied || !want) return;
-		presetApplied = true;
-		selected = stats.get(want) ?? null;
-	});
+	// svelte-ignore state_referenced_locally -- URL presets are initial values by design
+	let selected: CountryStat | null = $state(
+		presetCountry ? (stats.get(presetCountry) ?? null) : null
+	);
+	let hoverStat: CountryStat | null = $state(null);
+	let hoverPos = $state({ x: 0, y: 0 });
+	let mapBox: DOMRect | null = null;
+
 	const maxCount = $derived(Math.max(1, ...[...stats.values()].map((s) => s.count)));
 	const thresholds = $derived(metric === 'count' ? countThresholds(maxCount) : RATING_THRESHOLDS);
-	const binLabels = $derived(metric === 'count' ? countBinLabels(thresholds) : ratingBinLabels());
+	const binLabels = $derived(metric === 'count' ? countBinLabels(thresholds) : RATING_BIN_LABELS);
 
 	onMount(async () => {
 		const topo = (await import('world-atlas/countries-50m.json')).default as unknown as Topology<{
@@ -82,23 +87,32 @@
 	function showHover(code: string | undefined, event: PointerEvent | FocusEvent) {
 		const stat = code ? stats.get(code) : undefined;
 		if (!stat || !container) {
-			hover = null;
+			hoverStat = null;
 			return;
 		}
-		const box = container.getBoundingClientRect();
+		// Layout is read once on enter/focus, not per pointermove.
+		if (!mapBox || event.type !== 'pointermove') mapBox = container.getBoundingClientRect();
+		let x: number;
+		let y: number;
 		if (event instanceof PointerEvent) {
-			hover = { stat, x: event.clientX - box.left, y: event.clientY - box.top };
+			x = event.clientX - mapBox.left;
+			y = event.clientY - mapBox.top;
 		} else {
 			const shape = shapes.find((s) => s.code === code);
 			if (!shape) return;
-			const scale = box.width / WIDTH;
-			hover = { stat, x: shape.centroid[0] * scale, y: shape.centroid[1] * scale };
+			const scale = mapBox.width / WIDTH;
+			x = shape.centroid[0] * scale;
+			y = shape.centroid[1] * scale;
 		}
+		hoverPos = { x: Math.min(x + 12, mapBox.width - 180), y: y + 12 };
+		hoverStat = stat;
 	}
 
 	function topFilms(stat: CountryStat, n: number): EnrichedFilm[] {
 		return [...stat.films].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1)).slice(0, n);
 	}
+
+	const hoverFilms = $derived(hoverStat ? topFilms(hoverStat, 3) : []);
 
 	const tableRows = $derived(
 		[...stats.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
@@ -134,9 +148,9 @@
 						aria-label={describe(stat)}
 						onpointerenter={(e) => showHover(shape.code, e)}
 						onpointermove={(e) => showHover(shape.code, e)}
-						onpointerleave={() => (hover = null)}
+						onpointerleave={() => (hoverStat = null)}
 						onfocus={(e) => showHover(shape.code, e)}
-						onblur={() => (hover = null)}
+						onblur={() => (hoverStat = null)}
 						onclick={() => (selected = selected?.code === stat.code ? null : stat)}
 						onkeydown={(e) => {
 							if (e.key === 'Enter' || e.key === ' ') {
@@ -151,25 +165,21 @@
 			{/each}
 		</svg>
 
-		{#if hover}
-			<div
-				class="tooltip"
-				style="left: {Math.min(hover.x + 12, (container?.clientWidth ?? 0) - 180)}px; top: {hover.y +
-					12}px"
-			>
-				<strong>{hover.stat.name}</strong>
+		{#if hoverStat}
+			<div class="tooltip" style="left: {hoverPos.x}px; top: {hoverPos.y}px">
+				<strong>{hoverStat.name}</strong>
 				<div>
-					<span class="value">{hover.stat.count}</span>
-					film{hover.stat.count === 1 ? '' : 's'}
-					{#if hover.stat.avg !== null}
-						· <span class="value">{hover.stat.avg.toFixed(2)}</span> avg
-						{#if metric === 'rating' && hover.stat.ratedCount < MIN_RATED}
-							(only {hover.stat.ratedCount} rated)
+					<span class="value">{hoverStat.count}</span>
+					film{hoverStat.count === 1 ? '' : 's'}
+					{#if hoverStat.avg !== null}
+						· <span class="value">{hoverStat.avg.toFixed(2)}</span> avg
+						{#if metric === 'rating' && hoverStat.ratedCount < MIN_RATED}
+							(only {hoverStat.ratedCount} rated)
 						{/if}
 					{/if}
 				</div>
 				<ul>
-					{#each topFilms(hover.stat, 3) as film (film.uri)}
+					{#each hoverFilms as film (film.uri)}
 						<li>{film.name}{film.rating !== null ? ` — ${film.rating}` : ''}</li>
 					{/each}
 				</ul>
@@ -189,21 +199,10 @@
 	<p class="note">A film with several production countries counts for each of them.</p>
 
 	{#if selected}
-		<div class="panel">
-			<h3>{selected.name} — {selected.count} film{selected.count === 1 ? '' : 's'}</h3>
-			{#key selected.code}
-				<CountryRec stat={selected} exclude={watchedIds} />
-			{/key}
-			<ul>
-				{#each topFilms(selected, selected.films.length) as film (film.uri)}
-					<li>
-						<a href={film.uri} target="_blank" rel="noopener" title={film.name}>{film.name}</a>
-						<span class="meta">{film.year ?? ''}</span>
-						{#if film.rating !== null}<span class="value">{film.rating}</span>{/if}
-					</li>
-				{/each}
-			</ul>
-		</div>
+		{#key selected.code}
+			<CountryRec stat={selected} exclude={watchedIds} />
+		{/key}
+		<FilmList title={selected.name} films={selected.films} />
 	{/if}
 
 	<details>
@@ -226,25 +225,11 @@
 </section>
 
 <style>
-	/* Viridis ramps per theme, validated for both surfaces (see ramp.ts). */
-	.bin-0 { fill: #2fb47c; background: #2fb47c; }
-	.bin-1 { fill: #21918c; background: #21918c; }
-	.bin-2 { fill: #2f6c8e; background: #2f6c8e; }
-	.bin-3 { fill: #414487; background: #414487; }
-	.bin-4 { fill: #471365; background: #471365; }
-
-	@media (prefers-color-scheme: dark) {
-		:global(:root:not([data-theme='light'])) .bin-0 { fill: #355f8d; background: #355f8d; }
-		:global(:root:not([data-theme='light'])) .bin-1 { fill: #24868e; background: #24868e; }
-		:global(:root:not([data-theme='light'])) .bin-2 { fill: #26ad81; background: #26ad81; }
-		:global(:root:not([data-theme='light'])) .bin-3 { fill: #6ece58; background: #6ece58; }
-		:global(:root:not([data-theme='light'])) .bin-4 { fill: #dfe318; background: #dfe318; }
-	}
-	:global(:root[data-theme='dark']) .bin-0 { fill: #355f8d; background: #355f8d; }
-	:global(:root[data-theme='dark']) .bin-1 { fill: #24868e; background: #24868e; }
-	:global(:root[data-theme='dark']) .bin-2 { fill: #26ad81; background: #26ad81; }
-	:global(:root[data-theme='dark']) .bin-3 { fill: #6ece58; background: #6ece58; }
-	:global(:root[data-theme='dark']) .bin-4 { fill: #dfe318; background: #dfe318; }
+	.bin-0 { fill: var(--map-bin-0); background: var(--map-bin-0); }
+	.bin-1 { fill: var(--map-bin-1); background: var(--map-bin-1); }
+	.bin-2 { fill: var(--map-bin-2); background: var(--map-bin-2); }
+	.bin-3 { fill: var(--map-bin-3); background: var(--map-bin-3); }
+	.bin-4 { fill: var(--map-bin-4); background: var(--map-bin-4); }
 
 	.nodata { fill: var(--bg-secondary); background: var(--bg-secondary); }
 	.few { fill: var(--surface); background: var(--surface); }
@@ -291,15 +276,6 @@
 
 	.note { font-size: 0.75rem; color: var(--fg-muted); margin: 4px 0 0; }
 
-	.panel { margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 4px; }
-	.panel h3 { margin: 0 0 8px; }
-	.panel ul { margin: 0; padding: 0; list-style: none; columns: 2; column-gap: 24px; }
-	.panel li { display: flex; gap: 8px; padding: 2px 0; break-inside: avoid; }
-	.panel .meta { color: var(--fg-muted); }
-	.panel a { color: var(--accent); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.panel a:hover { text-decoration: underline; }
-	.panel .value { margin-left: auto; font-variant-numeric: tabular-nums; }
-
 	details { margin-top: 12px; }
 	summary { cursor: pointer; color: var(--fg-secondary); font-size: 0.875rem; }
 	table { border-collapse: collapse; margin-top: 8px; font-size: 0.875rem; }
@@ -315,7 +291,4 @@
 		clip: rect(0 0 0 0);
 	}
 
-	@media (max-width: 640px) {
-		.panel ul { columns: 1; }
-	}
 </style>

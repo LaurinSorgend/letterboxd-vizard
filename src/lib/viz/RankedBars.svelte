@@ -39,23 +39,16 @@
 				{d.label}
 			{/if}
 		</span>
-		{#if d.films}
-			<button
-				type="button"
-				class="track"
-				aria-pressed={selectedLabel === d.label}
-				title="{d.label}: {d.count}{d.avg !== null ? `, avg ${d.avg.toFixed(1)}` : ''} — click to list films"
-				onclick={() => toggle(d.label)}
-			>
-				<span class="bar" style="width: {(d.count / max) * 100}%"></span>
-				<span class="val">{d.count}</span>
-			</button>
-		{:else}
-			<div class="track" title="{d.label}: {d.count}{d.avg !== null ? `, avg ${d.avg.toFixed(1)}` : ''}">
-				<span class="bar" style="width: {(d.count / max) * 100}%"></span>
-				<span class="val">{d.count}</span>
-			</div>
-		{/if}
+		<button
+			type="button"
+			class="track"
+			aria-pressed={selectedLabel === d.label}
+			title="{d.label}: {d.count}{d.avg !== null ? `, avg ${d.avg.toFixed(1)}` : ''} — click to list films"
+			onclick={() => toggle(d.label)}
+		>
+			<span class="bar" style="width: {(d.count / max) * 100}%"></span>
+			<span class="val">{d.count}</span>
+		</button>
 		{#if showAvg}
 			<span class="avg">{d.avg !== null ? `★ ${d.avg.toFixed(1)}` : '—'}</span>
 		{/if}
@@ -66,7 +59,7 @@
 		{expanded ? 'Show fewer' : `Show all (${data.length})`}
 	</button>
 {/if}
-{#if selected?.films}
+{#if selected}
 	<FilmList title={selected.label} films={selected.films} />
 {/if}
 

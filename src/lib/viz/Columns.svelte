@@ -18,7 +18,7 @@
 
 <div class="chart" role="group" aria-label={description}>
 	{#each data as d, i (d.label)}
-		{#if d.films && d.count > 0}
+		{#if d.count > 0}
 			<button
 				type="button"
 				class="col"
@@ -31,15 +31,15 @@
 				<span class="lab">{i % showEvery === 0 ? d.label : ''}</span>
 			</button>
 		{:else}
-			<div class="col" title="{d.label}: {d.count}">
-				<span class="val">{d.count > 0 ? d.count : ''}</span>
-				<span class="bar" style="height: {Math.max(d.count === 0 ? 0 : 3, (d.count / max) * 140)}px"></span>
+			<div class="col" title="{d.label}: 0">
+				<span class="val"></span>
+				<span class="bar" style="height: 0"></span>
 				<span class="lab">{i % showEvery === 0 ? d.label : ''}</span>
 			</div>
 		{/if}
 	{/each}
 </div>
-{#if selected?.films}
+{#if selected}
 	<FilmList title={selected.label} films={selected.films} />
 {/if}
 

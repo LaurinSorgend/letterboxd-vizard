@@ -1,9 +1,5 @@
-import type { EnrichedFilm } from '$lib/types';
-
-export interface Seed {
-	tmdbId: number;
-	rating: number;
-}
+import { effectiveCountries } from './countries';
+import type { EnrichedFilm, Seed } from '$lib/types';
 
 const MAX_PER_DECADE = 4;
 const MAX_PER_COUNTRY = 6;
@@ -19,6 +15,11 @@ function shuffled<T>(items: T[]): T[] {
 
 function toSeed(film: EnrichedFilm): Seed {
 	return { tmdbId: film.tmdb!.tmdbId, rating: film.rating ?? 3 };
+}
+
+/** TMDB ids of watched films with a real TMDB record (negative ids are TheTVDB). */
+export function watchedTmdbIds(films: EnrichedFilm[]): number[] {
+	return films.filter((f) => f.tmdb && f.tmdb.tmdbId > 0).map((f) => f.tmdb!.tmdbId);
 }
 
 /**
@@ -40,7 +41,7 @@ export function pickDiverseSeeds(films: EnrichedFilm[], count: number): Seed[] {
 	for (const film of pool) {
 		if (picked.length >= count) break;
 		const decade = Math.floor((film.tmdb!.year ?? film.year ?? 0) / 10);
-		const country = film.tmdb!.countries[0] ?? film.tmdb!.originCountries[0] ?? '??';
+		const country = effectiveCountries(film.tmdb!)[0] ?? '??';
 		if (
 			(perDecade.get(decade) ?? 0) >= MAX_PER_DECADE ||
 			(perCountry.get(country) ?? 0) >= MAX_PER_COUNTRY

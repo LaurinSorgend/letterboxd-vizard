@@ -106,7 +106,7 @@ function dedupe(people: Person[]): Person[] {
 	return [...new Map(people.map((p) => [p.name, p])).values()];
 }
 
-async function fetchRecord(kind: 'movie' | 'tv', id: number): Promise<TmdbMovie> {
+export async function fetchRecord(kind: 'movie' | 'tv', id: number): Promise<TmdbMovie> {
 	const d = (await tmdbGet(`/${kind}/${id}`, { append_to_response: 'credits' })) as Details;
 	const crewDirectors = d.credits?.crew?.filter((p) => p.job === 'Director') ?? [];
 	const directors = kind === 'tv' && crewDirectors.length === 0 ? (d.created_by ?? []) : crewDirectors;
@@ -114,7 +114,7 @@ async function fetchRecord(kind: 'movie' | 'tv', id: number): Promise<TmdbMovie>
 		tmdbId: d.id,
 		mediaType: kind,
 		title: d.title ?? d.name ?? '',
-		year: Number.parseInt((d.release_date ?? d.first_air_date)?.slice(0, 4) ?? '', 10) || null,
+		year: releaseYear(d),
 		countries: d.production_countries?.map((c) => c.iso_3166_1) ?? [],
 		originCountries: d.origin_country ?? [],
 		genres: d.genres?.map((g) => g.name) ?? [],
