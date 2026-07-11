@@ -7,18 +7,26 @@
 	const GENRE_ROWS = 3;
 	const GENRE_ROW_SIZE = 10;
 
-	let { films }: { films: EnrichedFilm[] } = $props();
+	let {
+		films,
+		watchlistIds = [],
+		includeWatchlist = $bindable(false)
+	}: {
+		films: EnrichedFilm[];
+		watchlistIds?: number[];
+		includeWatchlist?: boolean;
+	} = $props();
 
 	let general: Recommendation[] = $state([]);
 	let genreRows: { genre: string; recommendations: Recommendation[] }[] = $state([]);
 
 	$effect(() => {
-		void load(films);
+		void load(films, includeWatchlist ? [] : watchlistIds);
 	});
 
-	async function load(current: EnrichedFilm[]) {
-		const watched = watchedTmdbIds(current);
-		const safeFetch = (seeds: Seed[]) => fetchRecommendations(seeds, watched).catch(() => []);
+	async function load(current: EnrichedFilm[], watchlistExclude: number[]) {
+		const exclude = [...watchedTmdbIds(current), ...watchlistExclude];
+		const safeFetch = (seeds: Seed[]) => fetchRecommendations(seeds, exclude).catch(() => []);
 		const genres = favoriteGenres(current, GENRE_ROWS);
 		const [main, ...perGenre] = await Promise.all([
 			safeFetch(pickDiverseSeeds(current, 25)),
@@ -55,7 +63,15 @@
 
 {#if general.length > 0 || genreRows.length > 0}
 	<section>
-		<h2>You might like</h2>
+		<div class="heading">
+			<h2>You might like</h2>
+			{#if watchlistIds.length > 0}
+				<label class="toggle">
+					<input type="checkbox" bind:checked={includeWatchlist} />
+					Include films from my watchlist
+				</label>
+			{/if}
+		</div>
 		<p class="note">Based on Trakt's related films for your highest-rated movies.</p>
 		{#if general.length > 0}
 			{@render posterGrid(general)}
@@ -115,5 +131,26 @@
 	.year {
 		font-size: 0.75rem;
 		color: var(--fg-muted);
+	}
+	.heading {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 8px 16px;
+		flex-wrap: wrap;
+	}
+	.heading h2 {
+		margin: 0;
+	}
+	.toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 0.875rem;
+		color: var(--fg-secondary);
+	}
+	.toggle input {
+		accent-color: var(--accent);
+		margin: 0;
 	}
 </style>
