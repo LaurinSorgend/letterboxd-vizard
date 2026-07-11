@@ -33,6 +33,7 @@ letterboxd-*-utc.zip
 .claude
 CLAUDE.md
 DESIGN.md
+.superpowers
 
 # Local demo data
 /static/demo-export.zip
