@@ -10,14 +10,14 @@
 	let recs: Recommendation[] = $state([]);
 
 	$effect(() => {
-		void load(stat);
+		void load(stat, exclude);
 	});
 
-	async function load(current: CountryStat) {
+	async function load(current: CountryStat, excludeIds: number[]) {
 		status = 'loading';
 		recs = [];
 		try {
-			const results = await fetchRecommendations(pickCountrySeeds(current.films, 8), exclude);
+			const results = await fetchRecommendations(pickCountrySeeds(current.films, 8), excludeIds);
 			recs = results.filter((r) => r.countries.includes(current.code)).slice(0, 3);
 			status = recs.length > 0 ? 'ready' : 'none';
 		} catch {
