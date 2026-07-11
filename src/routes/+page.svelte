@@ -31,6 +31,8 @@
 	let films: EnrichedFilm[] = $state([]);
 	let progress = $state({ done: 0, total: 0 });
 	let errorMessage: string | null = $state(null);
+	let watchlistIds: number[] = $state([]);
+	let includeWatchlist = $state(false);
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
 
@@ -60,9 +62,16 @@
 		errorMessage = null;
 		phase = 'working';
 		try {
-			data = parseExport(new Uint8Array(await file.arrayBuffer()));
-			progress = { done: 0, total: data.films.length };
-			films = await enrichFilms(data.films, (done, total) => (progress = { done, total }));
+			const parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
+			data = parsed;
+			const total = parsed.films.length + parsed.watchlist.length;
+			progress = { done: 0, total };
+			films = await enrichFilms(parsed.films, (done) => (progress = { done, total }));
+			watchlistIds = await enrichFilms(parsed.watchlist, (done) => {
+				progress = { done: parsed.films.length + done, total };
+			})
+				.then((entries) => entries.filter((e) => e.tmdb && e.tmdb.tmdbId > 0).map((e) => e.tmdb!.tmdbId))
+				.catch(() => []);
 			phase = 'ready';
 		} catch (cause) {
 			errorMessage = cause instanceof Error ? cause.message : String(cause);
@@ -110,7 +119,7 @@
 
 		<section>
 			<h2>Your films around the world</h2>
-			<WorldMap {films} {initialMetric} {presetCountry} />
+			<WorldMap {films} {initialMetric} {presetCountry} {watchlistIds} {includeWatchlist} />
 		</section>
 
 		<section>
@@ -166,7 +175,7 @@
 			</div>
 		</section>
 
-		<Recommendations {films} />
+		<Recommendations {films} {watchlistIds} bind:includeWatchlist />
 
 		{#if unmatched.length > 0}
 			<details class="unmatched">
