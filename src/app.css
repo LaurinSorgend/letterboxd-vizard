@@ -46,9 +46,11 @@
 
 	/*
 	 * World-map bins: sequential 5-step Viridis samples per theme (DESIGN.md
-	 * data-scale exception). Light: t 0.65→0.05 (more = darker); dark:
-	 * t 0.30→0.95 (more = lighter). Monotone lightness, step gaps, and surface
-	 * contrast validated with the dataviz palette checker (--ordinal).
+	 * data-scale exception; most CVD-friendly of the perceptually-uniform maps).
+	 * Light: t 0.65→0.05 (more = darker); dark: t 0.37→0.95 (more = lighter,
+	 * start shifted so bin 0 clears the 2:1 contrast floor on Frappé). Monotone
+	 * lightness, step gaps, and surface contrast validated against all four
+	 * flavor bases with the dataviz palette checker (--ordinal).
 	 * Index 0 = lowest bin.
 	 */
 	--map-bin-0: #2fb47c;
@@ -89,10 +91,10 @@
 		--ctp-blue: #89b4fa;
 		--ctp-lavender: #b4befe;
 
-		--map-bin-0: #355f8d;
-		--map-bin-1: #24868e;
-		--map-bin-2: #26ad81;
-		--map-bin-3: #6ece58;
+		--map-bin-0: #2d718e;
+		--map-bin-1: #20938c;
+		--map-bin-2: #32b67a;
+		--map-bin-3: #7fd34e;
 		--map-bin-4: #dfe318;
 	}
 }
@@ -126,10 +128,10 @@
 	--ctp-blue: #8caaee;
 	--ctp-lavender: #babbf1;
 
-	--map-bin-0: #355f8d;
-	--map-bin-1: #24868e;
-	--map-bin-2: #26ad81;
-	--map-bin-3: #6ece58;
+	--map-bin-0: #2d718e;
+	--map-bin-1: #20938c;
+	--map-bin-2: #32b67a;
+	--map-bin-3: #7fd34e;
 	--map-bin-4: #dfe318;
 }
 
@@ -162,10 +164,10 @@
 	--ctp-blue: #8aadf4;
 	--ctp-lavender: #b7bdf8;
 
-	--map-bin-0: #355f8d;
-	--map-bin-1: #24868e;
-	--map-bin-2: #26ad81;
-	--map-bin-3: #6ece58;
+	--map-bin-0: #2d718e;
+	--map-bin-1: #20938c;
+	--map-bin-2: #32b67a;
+	--map-bin-3: #7fd34e;
 	--map-bin-4: #dfe318;
 }
 
@@ -198,10 +200,10 @@
 	--ctp-blue: #89b4fa;
 	--ctp-lavender: #b4befe;
 
-	--map-bin-0: #355f8d;
-	--map-bin-1: #24868e;
-	--map-bin-2: #26ad81;
-	--map-bin-3: #6ece58;
+	--map-bin-0: #2d718e;
+	--map-bin-1: #20938c;
+	--map-bin-2: #32b67a;
+	--map-bin-3: #7fd34e;
 	--map-bin-4: #dfe318;
 }
 
