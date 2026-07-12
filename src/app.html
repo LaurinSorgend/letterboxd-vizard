@@ -5,9 +5,19 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<script>
-			const theme = localStorage.getItem('theme');
-			if (theme === 'light' || theme === 'dark') {
-				document.documentElement.dataset.theme = theme;
+			const legacy = localStorage.getItem('theme');
+			if (legacy) {
+				if (legacy === 'light') localStorage.setItem('flavor', 'latte');
+				if (legacy === 'dark') localStorage.setItem('flavor', 'mocha');
+				localStorage.removeItem('theme');
+			}
+			const flavor = localStorage.getItem('flavor');
+			if (['latte', 'frappe', 'macchiato', 'mocha'].includes(flavor)) {
+				document.documentElement.dataset.flavor = flavor;
+			}
+			const accent = localStorage.getItem('accent');
+			if (accent && accent !== 'blue') {
+				document.documentElement.dataset.accent = accent;
 			}
 		</script>
 		%sveltekit.head%

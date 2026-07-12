@@ -1,29 +1,76 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 
-	let theme = $state(
-		browser && ['light', 'dark'].includes(localStorage.getItem('theme') ?? '')
-			? (localStorage.getItem('theme') as 'light' | 'dark')
+	const flavors = [
+		['latte', 'Latte'],
+		['frappe', 'Frappé'],
+		['macchiato', 'Macchiato'],
+		['mocha', 'Mocha']
+	];
+	const accents = [
+		['rosewater', 'Rosewater'],
+		['flamingo', 'Flamingo'],
+		['pink', 'Pink'],
+		['mauve', 'Mauve'],
+		['red', 'Red'],
+		['maroon', 'Maroon'],
+		['peach', 'Peach'],
+		['yellow', 'Yellow'],
+		['green', 'Green'],
+		['teal', 'Teal'],
+		['sky', 'Sky'],
+		['sapphire', 'Sapphire'],
+		['blue', 'Blue'],
+		['lavender', 'Lavender']
+	];
+
+	let flavor = $state(
+		browser && flavors.some(([value]) => value === localStorage.getItem('flavor'))
+			? (localStorage.getItem('flavor') as string)
 			: 'system'
 	);
+	let accent = $state(
+		browser && accents.some(([value]) => value === localStorage.getItem('accent'))
+			? (localStorage.getItem('accent') as string)
+			: 'blue'
+	);
 
-	function apply(value: string) {
-		if (value === 'light' || value === 'dark') {
-			localStorage.setItem('theme', value);
-			document.documentElement.dataset.theme = value;
+	function applyFlavor(value: string) {
+		if (value === 'system') {
+			localStorage.removeItem('flavor');
+			delete document.documentElement.dataset.flavor;
 		} else {
-			localStorage.removeItem('theme');
-			delete document.documentElement.dataset.theme;
+			localStorage.setItem('flavor', value);
+			document.documentElement.dataset.flavor = value;
+		}
+	}
+
+	function applyAccent(value: string) {
+		if (value === 'blue') {
+			localStorage.removeItem('accent');
+			delete document.documentElement.dataset.accent;
+		} else {
+			localStorage.setItem('accent', value);
+			document.documentElement.dataset.accent = value;
 		}
 	}
 </script>
 
 <label>
 	Theme
-	<select bind:value={theme} onchange={() => apply(theme)}>
+	<select bind:value={flavor} onchange={() => applyFlavor(flavor)}>
 		<option value="system">System</option>
-		<option value="light">Light</option>
-		<option value="dark">Dark</option>
+		{#each flavors as [value, name] (value)}
+			<option {value}>{name}</option>
+		{/each}
+	</select>
+</label>
+<label>
+	Accent
+	<select bind:value={accent} onchange={() => applyAccent(accent)}>
+		{#each accents as [value, name] (value)}
+			<option {value}>{name}</option>
+		{/each}
 	</select>
 </label>
 
@@ -34,6 +81,9 @@
 		gap: 8px;
 		font-size: 0.875rem;
 		color: var(--fg-secondary);
+	}
+	label + label {
+		margin-left: 12px;
 	}
 	select {
 		background: var(--surface);
