@@ -16,7 +16,6 @@
 	} from './ramp';
 	import type { EnrichedFilm } from '$lib/types';
 
-	const MIN_RATED = 3;
 	const WIDTH = 960;
 	const HEIGHT = 480;
 
@@ -70,7 +69,7 @@
 
 	function binOf(stat: CountryStat): number | 'few' | null {
 		if (metric === 'count') return binIndex(stat.count, thresholds);
-		if (stat.ratedCount < MIN_RATED) return 'few';
+		if (stat.ratedCount === 0) return 'few';
 		return binIndex(stat.avg ?? 0, thresholds);
 	}
 
@@ -175,8 +174,8 @@
 					film{hoverStat.count === 1 ? '' : 's'}
 					{#if hoverStat.avg !== null}
 						· <span class="value">{hoverStat.avg.toFixed(2)}</span> avg
-						{#if metric === 'rating' && hoverStat.ratedCount < MIN_RATED}
-							(only {hoverStat.ratedCount} rated)
+						{#if metric === 'rating' && hoverStat.ratedCount < hoverStat.count}
+							({hoverStat.ratedCount} rated)
 						{/if}
 					{/if}
 				</div>
@@ -194,7 +193,7 @@
 			<span><i class="swatch bin-{i}"></i>{label}</span>
 		{/each}
 		{#if metric === 'rating'}
-			<span><i class="swatch few"></i>&lt; {MIN_RATED} rated</span>
+			<span><i class="swatch few"></i>no ratings</span>
 		{/if}
 		<span><i class="swatch nodata"></i>no films</span>
 	</div>
