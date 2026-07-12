@@ -24,14 +24,12 @@
 		films,
 		initialMetric = 'count',
 		presetCountry = null,
-		watchlistIds = [],
-		includeWatchlist = false
+		watchlistExclude = []
 	}: {
 		films: EnrichedFilm[];
 		initialMetric?: 'count' | 'rating';
 		presetCountry?: string | null;
-		watchlistIds?: number[];
-		includeWatchlist?: boolean;
+		watchlistExclude?: number[];
 	} = $props();
 
 	type Shape = { code: string | undefined; d: string; centroid: [number, number] };
@@ -41,10 +39,7 @@
 	let container: HTMLElement | undefined = $state();
 
 	const stats = $derived(aggregateCountries(films));
-	const excludeIds = $derived([
-		...watchedTmdbIds(films),
-		...(includeWatchlist ? [] : watchlistIds)
-	]);
+	const excludeIds = $derived([...watchedTmdbIds(films), ...watchlistExclude]);
 
 	// svelte-ignore state_referenced_locally -- URL presets are initial values by design
 	let selected: CountryStat | null = $state(

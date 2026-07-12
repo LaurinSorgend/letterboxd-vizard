@@ -23,6 +23,7 @@
 	} from '$lib/viz/stats';
 	import { parseExport } from '$lib/ingest/parse';
 	import { enrichFilms } from '$lib/ingest/enrich';
+	import { watchedTmdbIds } from '$lib/viz/seeds';
 	import type { EnrichedFilm, LetterboxdData } from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
@@ -35,6 +36,7 @@
 	let includeWatchlist = $state(false);
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
+	const watchlistExclude = $derived(includeWatchlist ? [] : watchlistIds);
 
 	const initialMetric = page.url.searchParams.get('metric') === 'rating' ? 'rating' : 'count';
 	const presetCountry = page.url.searchParams.get('country');
@@ -65,13 +67,15 @@
 			const parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
 			data = parsed;
 			const total = parsed.films.length + parsed.watchlist.length;
-			progress = { done: 0, total };
-			films = await enrichFilms(parsed.films, (done) => (progress = { done, total }));
-			watchlistIds = await enrichFilms(parsed.watchlist, (done) => {
-				progress = { done: parsed.films.length + done, total };
-			})
-				.then((entries) => entries.filter((e) => e.tmdb && e.tmdb.tmdbId > 0).map((e) => e.tmdb!.tmdbId))
-				.catch(() => []);
+			const done = { films: 0, watchlist: 0 };
+			const report = () => (progress = { done: done.films + done.watchlist, total });
+			report();
+			const [watched, watchlist] = await Promise.all([
+				enrichFilms(parsed.films, (n) => ((done.films = n), report())),
+				enrichFilms(parsed.watchlist, (n) => ((done.watchlist = n), report())).catch(() => [])
+			]);
+			films = watched;
+			watchlistIds = watchedTmdbIds(watchlist);
 			phase = 'ready';
 		} catch (cause) {
 			errorMessage = cause instanceof Error ? cause.message : String(cause);
@@ -119,7 +123,7 @@
 
 		<section>
 			<h2>Your films around the world</h2>
-			<WorldMap {films} {initialMetric} {presetCountry} {watchlistIds} {includeWatchlist} />
+			<WorldMap {films} {initialMetric} {presetCountry} {watchlistExclude} />
 		</section>
 
 		<section>

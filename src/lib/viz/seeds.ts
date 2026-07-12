@@ -1,5 +1,5 @@
 import { effectiveCountries } from './countries';
-import type { EnrichedFilm, Seed } from '$lib/types';
+import type { EnrichedFilm, Seed, TmdbMovie } from '$lib/types';
 
 const MAX_PER_DECADE = 4;
 const MAX_PER_COUNTRY = 6;
@@ -17,8 +17,8 @@ function toSeed(film: EnrichedFilm): Seed {
 	return { tmdbId: film.tmdb!.tmdbId, rating: film.rating ?? 3 };
 }
 
-/** TMDB ids of watched films with a real TMDB record (negative ids are TheTVDB). */
-export function watchedTmdbIds(films: EnrichedFilm[]): number[] {
+/** TMDB ids of enriched items with a real TMDB record (negative ids are TheTVDB). */
+export function watchedTmdbIds(films: { tmdb: TmdbMovie | null }[]): number[] {
 	return films.filter((f) => f.tmdb && f.tmdb.tmdbId > 0).map((f) => f.tmdb!.tmdbId);
 }
 
