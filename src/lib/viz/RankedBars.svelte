@@ -70,7 +70,9 @@
 			type="button"
 			class="track"
 			aria-pressed={selectedLabel === d.label}
-			title="{d.label}: {d.count}{d.avg !== null ? `, avg ${d.avg.toFixed(1)}` : ''} — click to list films"
+			title="{d.label}: {d.count}{d.avg !== null
+				? `, avg ${d.avg.toFixed(1)}`
+				: ''} — click to list films"
 			onclick={() => toggle(d.label)}
 		>
 			<span class="bar" style="width: {(d.count / max) * 100}%"></span>

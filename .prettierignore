@@ -1,0 +1,10 @@
+package-lock.json
+.svelte-kit
+build
+data
+static
+.gitnexus
+.superpowers
+.claude
+CLAUDE.md
+AGENTS.md

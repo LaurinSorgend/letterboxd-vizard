@@ -227,23 +227,65 @@
 </section>
 
 <style>
-	.bin-0 { fill: var(--map-bin-0); background: var(--map-bin-0); }
-	.bin-1 { fill: var(--map-bin-1); background: var(--map-bin-1); }
-	.bin-2 { fill: var(--map-bin-2); background: var(--map-bin-2); }
-	.bin-3 { fill: var(--map-bin-3); background: var(--map-bin-3); }
-	.bin-4 { fill: var(--map-bin-4); background: var(--map-bin-4); }
+	.bin-0 {
+		fill: var(--map-bin-0);
+		background: var(--map-bin-0);
+	}
+	.bin-1 {
+		fill: var(--map-bin-1);
+		background: var(--map-bin-1);
+	}
+	.bin-2 {
+		fill: var(--map-bin-2);
+		background: var(--map-bin-2);
+	}
+	.bin-3 {
+		fill: var(--map-bin-3);
+		background: var(--map-bin-3);
+	}
+	.bin-4 {
+		fill: var(--map-bin-4);
+		background: var(--map-bin-4);
+	}
 
-	.nodata { fill: var(--bg-secondary); background: var(--bg-secondary); }
-	.few { fill: var(--surface); background: var(--surface); }
+	.nodata {
+		fill: var(--bg-secondary);
+		background: var(--bg-secondary);
+	}
+	.few {
+		fill: var(--surface);
+		background: var(--surface);
+	}
 
-	svg { display: block; width: 100%; height: auto; }
-	svg path { stroke: var(--bg); stroke-width: 0.5; }
-	svg path[role='button'] { cursor: pointer; }
-	svg path[role='button']:hover { stroke: var(--fg); stroke-width: 1; }
-	svg path:focus-visible { outline: none; stroke: var(--focus); stroke-width: 2; }
-	svg path.selected { stroke: var(--fg); stroke-width: 1.5; }
+	svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	svg path {
+		stroke: var(--bg);
+		stroke-width: 0.5;
+	}
+	svg path[role='button'] {
+		cursor: pointer;
+	}
+	svg path[role='button']:hover {
+		stroke: var(--fg);
+		stroke-width: 1;
+	}
+	svg path:focus-visible {
+		outline: none;
+		stroke: var(--focus);
+		stroke-width: 2;
+	}
+	svg path.selected {
+		stroke: var(--fg);
+		stroke-width: 1.5;
+	}
 
-	.map { position: relative; }
+	.map {
+		position: relative;
+	}
 
 	.tooltip {
 		position: absolute;
@@ -256,10 +298,22 @@
 		pointer-events: none;
 		z-index: 1;
 	}
-	.tooltip ul { margin: 4px 0 0; padding-left: 16px; color: var(--fg-secondary); }
-	.value { font-weight: 600; }
+	.tooltip ul {
+		margin: 4px 0 0;
+		padding-left: 16px;
+		color: var(--fg-secondary);
+	}
+	.value {
+		font-weight: 600;
+	}
 
-	.controls fieldset { border: none; margin: 0 0 8px; padding: 0; display: flex; gap: 8px; }
+	.controls fieldset {
+		border: none;
+		margin: 0 0 8px;
+		padding: 0;
+		display: flex;
+		gap: 8px;
+	}
 	.controls label {
 		padding: 4px 12px;
 		border: 1px solid var(--border);
@@ -267,23 +321,76 @@
 		cursor: pointer;
 		font-size: 0.875rem;
 	}
-	.controls label.active { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-	.controls input { position: absolute; opacity: 0; }
-	.controls label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+	.controls label.active {
+		background: var(--accent);
+		color: var(--on-accent);
+		border-color: var(--accent);
+	}
+	.controls input {
+		position: absolute;
+		opacity: 0;
+	}
+	.controls label:has(input:focus-visible) {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
 
-	.legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font-size: 0.75rem; color: var(--fg-secondary); }
-	.legend span { display: inline-flex; align-items: center; gap: 4px; }
-	.swatch { width: 14px; height: 14px; border-radius: 2px; display: inline-block; }
-	.swatch.nodata, .swatch.few { border: 1px solid var(--border); }
+	.legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+		margin-top: 8px;
+		font-size: 0.75rem;
+		color: var(--fg-secondary);
+	}
+	.legend span {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.swatch {
+		width: 14px;
+		height: 14px;
+		border-radius: 2px;
+		display: inline-block;
+	}
+	.swatch.nodata,
+	.swatch.few {
+		border: 1px solid var(--border);
+	}
 
-	.note { font-size: 0.75rem; color: var(--fg-muted); margin: 4px 0 0; }
+	.note {
+		font-size: 0.75rem;
+		color: var(--fg-muted);
+		margin: 4px 0 0;
+	}
 
-	details { margin-top: 12px; }
-	summary { cursor: pointer; color: var(--fg-secondary); font-size: 0.875rem; }
-	table { border-collapse: collapse; margin-top: 8px; font-size: 0.875rem; }
-	th, td { padding: 4px 12px; border-bottom: 1px solid var(--border); text-align: left; }
-	thead tr { background: var(--bg-secondary); }
-	.num { text-align: right; font-variant-numeric: tabular-nums; }
+	details {
+		margin-top: 12px;
+	}
+	summary {
+		cursor: pointer;
+		color: var(--fg-secondary);
+		font-size: 0.875rem;
+	}
+	table {
+		border-collapse: collapse;
+		margin-top: 8px;
+		font-size: 0.875rem;
+	}
+	th,
+	td {
+		padding: 4px 12px;
+		border-bottom: 1px solid var(--border);
+		text-align: left;
+	}
+	thead tr {
+		background: var(--bg-secondary);
+	}
+	.num {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
 
 	.visually-hidden {
 		position: absolute;
@@ -292,5 +399,4 @@
 		overflow: hidden;
 		clip: rect(0 0 0 0);
 	}
-
 </style>

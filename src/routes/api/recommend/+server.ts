@@ -12,7 +12,11 @@ const MAX_RESULTS = 20;
 const limit = pLimit(5);
 
 /** TMDB record for a known id, reusing the title/year cache when it holds the same film. */
-async function movieRecord(tmdbId: number, title: string, year: number | null): Promise<TmdbMovie | null> {
+async function movieRecord(
+	tmdbId: number,
+	title: string,
+	year: number | null
+): Promise<TmdbMovie | null> {
 	const key = cacheKey(title, year);
 	const cached = getCached(key);
 	if (cached && cached.tmdbId === tmdbId) return cached;
@@ -41,7 +45,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const scores = new Map<
 		number,
-		{ tmdbId: number; title: string; year: number | null; score: number; traktRating: number | null }
+		{
+			tmdbId: number;
+			title: string;
+			year: number | null;
+			score: number;
+			traktRating: number | null;
+		}
 	>();
 	await Promise.all(
 		seeds.slice(0, MAX_SEEDS).map((seed) =>

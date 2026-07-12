@@ -167,5 +167,11 @@ export function ratingGaps(films: EnrichedFilm[]): { over: RatingGap[]; under: R
 		gaps.push({ film, yours: film.rating, tmdb, gap: film.rating - tmdb });
 	}
 	gaps.sort((a, b) => b.gap - a.gap);
-	return { over: gaps.slice(0, 5).filter((g) => g.gap > 0), under: gaps.slice(-5).filter((g) => g.gap < 0).reverse() };
+	return {
+		over: gaps.slice(0, 5).filter((g) => g.gap > 0),
+		under: gaps
+			.slice(-5)
+			.filter((g) => g.gap < 0)
+			.reverse()
+	};
 }

@@ -109,7 +109,8 @@ function dedupe(people: Person[]): Person[] {
 export async function fetchRecord(kind: 'movie' | 'tv', id: number): Promise<TmdbMovie> {
 	const d = (await tmdbGet(`/${kind}/${id}`, { append_to_response: 'credits' })) as Details;
 	const crewDirectors = d.credits?.crew?.filter((p) => p.job === 'Director') ?? [];
-	const directors = kind === 'tv' && crewDirectors.length === 0 ? (d.created_by ?? []) : crewDirectors;
+	const directors =
+		kind === 'tv' && crewDirectors.length === 0 ? (d.created_by ?? []) : crewDirectors;
 	return {
 		tmdbId: d.id,
 		mediaType: kind,
