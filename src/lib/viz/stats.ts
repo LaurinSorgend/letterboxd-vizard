@@ -6,6 +6,7 @@ export interface BarDatum {
 	count: number;
 	avg: number | null;
 	image?: string | null;
+	imageLarge?: string | null;
 	href?: string;
 	films: EnrichedFilm[];
 }
@@ -143,6 +144,7 @@ export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): Bar
 			count: group.films.length,
 			avg: avgRating(group.films),
 			image: imageUrl(group.profilePath, 'w45'),
+			imageLarge: imageUrl(group.profilePath, 'w185'),
 			href: `https://letterboxd.com/${kind}/${letterboxdSlug(name)}/`,
 			films: group.films
 		}))

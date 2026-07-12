@@ -11,6 +11,7 @@
 
 	let expanded = $state(false);
 	let selectedLabel: string | null = $state(null);
+	let pinnedLabel: string | null = $state(null);
 	const rows = $derived(expanded ? data : data.slice(0, limit));
 	const max = $derived(Math.max(1, ...rows.map((d) => d.count)));
 	const hasImages = $derived(data.some((d) => d.image !== undefined));
@@ -21,16 +22,42 @@
 	function toggle(label: string) {
 		selectedLabel = selectedLabel === label ? null : label;
 	}
+
+	function togglePin(label: string) {
+		pinnedLabel = pinnedLabel === label ? null : label;
+	}
 </script>
+
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key === 'Escape' && pinnedLabel !== null) pinnedLabel = null;
+	}}
+/>
 
 <div class="chart" class:with-images={hasImages} role="group" aria-label={description}>
 	{#each rows as d (d.label)}
 		{#if hasImages}
-			<span class="pic">
-				{#if d.image}
-					<img src={d.image} alt="" loading="lazy" width="24" height="24" />
-				{/if}
-			</span>
+			{#if d.imageLarge}
+				<button
+					type="button"
+					class="pic"
+					class:pinned={pinnedLabel === d.label}
+					aria-pressed={pinnedLabel === d.label}
+					aria-label="Show portrait of {d.label}"
+					onclick={() => togglePin(d.label)}
+				>
+					{#if d.image}
+						<img src={d.image} alt="" loading="lazy" width="24" height="24" />
+					{/if}
+					<img class="preview" src={d.imageLarge} alt="" loading="lazy" width="150" />
+				</button>
+			{:else}
+				<span class="pic">
+					{#if d.image}
+						<img src={d.image} alt="" loading="lazy" width="24" height="24" />
+					{/if}
+				</span>
+			{/if}
 		{/if}
 		<span class="lab" title={d.label}>
 			{#if d.href}
@@ -69,6 +96,7 @@
 		grid-template-columns: minmax(72px, max-content) 1fr auto;
 		gap: 4px 12px;
 		align-items: center;
+		position: relative;
 	}
 	.chart.with-images {
 		grid-template-columns: 24px minmax(72px, max-content) 1fr auto;
@@ -77,6 +105,33 @@
 	.pic {
 		width: 24px;
 		height: 24px;
+		position: relative;
+	}
+	button.pic {
+		padding: 0;
+		margin: 0;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		border-radius: 50%;
+	}
+	.pic .preview {
+		display: none;
+		position: absolute;
+		top: 28px;
+		left: 0;
+		width: 150px;
+		height: auto;
+		border-radius: 8px;
+		border: 1px solid var(--border-strong);
+		background: var(--surface);
+		box-shadow: 0 2px 8px color-mix(in srgb, var(--ctp-crust) 60%, transparent);
+		z-index: 10;
+	}
+	button.pic:hover .preview,
+	button.pic:focus-visible .preview,
+	button.pic.pinned .preview {
+		display: block;
 	}
 	.pic img {
 		width: 24px;
