@@ -41,3 +41,14 @@ node build
 ```
 
 Runs a Node server (adapter-node). The TMDB cache lives in `data/cache.db`.
+
+## Hosting with Docker
+
+```sh
+cp .env.example .env   # put your API keys in .env
+docker compose up -d --build
+```
+
+Serves on port 3000. Set `ORIGIN` in `.env` to your public URL (defaults to
+`http://localhost:3000`) so form submissions aren't rejected. The TMDB cache is
+persisted on the host in `./data` via a bind mount.

@@ -1,0 +1,12 @@
+node_modules
+build
+.svelte-kit
+data
+.env*
+.git
+.gitnexus
+.claude
+.superpowers
+*.md
+out.txt
+err.txt
