@@ -37,7 +37,9 @@ const insertMovie = db.prepare(
 	'INSERT OR REPLACE INTO movies (cache_key, tmdb_id, data, fetched_at) VALUES (?, ?, ?, ?)'
 );
 const selectMiss = db.prepare('SELECT fetched_at FROM misses WHERE cache_key = ?');
-const insertMiss = db.prepare('INSERT OR REPLACE INTO misses (cache_key, fetched_at) VALUES (?, ?)');
+const insertMiss = db.prepare(
+	'INSERT OR REPLACE INTO misses (cache_key, fetched_at) VALUES (?, ?)'
+);
 
 export function cacheKey(name: string, year: number | null): string {
 	return `${name.trim().toLowerCase()}::${year ?? ''}`;

@@ -18,7 +18,13 @@
 			<ul>
 				{#each list.rows as row (row.film.uri)}
 					<li>
-						<a class="name" href={row.film.uri} target="_blank" rel="noopener" title={row.film.name}>
+						<a
+							class="name"
+							href={row.film.uri}
+							target="_blank"
+							rel="noopener"
+							title={row.film.name}
+						>
 							{row.film.name}
 						</a>
 						<span class="nums">

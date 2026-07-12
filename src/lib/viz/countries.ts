@@ -16,7 +16,9 @@ export function countryName(alpha2: string): string {
 }
 
 /** The countries a record is attributed to: production countries, else origin countries. */
-export function effectiveCountries(record: Pick<TmdbMovie, 'countries' | 'originCountries'>): string[] {
+export function effectiveCountries(
+	record: Pick<TmdbMovie, 'countries' | 'originCountries'>
+): string[] {
 	return record.countries.length ? record.countries : record.originCountries;
 }
 

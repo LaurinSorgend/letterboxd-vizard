@@ -1,0 +1,13 @@
+name: CI
+on: [push]
+jobs:
+  ci:
+    runs-on: docker
+    container:
+      image: node:24-bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check
+      - run: npm run build

@@ -156,11 +156,19 @@
 			<div class="pair">
 				<div>
 					<h3>Genres</h3>
-					<RankedBars data={byGenre(films)} showAvg description="Films and average rating per genre" />
+					<RankedBars
+						data={byGenre(films)}
+						showAvg
+						description="Films and average rating per genre"
+					/>
 				</div>
 				<div>
 					<h3>Original language</h3>
-					<RankedBars data={byLanguage(films)} showAvg description="Films and average rating per language" />
+					<RankedBars
+						data={byLanguage(films)}
+						showAvg
+						description="Films and average rating per language"
+					/>
 				</div>
 			</div>
 		</section>
@@ -170,11 +178,19 @@
 			<div class="pair">
 				<div>
 					<h3>Most-watched directors</h3>
-					<RankedBars data={byPerson(films, 'directors')} showAvg description="Films and average rating per director" />
+					<RankedBars
+						data={byPerson(films, 'directors')}
+						showAvg
+						description="Films and average rating per director"
+					/>
 				</div>
 				<div>
 					<h3>Most-watched actors</h3>
-					<RankedBars data={byPerson(films, 'cast')} showAvg description="Films and average rating per actor" />
+					<RankedBars
+						data={byPerson(films, 'cast')}
+						showAvg
+						description="Films and average rating per actor"
+					/>
 				</div>
 			</div>
 		</section>
@@ -201,8 +217,8 @@
 		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/pulls">Contribute</a>
 	</nav>
 	<p>
-		Film metadata from <a href="https://www.themoviedb.org">TMDB</a>. This product uses the TMDB
-		API but is not endorsed or certified by TMDB. Recommendations powered by
+		Film metadata from <a href="https://www.themoviedb.org">TMDB</a>. This product uses the TMDB API
+		but is not endorsed or certified by TMDB. Recommendations powered by
 		<a href="https://trakt.tv">Trakt</a>. Some series data from
 		<a href="https://thetvdb.com">TheTVDB</a>.
 	</p>

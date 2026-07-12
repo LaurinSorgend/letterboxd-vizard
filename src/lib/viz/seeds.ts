@@ -98,9 +98,7 @@ export function pickGenreSeeds(films: EnrichedFilm[], genre: string): Seed[] {
 export function pickCountrySeeds(films: EnrichedFilm[], count: number): Seed[] {
 	const pool = films.filter(
 		(f) =>
-			f.tmdb?.mediaType === 'movie' &&
-			f.tmdb.tmdbId > 0 &&
-			(f.rating === null || f.rating >= 3)
+			f.tmdb?.mediaType === 'movie' && f.tmdb.tmdbId > 0 && (f.rating === null || f.rating >= 3)
 	);
 	return shuffled(pool).slice(0, count).map(toSeed);
 }

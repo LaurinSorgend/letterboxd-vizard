@@ -36,7 +36,9 @@ export async function relatedMovies(tmdbId: number): Promise<RelatedMovie[]> {
 	const slug = found[0]?.movie.ids.slug;
 	let related: RelatedMovie[] = [];
 	if (slug) {
-		const movies = (await traktGet(`/movies/${slug}/related?limit=15&extended=full`)) as TraktMovie[];
+		const movies = (await traktGet(
+			`/movies/${slug}/related?limit=15&extended=full`
+		)) as TraktMovie[];
 		related = movies
 			.filter((m) => m.ids.tmdb !== null)
 			.map((m) => ({
