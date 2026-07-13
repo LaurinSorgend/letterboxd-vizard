@@ -11,8 +11,23 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "letterboxd-vizard-db",
-			"database_id": "REPLACE_WITH_D1_DATABASE_ID"
+			"database_name": "letterboxed-vizard-db",
+			"database_id": "f5246d56-7cff-43c3-bbc6-0f75ce3bf669"
 		}
-	]
+	],
+	"observability": {
+		"enabled": false,
+		"head_sampling_rate": 1,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"persist": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": false,
+			"persist": true,
+			"head_sampling_rate": 1
+		}
+	}
 }

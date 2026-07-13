@@ -14,7 +14,7 @@ analyze it.
 ```sh
 npm install
 cp .env.example .env   # put your TMDB API key in .env
-npx wrangler d1 execute letterboxd-vizard-db --local --file=schema.sql
+npx wrangler d1 execute letterboxed-vizard-db --local --file=schema.sql
 npm run dev
 ```
 
@@ -45,9 +45,9 @@ At hobby traffic the whole stack fits Cloudflare's free tier. One-time setup:
 
 ```sh
 npx wrangler login
-npx wrangler d1 create letterboxd-vizard-db --jurisdiction eu
+npx wrangler d1 create letterboxed-vizard-db --jurisdiction eu
 # paste the printed database_id into wrangler.jsonc
-npx wrangler d1 execute letterboxd-vizard-db --remote --file=schema.sql
+npx wrangler d1 execute letterboxed-vizard-db --remote --file=schema.sql
 npx wrangler secret put TMDB_API_KEY
 # optional: repeat for TRAKT_CLIENT_ID and TVDB_API_KEY
 ```
