@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import worldCountries from 'world-countries';
 import type { TmdbMovie } from '$lib/types';
+import type { FetchBudget } from './budget';
 
 const BASE = 'https://api4.thetvdb.com/v4';
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -9,8 +10,9 @@ const alpha3to2 = new Map(worldCountries.map((c) => [c.cca3.toLowerCase(), c.cca
 
 let session: { token: string; fetchedAt: number } | null = null;
 
-async function token(): Promise<string> {
+async function token(budget: FetchBudget): Promise<string> {
 	if (session && Date.now() - session.fetchedAt < TOKEN_TTL_MS) return session.token;
+	budget.take();
 	const response = await fetch(`${BASE}/login`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -22,9 +24,11 @@ async function token(): Promise<string> {
 	return session.token;
 }
 
-async function tvdbGet(path: string): Promise<unknown> {
+async function tvdbGet(budget: FetchBudget, path: string): Promise<unknown> {
+	const auth = await token(budget);
+	budget.take();
 	const response = await fetch(BASE + path, {
-		headers: { Authorization: `Bearer ${await token()}` }
+		headers: { Authorization: `Bearer ${auth}` }
 	});
 	if (!response.ok) throw new Error(`TheTVDB ${path} failed: ${response.status}`);
 	return response.json();
@@ -49,13 +53,14 @@ interface TvdbSeries {
  * Records get negative ids so they never collide with TMDB ids.
  */
 export async function lookupSeriesOnTvdb(
+	budget: FetchBudget,
 	name: string,
 	year: number | null
 ): Promise<TmdbMovie | null> {
 	if (!env.TVDB_API_KEY) return null;
 
 	const query = encodeURIComponent(name);
-	const { data: results } = (await tvdbGet(`/search?query=${query}&type=series`)) as {
+	const { data: results } = (await tvdbGet(budget, `/search?query=${query}&type=series`)) as {
 		data: TvdbSearchResult[];
 	};
 	const match =
@@ -67,7 +72,8 @@ export async function lookupSeriesOnTvdb(
 
 	let details: TvdbSeries = {};
 	try {
-		details = ((await tvdbGet(`/series/${match.tvdb_id}/extended`)) as { data: TvdbSeries }).data;
+		details = ((await tvdbGet(budget, `/series/${match.tvdb_id}/extended`)) as { data: TvdbSeries })
+			.data;
 	} catch {
 		// Search hit is enough; extended details are a bonus.
 	}

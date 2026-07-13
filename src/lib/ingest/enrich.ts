@@ -1,10 +1,19 @@
 import type { EnrichRequestItem, TmdbMovie } from '$lib/types';
 
 const BATCH_SIZE = 50;
+/** Retry batches stay under the server's per-request fetch budget (~2 fetches per film). */
+const RETRY_BATCH_SIZE = 15;
 /** Batches in flight at once, so the server pipeline never drains between round trips. */
 const MAX_IN_FLIGHT = 2;
+/** Rounds of retries for lookups the server deferred (fetch budget) or failed transiently. */
+const MAX_ROUNDS = 8;
 
-async function enrichBatch(batch: EnrichRequestItem[]): Promise<(TmdbMovie | null)[]> {
+interface EnrichResponse {
+	results: (TmdbMovie | null)[];
+	pending?: number[];
+}
+
+async function enrichBatch(batch: EnrichRequestItem[]): Promise<EnrichResponse> {
 	const response = await fetch('/api/enrich', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -13,7 +22,7 @@ async function enrichBatch(batch: EnrichRequestItem[]): Promise<(TmdbMovie | nul
 	if (!response.ok) {
 		throw new Error(`Enrichment failed (${response.status}): ${await response.text()}`);
 	}
-	return ((await response.json()) as { results: (TmdbMovie | null)[] }).results;
+	return (await response.json()) as EnrichResponse;
 }
 
 /** Resolves name+year items against /api/enrich in batches, reporting progress after each batch. */
@@ -21,26 +30,38 @@ export async function enrichFilms<T extends EnrichRequestItem>(
 	items: T[],
 	onProgress: (done: number, total: number) => void
 ): Promise<(T & { tmdb: TmdbMovie | null })[]> {
-	const batches: T[][] = [];
-	for (let start = 0; start < items.length; start += BATCH_SIZE) {
-		batches.push(items.slice(start, start + BATCH_SIZE));
-	}
-
-	const results: (TmdbMovie | null)[][] = new Array(batches.length);
+	const tmdb: (TmdbMovie | null)[] = new Array(items.length).fill(null);
+	let queue = items.map((_, index) => index);
 	let done = 0;
-	let next = 0;
-	async function worker() {
-		while (next < batches.length) {
-			const index = next++;
-			results[index] = await enrichBatch(batches[index]);
-			done += batches[index].length;
-			onProgress(done, items.length);
-		}
-	}
-	await Promise.all(Array.from({ length: Math.min(MAX_IN_FLIGHT, batches.length) }, worker));
 
-	return items.map((item, i) => ({
-		...item,
-		tmdb: results[Math.floor(i / BATCH_SIZE)][i % BATCH_SIZE]
-	}));
+	for (let round = 0; round < MAX_ROUNDS && queue.length > 0; round++) {
+		const size = round === 0 ? BATCH_SIZE : RETRY_BATCH_SIZE;
+		const batches: number[][] = [];
+		for (let start = 0; start < queue.length; start += size) {
+			batches.push(queue.slice(start, start + size));
+		}
+
+		const retry: number[] = [];
+		let next = 0;
+		async function worker() {
+			while (next < batches.length) {
+				const batch = batches[next++];
+				const { results, pending } = await enrichBatch(batch.map((i) => items[i]));
+				const stillPending = new Set(pending ?? []);
+				batch.forEach((itemIndex, batchIndex) => {
+					if (stillPending.has(batchIndex)) {
+						retry.push(itemIndex);
+					} else {
+						tmdb[itemIndex] = results[batchIndex];
+						done += 1;
+					}
+				});
+				onProgress(done, items.length);
+			}
+		}
+		await Promise.all(Array.from({ length: Math.min(MAX_IN_FLIGHT, batches.length) }, worker));
+		queue = retry;
+	}
+
+	return items.map((item, i) => ({ ...item, tmdb: tmdb[i] }));
 }

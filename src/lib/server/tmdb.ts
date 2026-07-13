@@ -1,8 +1,11 @@
 import { env } from '$env/dynamic/private';
 import type { Person, TmdbMovie } from '$lib/types';
+import type { FetchBudget } from './budget';
 import { lookupSeriesOnTvdb } from './tvdb';
 
 const BASE = 'https://api.themoviedb.org/3';
+const RETRY_WAIT_MS = 500;
+const MAX_RETRY_WAIT_MS = 2000;
 
 interface SearchResult {
 	id: number;
@@ -19,20 +22,31 @@ function apiKey(): string {
 }
 
 /** Supports both v3 API keys (query param) and v4 read access tokens (JWT bearer). */
-async function tmdbGet(path: string, params: Record<string, string>): Promise<unknown> {
+async function tmdbGet(
+	budget: FetchBudget,
+	path: string,
+	params: Record<string, string>
+): Promise<unknown> {
 	const key = apiKey();
 	const isBearer = key.startsWith('eyJ');
 	const url = new URL(BASE + path);
 	for (const [name, value] of Object.entries(params)) url.searchParams.set(name, value);
 	if (!isBearer) url.searchParams.set('api_key', key);
+	const headers: Record<string, string> = isBearer ? { Authorization: `Bearer ${key}` } : {};
 
-	const response = await fetch(url, {
-		headers: isBearer ? { Authorization: `Bearer ${key}` } : {}
-	});
-	if (!response.ok) {
-		throw new Error(`TMDB ${path} failed: ${response.status} ${await response.text()}`);
+	for (let attempt = 0; ; attempt++) {
+		budget.take();
+		const response = await fetch(url, { headers });
+		if (response.ok) return response.json();
+		const detail = await response.text();
+		const retryable = response.status === 429 || response.status >= 500;
+		if (!retryable || attempt > 0 || budget.exhausted) {
+			throw new Error(`TMDB ${path} failed: ${response.status} ${detail}`);
+		}
+		const after = Number(response.headers.get('Retry-After')) * 1000;
+		const wait = after > 0 ? Math.min(after, MAX_RETRY_WAIT_MS) : RETRY_WAIT_MS;
+		await new Promise((resolve) => setTimeout(resolve, wait));
 	}
-	return response.json();
 }
 
 function releaseYear(result: SearchResult): number | null {
@@ -42,12 +56,13 @@ function releaseYear(result: SearchResult): number | null {
 }
 
 async function searchWithYear(
+	budget: FetchBudget,
 	kind: 'movie' | 'tv',
 	name: string,
 	year: number
 ): Promise<SearchResult | null> {
 	const yearParam = kind === 'movie' ? 'primary_release_year' : 'first_air_date_year';
-	const { results } = (await tmdbGet(`/search/${kind}`, {
+	const { results } = (await tmdbGet(budget, `/search/${kind}`, {
 		query: name,
 		[yearParam]: String(year)
 	})) as { results: SearchResult[] };
@@ -55,11 +70,12 @@ async function searchWithYear(
 }
 
 async function searchLoose(
+	budget: FetchBudget,
 	kind: 'movie' | 'tv',
 	name: string,
 	year: number | null
 ): Promise<{ result: SearchResult; yearMatch: boolean } | null> {
-	const { results } = (await tmdbGet(`/search/${kind}`, { query: name })) as {
+	const { results } = (await tmdbGet(budget, `/search/${kind}`, { query: name })) as {
 		results: SearchResult[];
 	};
 	if (results.length === 0) return null;
@@ -106,8 +122,12 @@ function dedupe(people: Person[]): Person[] {
 	return [...new Map(people.map((p) => [p.name, p])).values()];
 }
 
-export async function fetchRecord(kind: 'movie' | 'tv', id: number): Promise<TmdbMovie> {
-	const d = (await tmdbGet(`/${kind}/${id}`, { append_to_response: 'credits' })) as Details;
+export async function fetchRecord(
+	budget: FetchBudget,
+	kind: 'movie' | 'tv',
+	id: number
+): Promise<TmdbMovie> {
+	const d = (await tmdbGet(budget, `/${kind}/${id}`, { append_to_response: 'credits' })) as Details;
 	const crewDirectors = d.credits?.crew?.filter((p) => p.job === 'Director') ?? [];
 	const directors =
 		kind === 'tv' && crewDirectors.length === 0 ? (d.created_by ?? []) : crewDirectors;
@@ -133,21 +153,25 @@ export async function fetchRecord(kind: 'movie' | 'tv', id: number): Promise<Tmd
  * Year-respecting matches win before wrong-year fallbacks:
  * movie@year → tv@year → movie±1 → tv±1 → any movie → any tv → TheTVDB.
  */
-export async function lookupMovie(name: string, year: number | null): Promise<TmdbMovie | null> {
+export async function lookupMovie(
+	budget: FetchBudget,
+	name: string,
+	year: number | null
+): Promise<TmdbMovie | null> {
 	if (year !== null) {
-		const movie = await searchWithYear('movie', name, year);
-		if (movie) return fetchRecord('movie', movie.id);
-		const tv = await searchWithYear('tv', name, year);
-		if (tv) return fetchRecord('tv', tv.id);
+		const movie = await searchWithYear(budget, 'movie', name, year);
+		if (movie) return fetchRecord(budget, 'movie', movie.id);
+		const tv = await searchWithYear(budget, 'tv', name, year);
+		if (tv) return fetchRecord(budget, 'tv', tv.id);
 	}
 
-	const movieLoose = await searchLoose('movie', name, year);
-	if (movieLoose?.yearMatch) return fetchRecord('movie', movieLoose.result.id);
-	const tvLoose = await searchLoose('tv', name, year);
-	if (tvLoose?.yearMatch) return fetchRecord('tv', tvLoose.result.id);
+	const movieLoose = await searchLoose(budget, 'movie', name, year);
+	if (movieLoose?.yearMatch) return fetchRecord(budget, 'movie', movieLoose.result.id);
+	const tvLoose = await searchLoose(budget, 'tv', name, year);
+	if (tvLoose?.yearMatch) return fetchRecord(budget, 'tv', tvLoose.result.id);
 
-	if (movieLoose) return fetchRecord('movie', movieLoose.result.id);
-	if (tvLoose) return fetchRecord('tv', tvLoose.result.id);
+	if (movieLoose) return fetchRecord(budget, 'movie', movieLoose.result.id);
+	if (tvLoose) return fetchRecord(budget, 'tv', tvLoose.result.id);
 
-	return lookupSeriesOnTvdb(name, year);
+	return lookupSeriesOnTvdb(budget, name, year);
 }

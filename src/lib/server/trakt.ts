@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import type { D1Database } from '@cloudflare/workers-types';
+import type { FetchBudget } from './budget';
 import { getRelatedCached, putRelatedCached, type RelatedMovie } from './cache';
 
 const BASE = 'https://api.trakt.tv';
@@ -8,7 +9,8 @@ export function traktAvailable(): boolean {
 	return Boolean(env.TRAKT_CLIENT_ID);
 }
 
-async function traktGet(path: string): Promise<unknown> {
+async function traktGet(budget: FetchBudget, path: string): Promise<unknown> {
+	budget.take();
 	const response = await fetch(BASE + path, {
 		headers: {
 			'Content-Type': 'application/json',
@@ -29,15 +31,22 @@ interface TraktMovie {
 }
 
 /** Related movies for a TMDB id, cached in D1 for a week. */
-export async function relatedMovies(db: D1Database, tmdbId: number): Promise<RelatedMovie[]> {
+export async function relatedMovies(
+	db: D1Database,
+	budget: FetchBudget,
+	tmdbId: number
+): Promise<RelatedMovie[]> {
 	const cached = await getRelatedCached(db, tmdbId);
 	if (cached) return cached;
 
-	const found = (await traktGet(`/search/tmdb/${tmdbId}?type=movie`)) as { movie: TraktMovie }[];
+	const found = (await traktGet(budget, `/search/tmdb/${tmdbId}?type=movie`)) as {
+		movie: TraktMovie;
+	}[];
 	const slug = found[0]?.movie.ids.slug;
 	let related: RelatedMovie[] = [];
 	if (slug) {
 		const movies = (await traktGet(
+			budget,
 			`/movies/${slug}/related?limit=15&extended=full`
 		)) as TraktMovie[];
 		related = movies

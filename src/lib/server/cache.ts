@@ -4,6 +4,17 @@ import type { TmdbMovie } from '$lib/types';
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const RELATED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** D1 allows at most 100 bound parameters per query. */
+const MAX_PARAMS = 100;
+
+function chunks<T>(list: T[], size: number): T[][] {
+	const out: T[][] = [];
+	for (let start = 0; start < list.length; start += size) {
+		out.push(list.slice(start, start + size));
+	}
+	return out;
+}
+
 export function cacheKey(name: string, year: number | null): string {
 	return `${name.trim().toLowerCase()}::${year ?? ''}`;
 }
@@ -42,6 +53,64 @@ export async function putCached(
 		await db
 			.prepare('INSERT OR REPLACE INTO misses (cache_key, fetched_at) VALUES (?, ?)')
 			.bind(key, Date.now())
+			.run();
+	}
+}
+
+/**
+ * Cache lookup for many keys in a couple of queries: hits map to the movie,
+ * fresh misses to null, unknown keys are absent.
+ */
+export async function getCachedMany(
+	db: D1Database,
+	keys: string[]
+): Promise<Map<string, TmdbMovie | null>> {
+	const known = new Map<string, TmdbMovie | null>();
+	for (const chunk of chunks(keys, MAX_PARAMS)) {
+		const marks = chunk.map(() => '?').join(',');
+		const { results } = await db
+			.prepare(`SELECT cache_key, data FROM movies WHERE cache_key IN (${marks})`)
+			.bind(...chunk)
+			.all<{ cache_key: string; data: string }>();
+		for (const row of results) known.set(row.cache_key, JSON.parse(row.data) as TmdbMovie);
+	}
+
+	const unknown = keys.filter((key) => !known.has(key));
+	const cutoff = Date.now() - MISS_TTL_MS;
+	for (const chunk of chunks(unknown, MAX_PARAMS - 1)) {
+		const marks = chunk.map(() => '?').join(',');
+		const { results } = await db
+			.prepare(`SELECT cache_key FROM misses WHERE cache_key IN (${marks}) AND fetched_at > ?`)
+			.bind(...chunk, cutoff)
+			.all<{ cache_key: string }>();
+		for (const row of results) known.set(row.cache_key, null);
+	}
+	return known;
+}
+
+/** Multi-row upserts so a whole batch costs a handful of D1 subrequests. */
+export async function putCachedMany(
+	db: D1Database,
+	entries: [string, TmdbMovie | null][]
+): Promise<void> {
+	const now = Date.now();
+	const movies = entries.filter((entry): entry is [string, TmdbMovie] => entry[1] !== null);
+	const misses = entries.filter(([, movie]) => movie === null).map(([key]) => key);
+
+	for (const chunk of chunks(movies, Math.floor(MAX_PARAMS / 4))) {
+		const marks = chunk.map(() => '(?, ?, ?, ?)').join(',');
+		await db
+			.prepare(
+				`INSERT OR REPLACE INTO movies (cache_key, tmdb_id, data, fetched_at) VALUES ${marks}`
+			)
+			.bind(...chunk.flatMap(([key, movie]) => [key, movie.tmdbId, JSON.stringify(movie), now]))
+			.run();
+	}
+	for (const chunk of chunks(misses, Math.floor(MAX_PARAMS / 2))) {
+		const marks = chunk.map(() => '(?, ?)').join(',');
+		await db
+			.prepare(`INSERT OR REPLACE INTO misses (cache_key, fetched_at) VALUES ${marks}`)
+			.bind(...chunk.flatMap((key) => [key, now]))
 			.run();
 	}
 }
