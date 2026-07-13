@@ -5,16 +5,21 @@ world maps of how many films you watched per country and how you rate them, rati
 habits vs TMDB, watches over time, genres, languages, directors and actors.
 
 Your export is parsed entirely in the browser - only film titles and years are sent
-to the server to look up metadata on TMDB. Lookups are cached in SQLite so each film
-is fetched from TMDB at most once, no matter how many users analyze it.
+to the server to look up metadata on TMDB. Lookups are cached in a D1 (SQLite)
+database so each film is fetched from TMDB at most once, no matter how many users
+analyze it.
 
 ## Setup
 
 ```sh
 npm install
 cp .env.example .env   # put your TMDB API key in .env
+npx wrangler d1 execute letterboxd-vizard-db --local --file=schema.sql
 npm run dev
 ```
+
+The `d1 execute --local` step creates the cache tables in the local D1 emulator
+(under `.wrangler/state`) - run it once, and again after changing `schema.sql`.
 
 Get a free TMDB API key at themoviedb.org → Settings → API. Both v3 keys and v4 read
 access tokens work.
@@ -33,22 +38,22 @@ Get your Letterboxd export at letterboxd.com → Settings → Data → Export yo
 This project was largely written with the help of an AI coding assistant
 (Claude Code), guided, reviewed and tested by a human.
 
-## Production
+## Hosting on Cloudflare
+
+The app deploys to Cloudflare Workers, with the TMDB cache in a D1 database.
+At hobby traffic the whole stack fits Cloudflare's free tier. One-time setup:
 
 ```sh
-npm run build
-node build
+npx wrangler login
+npx wrangler d1 create letterboxd-vizard-db --jurisdiction eu
+# paste the printed database_id into wrangler.jsonc
+npx wrangler d1 execute letterboxd-vizard-db --remote --file=schema.sql
+npx wrangler secret put TMDB_API_KEY
+# optional: repeat for TRAKT_CLIENT_ID and TVDB_API_KEY
 ```
 
-Runs a Node server (adapter-node). The TMDB cache lives in `data/cache.db`.
-
-## Hosting with Docker
+Then deploy (and redeploy) with:
 
 ```sh
-cp .env.example .env   # put your API keys in .env
-docker compose up -d --build
+npm run deploy
 ```
-
-Serves on port 3000. Set `ORIGIN` in `.env` to your public URL (defaults to
-`http://localhost:3000`) so form submissions aren't rejected. The TMDB cache is
-persisted on the host in `./data` via a bind mount.

@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS movies (
+	cache_key TEXT PRIMARY KEY,
+	tmdb_id INTEGER NOT NULL,
+	data TEXT NOT NULL,
+	fetched_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS misses (
+	cache_key TEXT PRIMARY KEY,
+	fetched_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS trakt_related (
+	tmdb_id INTEGER PRIMARY KEY,
+	data TEXT NOT NULL,
+	fetched_at INTEGER NOT NULL
+);

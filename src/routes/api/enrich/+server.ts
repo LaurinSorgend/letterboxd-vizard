@@ -1,21 +1,25 @@
 import { json, error } from '@sveltejs/kit';
-import pLimit from 'p-limit';
+import pLimit, { type LimitFunction } from 'p-limit';
+import type { D1Database } from '@cloudflare/workers-types';
 import { cacheKey, getCached, putCached } from '$lib/server/cache';
 import { lookupMovie } from '$lib/server/tmdb';
 import type { EnrichRequestItem, TmdbMovie } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 const MAX_BATCH = 100;
-const limit = pLimit(10);
 
-async function resolve(item: EnrichRequestItem): Promise<TmdbMovie | null> {
+async function resolve(
+	db: D1Database,
+	limit: LimitFunction,
+	item: EnrichRequestItem
+): Promise<TmdbMovie | null> {
 	const key = cacheKey(item.name, item.year);
-	const cached = getCached(key);
+	const cached = await getCached(db, key);
 	if (cached !== undefined) return cached;
 
 	try {
 		const movie = await limit(() => lookupMovie(item.name, item.year));
-		putCached(key, movie);
+		await putCached(db, key, movie);
 		console.log(`tmdb lookup: ${key} -> ${movie ? movie.tmdbId : 'no match'}`);
 		return movie;
 	} catch (cause) {
@@ -25,7 +29,8 @@ async function resolve(item: EnrichRequestItem): Promise<TmdbMovie | null> {
 	}
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, platform }) => {
+	const db = platform!.env.DB;
 	const body = (await request.json().catch(() => null)) as { items?: EnrichRequestItem[] } | null;
 	const items = body?.items;
 	if (!Array.isArray(items) || items.some((i) => typeof i?.name !== 'string')) {
@@ -35,6 +40,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		error(400, `Batch too large — send at most ${MAX_BATCH} items`);
 	}
 
+	// Per-request limiter: Workers forbid I/O queued from another request's context.
+	const limit = pLimit(10);
+
 	// Dedupe within the batch so identical films resolve once.
 	const byKey = new Map<string, Promise<TmdbMovie | null>>();
 	const results = await Promise.all(
@@ -42,7 +50,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			const key = cacheKey(item.name, item.year);
 			let pending = byKey.get(key);
 			if (!pending) {
-				pending = resolve(item);
+				pending = resolve(db, limit, item);
 				byKey.set(key, pending);
 			}
 			return pending;

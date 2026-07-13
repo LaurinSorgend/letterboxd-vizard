@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import type { D1Database } from '@cloudflare/workers-types';
 import { getRelatedCached, putRelatedCached, type RelatedMovie } from './cache';
 
 const BASE = 'https://api.trakt.tv';
@@ -27,9 +28,9 @@ interface TraktMovie {
 	ids: { slug: string; tmdb: number | null };
 }
 
-/** Related movies for a TMDB id, cached in SQLite for a week. */
-export async function relatedMovies(tmdbId: number): Promise<RelatedMovie[]> {
-	const cached = getRelatedCached(tmdbId);
+/** Related movies for a TMDB id, cached in D1 for a week. */
+export async function relatedMovies(db: D1Database, tmdbId: number): Promise<RelatedMovie[]> {
+	const cached = await getRelatedCached(db, tmdbId);
 	if (cached) return cached;
 
 	const found = (await traktGet(`/search/tmdb/${tmdbId}?type=movie`)) as { movie: TraktMovie }[];
@@ -48,6 +49,6 @@ export async function relatedMovies(tmdbId: number): Promise<RelatedMovie[]> {
 				traktRating: m.rating ?? null
 			}));
 	}
-	putRelatedCached(tmdbId, related);
+	await putRelatedCached(db, tmdbId, related);
 	return related;
 }
