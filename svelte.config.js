@@ -1,5 +1,8 @@
-import adapter from '@sveltejs/adapter-cloudflare';
+import cloudflare from '@sveltejs/adapter-cloudflare';
+import node from '@sveltejs/adapter-node';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+const target = process.env.DEPLOY_TARGET ?? 'cloudflare';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -9,10 +12,13 @@ const config = {
 		runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
 	},
 	kit: {
-		adapter: adapter({
-			// Keep local D1 state alive across dev server restarts.
-			platformProxy: { persist: true }
-		})
+		adapter:
+			target === 'node'
+				? node()
+				: cloudflare({
+						// Keep local D1 state alive across dev server restarts.
+						platformProxy: { persist: true }
+					})
 	}
 };
 
