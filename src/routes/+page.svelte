@@ -10,6 +10,8 @@
 	import RatingGaps from '$lib/viz/RatingGaps.svelte';
 	import Recommendations from '$lib/viz/Recommendations.svelte';
 	import StatTiles from '$lib/viz/StatTiles.svelte';
+	import Heatmap from '$lib/viz/Heatmap.svelte';
+	import { buildDailyHeatmap, buildWeeklyHeatmap } from '$lib/viz/heatmap';
 	import { effectiveCountries } from '$lib/viz/countries';
 	import {
 		avgRating,
@@ -40,6 +42,10 @@
 
 	const initialMetric = page.url.searchParams.get('metric') === 'rating' ? 'rating' : 'count';
 	const presetCountry = page.url.searchParams.get('country');
+
+	const currentYear = new Date().getFullYear();
+	const dailyHeatmap = $derived(buildDailyHeatmap(films, currentYear));
+	const weeklyHeatmap = $derived(buildWeeklyHeatmap(films));
 
 	const tiles = $derived.by(() => {
 		const avg = avgRating(films);
@@ -149,6 +155,14 @@
 					<Columns data={releaseDecades(films)} description="Films per release decade" />
 				</div>
 			</div>
+		</section>
+
+		<section>
+			<h2>When you watch</h2>
+			<h3>This year, day by day</h3>
+			<Heatmap grid={dailyHeatmap} />
+			<h3 class="spaced">Every week, year over year</h3>
+			<Heatmap grid={weeklyHeatmap} />
 		</section>
 
 		<section>
@@ -269,6 +283,9 @@
 		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		gap: 32px;
 		align-items: start;
+	}
+	h3.spaced {
+		margin-top: 24px;
 	}
 	@media (max-width: 900px) {
 		.pair {
