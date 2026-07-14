@@ -1,8 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import pLimit, { type LimitFunction } from 'p-limit';
 import type { D1Database } from '@cloudflare/workers-types';
-import { BudgetExhausted, FetchBudget } from '$lib/server/budget';
+import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { cacheKey, getCached, putCached } from '$lib/server/cache';
+import { getDb } from '$lib/server/db';
 import { fetchRecord } from '$lib/server/tmdb';
 import { relatedMovies, traktAvailable } from '$lib/server/trakt';
 import { effectiveCountries } from '$lib/viz/countries';
@@ -11,7 +12,6 @@ import type { RequestHandler } from './$types';
 
 const MAX_SEEDS = 25;
 const MAX_RESULTS = 20;
-const FETCHES_PER_REQUEST = 40;
 const CONCURRENCY = 5;
 
 /** TMDB record for a known id, reusing the title/year cache when it holds the same film. */
@@ -41,7 +41,7 @@ async function movieRecord(
 export const POST: RequestHandler = async ({ request, platform }) => {
 	if (!traktAvailable()) return json({ available: false, results: [] });
 
-	const db = platform!.env.DB;
+	const db = await getDb(platform);
 	const body = (await request.json().catch(() => null)) as {
 		seeds?: Seed[];
 		exclude?: number[];

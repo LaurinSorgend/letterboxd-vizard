@@ -1,17 +1,17 @@
 import { json, error } from '@sveltejs/kit';
 import pLimit from 'p-limit';
-import { BudgetExhausted, FetchBudget } from '$lib/server/budget';
+import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { cacheKey, getCachedMany, putCachedMany } from '$lib/server/cache';
+import { getDb } from '$lib/server/db';
 import { lookupMovie } from '$lib/server/tmdb';
 import type { EnrichRequestItem, TmdbMovie } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 const MAX_BATCH = 100;
-const FETCHES_PER_REQUEST = 40;
 const CONCURRENCY = 5;
 
 export const POST: RequestHandler = async ({ request, platform }) => {
-	const db = platform!.env.DB;
+	const db = await getDb(platform);
 	const body = (await request.json().catch(() => null)) as { items?: EnrichRequestItem[] } | null;
 	const items = body?.items;
 	if (!Array.isArray(items) || items.some((i) => typeof i?.name !== 'string')) {

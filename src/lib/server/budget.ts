@@ -27,3 +27,9 @@ export class FetchBudget {
 		this.#remaining -= 1;
 	}
 }
+
+/**
+ * Per-invocation fetch cap. 40 fits the Workers free-plan 50-subrequest limit;
+ * self-hosters (no such limit) can raise it via the FETCH_BUDGET env var.
+ */
+export const FETCHES_PER_REQUEST = Number(process.env.FETCH_BUDGET) || 40;
