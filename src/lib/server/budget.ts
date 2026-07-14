@@ -30,6 +30,10 @@ export class FetchBudget {
 
 /**
  * Per-invocation fetch cap. 40 fits the Workers free-plan 50-subrequest limit;
- * self-hosters (no such limit) can raise it via the FETCH_BUDGET env var.
+ * self-hosters (no such limit) can raise it via the FETCH_BUDGET env var. Only a
+ * positive integer overrides the default, so 0, negatives, and junk fall back to
+ * 40 rather than silently disabling or instantly exhausting the budget.
  */
-export const FETCHES_PER_REQUEST = Number(process.env.FETCH_BUDGET) || 40;
+const budgetOverride = Number(process.env.FETCH_BUDGET);
+export const FETCHES_PER_REQUEST =
+	Number.isInteger(budgetOverride) && budgetOverride > 0 ? budgetOverride : 40;
