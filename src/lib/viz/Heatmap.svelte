@@ -1,12 +1,23 @@
 <script lang="ts">
 	import FilmList from './FilmList.svelte';
-	import { formatWatchtime, type HeatmapGrid, type HeatCell } from './heatmap';
+	import {
+		cellBin,
+		formatWatchtime,
+		heatScale,
+		type HeatMetric,
+		type HeatmapGrid,
+		type HeatCell
+	} from './heatmap';
 
-	let { grid }: { grid: HeatmapGrid } = $props();
+	let { grid, metric = 'watchtime' }: { grid: HeatmapGrid; metric?: HeatMetric } = $props();
 
 	let selectedKey: string | null = $state(null);
 
 	const cols = $derived(grid.rows[0]?.length ?? 0);
+	const scale = $derived(heatScale(grid, metric));
+	const description = $derived(
+		`${metric === 'rating' ? 'Average rating' : 'Watchtime'} ${grid.period}`
+	);
 	const selected = $derived.by(() => {
 		if (selectedKey === null) return null;
 		for (const row of grid.rows) {
@@ -20,16 +31,23 @@
 		selectedKey = selectedKey === cell.key ? null : cell.key;
 	}
 
+	function ratingText(cell: HeatCell): string {
+		if (cell.rating === null) return 'no ratings';
+		const partial = cell.ratedCount < cell.films.length ? ` (${cell.ratedCount} rated)` : '';
+		return `average rating ${cell.rating.toFixed(2)}${partial}`;
+	}
+
 	function title(cell: HeatCell): string {
 		if (cell.films.length === 0) return `${cell.label}: nothing watched`;
 		const count = `${cell.films.length} film${cell.films.length === 1 ? '' : 's'}`;
-		return `${cell.label}: ${count} · ${formatWatchtime(cell.minutes)}`;
+		const value = metric === 'rating' ? ratingText(cell) : formatWatchtime(cell.minutes);
+		return `${cell.label}: ${count} · ${value}`;
 	}
 </script>
 
-<section aria-label={grid.description}>
+<section aria-label={description}>
 	{#if grid.empty}
-		<p class="empty-msg">No diary entries with known runtimes yet.</p>
+		<p class="empty-msg">No diary entries in this period yet.</p>
 	{:else}
 		<div class="scroll">
 			<div
@@ -51,14 +69,15 @@
 					{/if}
 					{#each row as cell, c (c)}
 						{@const pos = `grid-row: ${r + 2}; grid-column: ${c + 2};`}
+						{@const bin = cell ? cellBin(cell, metric, scale.thresholds) : null}
 						{#if cell === null}
 							<span class="pad" style={pos}></span>
-						{:else if cell.bin === null}
+						{:else if bin === null}
 							<span class="cell empty" style={pos} title={title(cell)}></span>
 						{:else}
 							<button
 								type="button"
-								class="cell bin-{cell.bin}"
+								class="cell {bin === 'few' ? 'few' : `bin-${bin}`}"
 								style={pos}
 								aria-pressed={selectedKey === cell.key}
 								aria-label={title(cell)}
@@ -73,9 +92,12 @@
 
 		<div class="legend" aria-hidden="true">
 			<span class="less">Less</span>
-			{#each grid.legend as label, i (i)}
+			{#each scale.legend as label, i (i)}
 				<span class="key"><i class="swatch bin-{i}"></i>{label}</span>
 			{/each}
+			{#if metric === 'rating'}
+				<span class="key"><i class="swatch few"></i>no ratings</span>
+			{/if}
 			<span class="key"><i class="swatch empty"></i>none</span>
 		</div>
 	{/if}
@@ -136,6 +158,10 @@
 		background: var(--bg-secondary);
 		border: 1px solid var(--border);
 	}
+	.few {
+		background: var(--surface);
+		border: 1px solid var(--border);
+	}
 	.pad {
 		width: var(--cell);
 		height: var(--cell);
@@ -179,7 +205,8 @@
 		border-radius: 2px;
 		display: inline-block;
 	}
-	.swatch.empty {
+	.swatch.empty,
+	.swatch.few {
 		border: 1px solid var(--border);
 	}
 	.empty-msg {

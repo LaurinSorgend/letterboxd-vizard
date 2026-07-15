@@ -11,7 +11,8 @@
 	import Recommendations from '$lib/viz/Recommendations.svelte';
 	import StatTiles from '$lib/viz/StatTiles.svelte';
 	import Heatmap from '$lib/viz/Heatmap.svelte';
-	import { buildDailyHeatmap, buildWeeklyHeatmap } from '$lib/viz/heatmap';
+	import MetricToggle from '$lib/viz/MetricToggle.svelte';
+	import { buildDailyHeatmap, buildWeeklyHeatmap, type HeatMetric } from '$lib/viz/heatmap';
 	import { effectiveCountries } from '$lib/viz/countries';
 	import {
 		avgRating,
@@ -46,6 +47,7 @@
 	const currentYear = new Date().getFullYear();
 	const dailyHeatmap = $derived(buildDailyHeatmap(films, currentYear));
 	const weeklyHeatmap = $derived(buildWeeklyHeatmap(films));
+	let heatMetric: HeatMetric = $state('watchtime');
 
 	const tiles = $derived.by(() => {
 		const avg = avgRating(films);
@@ -159,10 +161,19 @@
 
 		<section>
 			<h2>When you watch</h2>
+			<MetricToggle
+				name="heat-metric"
+				label="Heatmap metric"
+				options={[
+					{ value: 'watchtime', label: 'Watchtime' },
+					{ value: 'rating', label: 'Average rating' }
+				]}
+				bind:value={heatMetric}
+			/>
 			<h3>This year, day by day</h3>
-			<Heatmap grid={dailyHeatmap} />
+			<Heatmap grid={dailyHeatmap} metric={heatMetric} />
 			<h3 class="spaced">Every week, year over year</h3>
-			<Heatmap grid={weeklyHeatmap} />
+			<Heatmap grid={weeklyHeatmap} metric={heatMetric} />
 		</section>
 
 		<section>

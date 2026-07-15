@@ -5,6 +5,7 @@
 	import type { Topology, GeometryCollection } from 'topojson-specification';
 	import CountryRec from './CountryRec.svelte';
 	import FilmList from './FilmList.svelte';
+	import MetricToggle from './MetricToggle.svelte';
 	import { aggregateCountries, numericToAlpha2, type CountryStat } from './countries';
 	import { watchedTmdbIds } from './seeds';
 	import {
@@ -121,19 +122,15 @@
 </script>
 
 <section aria-label="Films by country">
-	<div class="controls">
-		<fieldset>
-			<legend class="visually-hidden">Map metric</legend>
-			<label class:active={metric === 'count'}>
-				<input type="radio" name="metric" value="count" bind:group={metric} />
-				Films watched
-			</label>
-			<label class:active={metric === 'rating'}>
-				<input type="radio" name="metric" value="rating" bind:group={metric} />
-				Average rating
-			</label>
-		</fieldset>
-	</div>
+	<MetricToggle
+		name="map-metric"
+		label="Map metric"
+		options={[
+			{ value: 'count', label: 'Films watched' },
+			{ value: 'rating', label: 'Average rating' }
+		]}
+		bind:value={metric}
+	/>
 
 	<div class="map" bind:this={container}>
 		<svg viewBox="0 0 {WIDTH} {HEIGHT}" role="group" aria-label="World map of your films">
@@ -306,34 +303,6 @@
 		font-weight: 600;
 	}
 
-	.controls fieldset {
-		border: none;
-		margin: 0 0 8px;
-		padding: 0;
-		display: flex;
-		gap: 8px;
-	}
-	.controls label {
-		padding: 4px 12px;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.875rem;
-	}
-	.controls label.active {
-		background: var(--accent);
-		color: var(--on-accent);
-		border-color: var(--accent);
-	}
-	.controls input {
-		position: absolute;
-		opacity: 0;
-	}
-	.controls label:has(input:focus-visible) {
-		outline: 2px solid var(--focus);
-		outline-offset: 2px;
-	}
-
 	.legend {
 		display: flex;
 		flex-wrap: wrap;
@@ -389,13 +358,5 @@
 	.num {
 		text-align: right;
 		font-variant-numeric: tabular-nums;
-	}
-
-	.visually-hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
 	}
 </style>

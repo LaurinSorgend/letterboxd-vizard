@@ -1,23 +1,48 @@
-import { binIndex } from './ramp';
+import { binIndex, RATING_BIN_LABELS, RATING_THRESHOLDS } from './ramp';
+import { avgRating } from './stats';
 import type { EnrichedFilm } from '$lib/types';
 
-/** One cell of a heatmap grid; `bin` is null when nothing was watched that period. */
+export type HeatMetric = 'watchtime' | 'rating';
+
+/** One cell of a heatmap grid; `films` is empty when nothing was watched that period. */
 export interface HeatCell {
 	key: string;
 	label: string;
 	minutes: number;
-	bin: number | null;
+	rating: number | null;
+	ratedCount: number;
 	films: EnrichedFilm[];
 }
 
-/** A rectangular heatmap with sparse row/column labels and a bin legend. */
+/** A rectangular heatmap with sparse row/column labels; bins come from `heatScale`. */
 export interface HeatmapGrid {
 	rows: (HeatCell | null)[][];
 	rowLabels: string[];
 	colLabels: string[];
-	legend: string[];
-	description: string;
+	watchtimeThresholds: number[];
+	watchtimeLegend: string[];
+	period: string;
 	empty: boolean;
+}
+
+/** Thresholds and legend labels for `metric`; rating bins are shared with the map. */
+export function heatScale(
+	grid: HeatmapGrid,
+	metric: HeatMetric
+): { thresholds: number[]; legend: string[] } {
+	if (metric === 'rating') return { thresholds: RATING_THRESHOLDS, legend: RATING_BIN_LABELS };
+	return { thresholds: grid.watchtimeThresholds, legend: grid.watchtimeLegend };
+}
+
+/** Bin of a cell: null when nothing was watched, 'few' when nothing watched was rated. */
+export function cellBin(
+	cell: HeatCell,
+	metric: HeatMetric,
+	thresholds: number[]
+): number | 'few' | null {
+	if (cell.films.length === 0) return null;
+	if (metric === 'watchtime') return binIndex(cell.minutes, thresholds);
+	return cell.rating === null ? 'few' : binIndex(cell.rating, thresholds);
 }
 
 /* Watchtime bins in minutes; index i = value >= threshold[i-1]. Map colors reused. */
@@ -57,9 +82,16 @@ function addDays(date: Date, n: number): Date {
 	return new Date(date.getTime() + n * DAY_MS);
 }
 
-function binOf(bucket: Bucket | undefined, thresholds: number[]): number | null {
-	if (!bucket || bucket.films.length === 0) return null;
-	return binIndex(bucket.minutes, thresholds);
+function cellOf(key: string, label: string, bucket: Bucket | undefined): HeatCell {
+	const films = bucket?.films ?? [];
+	return {
+		key,
+		label,
+		minutes: bucket?.minutes ?? 0,
+		rating: avgRating(films),
+		ratedCount: films.filter((f) => f.rating !== null).length,
+		films
+	};
 }
 
 /** Days elapsed since the week's Monday (Mon=0 … Sun=6). */
@@ -116,16 +148,9 @@ export function buildDailyHeatmap(films: EnrichedFilm[], year: number): HeatmapG
 				lastMonth = day.getUTCMonth();
 				colLabels[w] = MONTHS[lastMonth];
 			}
-			const bucket = byDay.get(isoOf(day));
-			const bin = binOf(bucket, DAILY_THRESHOLDS);
-			if (bin !== null) empty = false;
-			rows[r][w] = {
-				key: isoOf(day),
-				label: dailyLabel(day),
-				minutes: bucket?.minutes ?? 0,
-				bin,
-				films: bucket?.films ?? []
-			};
+			const cell = cellOf(isoOf(day), dailyLabel(day), byDay.get(isoOf(day)));
+			if (cell.films.length > 0) empty = false;
+			rows[r][w] = cell;
 		}
 	}
 
@@ -134,8 +159,9 @@ export function buildDailyHeatmap(films: EnrichedFilm[], year: number): HeatmapG
 		rows,
 		rowLabels: Array.from({ length: 7 }, (_, r) => (r % 2 === 0 ? WEEKDAYS[(r + 1) % 7] : '')),
 		colLabels,
-		legend: DAILY_LEGEND,
-		description: `Watchtime per day in ${year}`,
+		watchtimeThresholds: DAILY_THRESHOLDS,
+		watchtimeLegend: DAILY_LEGEND,
+		period: `per day in ${year}`,
 		empty
 	};
 }
@@ -183,8 +209,9 @@ export function buildWeeklyHeatmap(films: EnrichedFilm[]): HeatmapGrid {
 			rows: [],
 			rowLabels: [],
 			colLabels: [],
-			legend: WEEKLY_LEGEND,
-			description: 'Watchtime per week across years',
+			watchtimeThresholds: WEEKLY_THRESHOLDS,
+			watchtimeLegend: WEEKLY_LEGEND,
+			period: 'per week across years',
 			empty: true
 		};
 	}
@@ -197,15 +224,9 @@ export function buildWeeklyHeatmap(films: EnrichedFilm[]): HeatmapGrid {
 		const yearStart = new Date(Date.UTC(year, 0, 1));
 		const weekBase = addDays(yearStart, -daysSinceMonday(yearStart));
 		return Array.from({ length: cols }, (_, week): HeatCell => {
-			const bucket = byWeek.get(`${year}:${week}`);
 			const monday = addDays(weekBase, week * 7);
-			return {
-				key: `${year}:${week}`,
-				label: `Week of ${monday.getUTCDate()} ${MONTHS[monday.getUTCMonth()]} ${monday.getUTCFullYear()}`,
-				minutes: bucket?.minutes ?? 0,
-				bin: binOf(bucket, WEEKLY_THRESHOLDS),
-				films: bucket?.films ?? []
-			};
+			const label = `Week of ${monday.getUTCDate()} ${MONTHS[monday.getUTCMonth()]} ${monday.getUTCFullYear()}`;
+			return cellOf(`${year}:${week}`, label, byWeek.get(`${year}:${week}`));
 		});
 	});
 
@@ -213,8 +234,9 @@ export function buildWeeklyHeatmap(films: EnrichedFilm[]): HeatmapGrid {
 		rows,
 		rowLabels: years.map(String),
 		colLabels: weeklyColLabels(maxYear, cols),
-		legend: WEEKLY_LEGEND,
-		description: 'Watchtime per week across years',
-		empty: !rows.some((row) => row.some((cell) => cell.bin !== null))
+		watchtimeThresholds: WEEKLY_THRESHOLDS,
+		watchtimeLegend: WEEKLY_LEGEND,
+		period: 'per week across years',
+		empty: !rows.some((row) => row.some((cell) => cell.films.length > 0))
 	};
 }
