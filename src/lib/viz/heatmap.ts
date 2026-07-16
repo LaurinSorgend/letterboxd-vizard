@@ -82,8 +82,20 @@ function addDays(date: Date, n: number): Date {
 	return new Date(date.getTime() + n * DAY_MS);
 }
 
+/** Unique films by uri, preserving first-seen order (a film logged twice in one period appears once). */
+function uniqueByUri(films: EnrichedFilm[]): EnrichedFilm[] {
+	const seen = new Set<string>();
+	const unique: EnrichedFilm[] = [];
+	for (const film of films) {
+		if (seen.has(film.uri)) continue;
+		seen.add(film.uri);
+		unique.push(film);
+	}
+	return unique;
+}
+
 function cellOf(key: string, label: string, bucket: Bucket | undefined): HeatCell {
-	const films = bucket?.films ?? [];
+	const films = uniqueByUri(bucket?.films ?? []);
 	return {
 		key,
 		label,
