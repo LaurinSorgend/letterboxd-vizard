@@ -46,16 +46,21 @@ export async function enrichFilms<T extends EnrichRequestItem>(
 		async function worker() {
 			while (next < batches.length) {
 				const batch = batches[next++];
-				const { results, pending } = await enrichBatch(batch.map((i) => items[i]));
-				const stillPending = new Set(pending ?? []);
-				batch.forEach((itemIndex, batchIndex) => {
-					if (stillPending.has(batchIndex)) {
-						retry.push(itemIndex);
-					} else {
-						tmdb[itemIndex] = results[batchIndex];
-						done += 1;
-					}
-				});
+				try {
+					const { results, pending } = await enrichBatch(batch.map((i) => items[i]));
+					const stillPending = new Set(pending ?? []);
+					batch.forEach((itemIndex, batchIndex) => {
+						if (stillPending.has(batchIndex)) {
+							retry.push(itemIndex);
+						} else {
+							tmdb[itemIndex] = results[batchIndex];
+							done += 1;
+						}
+					});
+				} catch {
+					// A failed HTTP/network batch is retried next round rather than discarding the whole library.
+					retry.push(...batch);
+				}
 				onProgress(done, items.length);
 			}
 		}
