@@ -132,7 +132,10 @@
 <main>
 	<header>
 		<div>
-			<h1>Letterboxd Vizard</h1>
+			<div class="title">
+				<img class="logo" src="/letterbox-vizard-icon.svg" alt="" width="32" height="32" />
+				<h1>Letterboxd Vizard</h1>
+			</div>
 			{#if data?.profile && phase === 'ready'}
 				<p class="sub">
 					{data.profile.givenName || data.profile.username} · {films.length} films watched
@@ -296,6 +299,16 @@
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: 16px;
+	}
+	.title {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.logo {
+		width: 32px;
+		height: 32px;
+		flex-shrink: 0;
 	}
 	h1 {
 		margin: 0;
