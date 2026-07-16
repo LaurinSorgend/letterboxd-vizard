@@ -3,6 +3,7 @@
 	import { dev } from '$app/environment';
 	import { page } from '$app/state';
 	import FileDrop from '$lib/FileDrop.svelte';
+	import RememberToggle from '$lib/RememberToggle.svelte';
 	import ThemeSwitch from '$lib/ThemeSwitch.svelte';
 	import WorldMap from '$lib/viz/WorldMap.svelte';
 	import Columns from '$lib/viz/Columns.svelte';
@@ -27,6 +28,7 @@
 	import { parseExport } from '$lib/ingest/parse';
 	import { enrichFilms } from '$lib/ingest/enrich';
 	import { watchedTmdbIds } from '$lib/viz/seeds';
+	import { clearSnapshot, loadSnapshot, saveSnapshot } from '$lib/store';
 	import type { EnrichedFilm, LetterboxdData } from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
@@ -37,6 +39,8 @@
 	let errorMessage: string | null = $state(null);
 	let watchlistIds: number[] = $state([]);
 	let includeWatchlist = $state(false);
+	let remember = $state(false);
+	let saveError: string | null = $state(null);
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
 	const watchlistExclude = $derived(includeWatchlist ? [] : watchlistIds);
@@ -65,8 +69,36 @@
 		if (dev && page.url.searchParams.has('demo')) {
 			const response = await fetch('/demo-export.zip');
 			if (response.ok) handleFile(new File([await response.blob()], 'demo.zip'));
+			return;
+		}
+		const snapshot = loadSnapshot();
+		if (snapshot) {
+			films = snapshot.films;
+			watchlistIds = snapshot.watchlistIds;
+			data = { films: snapshot.films, watchlist: [], profile: snapshot.profile };
+			remember = true;
+			phase = 'ready';
 		}
 	});
+
+	function persist() {
+		if (saveSnapshot({ films, watchlistIds, profile: data?.profile ?? null })) {
+			saveError = null;
+		} else {
+			remember = false;
+			saveError =
+				'Could not save — your library is too large for this browser. Data stays for this visit only.';
+		}
+	}
+
+	function toggleRemember(on: boolean) {
+		remember = on;
+		if (on) persist();
+		else {
+			clearSnapshot();
+			saveError = null;
+		}
+	}
 
 	async function handleFile(file: File) {
 		errorMessage = null;
@@ -85,6 +117,7 @@
 			films = watched;
 			watchlistIds = watchedTmdbIds(watchlist);
 			phase = 'ready';
+			if (remember) persist();
 		} catch (cause) {
 			errorMessage = cause instanceof Error ? cause.message : String(cause);
 			phase = 'idle';
@@ -127,6 +160,8 @@
 			{/if}
 		</div>
 	{:else}
+		<RememberToggle checked={remember} error={saveError} onchange={toggleRemember} />
+
 		<StatTiles {tiles} />
 
 		<section>
