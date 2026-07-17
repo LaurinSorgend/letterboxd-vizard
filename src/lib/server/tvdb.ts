@@ -46,6 +46,14 @@ interface TvdbSearchResult {
 interface TvdbSeries {
 	genres?: { name: string }[];
 	averageRuntime?: number | null;
+	episodes?: { id: number }[] | null;
+}
+
+/** Whole-run length in minutes, matching TmdbMovie.runtime; null unless both halves are known. */
+function seriesRuntime(details: TvdbSeries): number | null {
+	const episodes = details.episodes?.length;
+	if (!details.averageRuntime || !episodes) return null;
+	return details.averageRuntime * episodes;
 }
 
 /**
@@ -72,8 +80,12 @@ export async function lookupSeriesOnTvdb(
 
 	let details: TvdbSeries = {};
 	try {
-		details = ((await tvdbGet(budget, `/series/${match.tvdb_id}/extended`)) as { data: TvdbSeries })
-			.data;
+		// meta=episodes rides along on this request; the count is half of the whole-run runtime.
+		details = (
+			(await tvdbGet(budget, `/series/${match.tvdb_id}/extended?meta=episodes&short=true`)) as {
+				data: TvdbSeries;
+			}
+		).data;
 	} catch {
 		// Search hit is enough; extended details are a bonus.
 	}
@@ -87,7 +99,7 @@ export async function lookupSeriesOnTvdb(
 		countries: country ? [country] : [],
 		originCountries: country ? [country] : [],
 		genres: details.genres?.map((g) => g.name) ?? [],
-		runtime: details.averageRuntime ?? null,
+		runtime: seriesRuntime(details),
 		originalLanguage: match.primary_language ?? null,
 		voteAverage: null,
 		posterPath: match.thumbnail ?? null,

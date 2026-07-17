@@ -65,6 +65,7 @@
 
 	const rewatched = $derived(mostRewatched(films));
 	let runtimeScope: 'films' | 'all' = $state('films');
+	const justFilms = $derived(films.filter((f) => f.tmdb?.mediaType !== 'tv'));
 	const hasSeries = $derived(films.some((f) => f.tmdb?.mediaType === 'tv' && f.tmdb.runtime));
 
 	const tiles = $derived.by(() => {
@@ -255,7 +256,7 @@
 				/>
 			{/if}
 			<RankedBars
-				data={runtimeBuckets(films, runtimeScope === 'all')}
+				data={runtimeBuckets(runtimeScope === 'all' ? films : justFilms)}
 				showAvg
 				description="Films and average rating per runtime band"
 			/>

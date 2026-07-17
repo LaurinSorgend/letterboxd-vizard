@@ -114,13 +114,12 @@ const RUNTIME_BANDS: { label: string; below: number }[] = [
 	{ label: '3h+', below: Infinity }
 ];
 
-/** Films per runtime band. Series carry whole-run lengths, so they all land in 3h+ when included. */
-export function runtimeBuckets(films: EnrichedFilm[], includeSeries: boolean): BarDatum[] {
+/** Films per runtime band. Series carry whole-run lengths, so they all land in 3h+. */
+export function runtimeBuckets(films: EnrichedFilm[]): BarDatum[] {
 	const groups = RUNTIME_BANDS.map((): EnrichedFilm[] => []);
 	for (const film of films) {
 		const runtime = film.tmdb?.runtime;
 		if (!runtime) continue;
-		if (!includeSeries && film.tmdb?.mediaType === 'tv') continue;
 		groups[RUNTIME_BANDS.findIndex((band) => runtime < band.below)].push(film);
 	}
 	return RUNTIME_BANDS.map((band, i) => ({

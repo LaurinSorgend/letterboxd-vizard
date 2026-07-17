@@ -141,6 +141,9 @@ function dailyLabel(day: Date): string {
 	return `${WEEKDAYS[day.getUTCDay()]}, ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()}`;
 }
 
+/* Four cuts give the five bins the map colors provide (--map-bin-0…4). */
+const QUANTILES = [0.2, 0.4, 0.6, 0.8];
+
 /**
  * Five roughly even watchtime bins drawn from the non-empty cells, rounded to whole hours.
  * Genre totals scale with library size, so fixed cuts would saturate or starve the ramp.
@@ -150,10 +153,10 @@ function watchtimeBins(minutes: number[]): { thresholds: number[]; legend: strin
 	if (sorted.length === 0) return { thresholds: DAILY_THRESHOLDS, legend: DAILY_LEGEND };
 
 	const thresholds: number[] = [];
-	for (const q of [0.2, 0.4, 0.6, 0.8]) {
+	let hours = 0;
+	for (const q of QUANTILES) {
 		const value = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))];
-		let hours = Math.max(1, Math.ceil(value / 60));
-		while (thresholds.length > 0 && hours * 60 <= thresholds[thresholds.length - 1]) hours++;
+		hours = Math.max(hours + 1, Math.ceil(value / 60));
 		thresholds.push(hours * 60);
 	}
 
@@ -171,13 +174,16 @@ function watchtimeBins(minutes: number[]): { thresholds: number[]; legend: strin
  */
 export type SeasonScale = 'genre' | 'global';
 
-/** Bins each row against its own busiest month, so a quiet genre still spans the ramp. */
+/**
+ * Bins each row against its own busiest month, so a quiet genre still spans the ramp.
+ * Every cell gets a bin — a row of unknown runtimes bins to 0 rather than falling back
+ * to grid thresholds the genre grid does not carry.
+ */
 function scaleRowsIndependently(rows: HeatCell[][]): void {
 	for (const row of rows) {
 		const max = Math.max(...row.map((cell) => cell.minutes));
-		if (max <= 0) continue;
-		const thresholds = [0.2, 0.4, 0.6, 0.8].map((fraction) => fraction * max);
-		for (const cell of row) cell.watchtimeBin = binIndex(cell.minutes, thresholds);
+		const thresholds = QUANTILES.map((fraction) => fraction * max);
+		for (const cell of row) cell.watchtimeBin = max > 0 ? binIndex(cell.minutes, thresholds) : 0;
 	}
 }
 
@@ -191,10 +197,11 @@ export function buildSeasonalHeatmap(
 
 	for (const film of films) {
 		const minutes = film.tmdb?.runtime ?? 0;
+		const genresOf = new Set(film.tmdb?.genres ?? []);
 		for (const date of film.watchedDates) {
 			const month = Number.parseInt(date.slice(5, 7), 10) - 1;
 			if (!(month >= 0 && month <= 11)) continue;
-			for (const genre of new Set(film.tmdb?.genres ?? [])) {
+			for (const genre of genresOf) {
 				const key = `${genre}:${month}`;
 				let bucket = byCell.get(key);
 				if (!bucket) byCell.set(key, (bucket = { minutes: 0, films: [] }));
@@ -227,28 +234,24 @@ export function buildSeasonalHeatmap(
 		)
 	);
 
-	// Per-genre rows have no shared numeric scale, so the legend degrades to a bare ramp.
-	if (scale === 'genre') {
-		scaleRowsIndependently(rows);
-		return {
-			rows,
-			rowLabels: genres,
-			colLabels: MONTHS,
-			watchtimeThresholds: [],
-			watchtimeLegend: ['', '', '', '', 'More'],
-			period: 'per genre and month, each genre on its own scale',
-			empty: false
-		};
-	}
+	// Per-genre rows share no numeric scale, so their bins live on the cells and the legend
+	// degrades to a bare ramp; the grid-wide thresholds stay unread in that mode.
+	if (scale === 'genre') scaleRowsIndependently(rows);
+	const { thresholds, legend } =
+		scale === 'genre'
+			? { thresholds: [], legend: ['', '', '', '', 'More'] }
+			: watchtimeBins(rows.flat().map((cell) => cell.minutes));
 
-	const { thresholds, legend } = watchtimeBins(rows.flat().map((cell) => cell.minutes));
 	return {
 		rows,
 		rowLabels: genres,
 		colLabels: MONTHS,
 		watchtimeThresholds: thresholds,
 		watchtimeLegend: legend,
-		period: 'per genre and month, all years pooled',
+		period:
+			scale === 'genre'
+				? 'per genre and month, each genre on its own scale'
+				: 'per genre and month, all years pooled',
 		empty: false
 	};
 }
