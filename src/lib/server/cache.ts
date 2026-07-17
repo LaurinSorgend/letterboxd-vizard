@@ -15,8 +15,11 @@ function chunks<T>(list: T[], size: number): T[][] {
 	return out;
 }
 
+/** Bump SCHEMA when the shape or meaning of a cached TmdbMovie changes; old rows fall out of reach. */
+const SCHEMA = 'v2';
+
 export function cacheKey(name: string, year: number | null): string {
-	return `${name.trim().toLowerCase()}::${year ?? ''}`;
+	return `${SCHEMA}::${name.trim().toLowerCase()}::${year ?? ''}`;
 }
 
 /** Returns the cached movie, null for a known (fresh) miss, or undefined if unknown. */

@@ -107,6 +107,8 @@ interface Details {
 	genres?: { name: string }[];
 	runtime?: number | null;
 	episode_run_time?: number[];
+	number_of_episodes?: number | null;
+	last_episode_to_air?: { runtime?: number | null } | null;
 	original_language?: string;
 	vote_average?: number;
 	poster_path?: string | null;
@@ -120,6 +122,17 @@ function toPerson(p: CreditPerson): Person {
 
 function dedupe(people: Person[]): Person[] {
 	return [...new Map(people.map((p) => [p.name, p])).values()];
+}
+
+/**
+ * Whole-run length of a series in minutes, or null if TMDB gives nothing to go on.
+ * TMDB leaves `episode_run_time` empty for many shows, so the last episode's length
+ * stands in for a typical one — an estimate that overshoots when a finale runs long.
+ */
+function seriesRuntime(d: Details): number | null {
+	const perEpisode = d.episode_run_time?.[0] ?? d.last_episode_to_air?.runtime ?? null;
+	if (!perEpisode || !d.number_of_episodes) return null;
+	return perEpisode * d.number_of_episodes;
 }
 
 export async function fetchRecord(
@@ -139,7 +152,7 @@ export async function fetchRecord(
 		countries: d.production_countries?.map((c) => c.iso_3166_1) ?? [],
 		originCountries: d.origin_country ?? [],
 		genres: d.genres?.map((g) => g.name) ?? [],
-		runtime: d.runtime ?? d.episode_run_time?.[0] ?? null,
+		runtime: kind === 'tv' ? seriesRuntime(d) : (d.runtime ?? null),
 		originalLanguage: d.original_language ?? null,
 		voteAverage: d.vote_average ?? null,
 		posterPath: d.poster_path ?? null,

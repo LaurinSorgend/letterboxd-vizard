@@ -43,6 +43,7 @@ export interface TmdbMovie {
 	countries: string[];
 	originCountries: string[];
 	genres: string[];
+	/** Minutes: a film's length, or a series' estimated whole-run length. */
 	runtime: number | null;
 	originalLanguage: string | null;
 	voteAverage: number | null;
