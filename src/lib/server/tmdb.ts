@@ -126,11 +126,11 @@ function dedupe(people: Person[]): Person[] {
 
 /**
  * Whole-run length of a series in minutes, or null if TMDB gives nothing to go on.
- * TMDB leaves `episode_run_time` empty for many shows, so the last episode's length
- * stands in for a typical one — an estimate that overshoots when a finale runs long.
+ * TMDB leaves `episode_run_time` empty or zeroed for many shows, so the last episode's
+ * length stands in for a typical one — an estimate that overshoots when a finale runs long.
  */
 function seriesRuntime(d: Details): number | null {
-	const perEpisode = d.episode_run_time?.[0] ?? d.last_episode_to_air?.runtime ?? null;
+	const perEpisode = d.episode_run_time?.find((m) => m > 0) ?? d.last_episode_to_air?.runtime;
 	if (!perEpisode || !d.number_of_episodes) return null;
 	return perEpisode * d.number_of_episodes;
 }

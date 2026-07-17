@@ -15,11 +15,31 @@ function chunks<T>(list: T[], size: number): T[][] {
 	return out;
 }
 
-/** Bump SCHEMA when the shape or meaning of a cached TmdbMovie changes; old rows fall out of reach. */
+/**
+ * Bump SCHEMA when the shape or meaning of a cached TmdbMovie changes. Keys are built before
+ * the media type is known, so a bump invalidates every record — when only one kind of record
+ * changed, a targeted delete costs a great deal less than the re-warm a bump forces.
+ */
 const SCHEMA = 'v2';
 
 export function cacheKey(name: string, year: number | null): string {
 	return `${SCHEMA}::${name.trim().toLowerCase()}::${year ?? ''}`;
+}
+
+let swept = false;
+
+/**
+ * Drops rows left behind by superseded SCHEMA generations. Nothing else ever deletes, so
+ * without this a bump strands its whole generation in the database permanently. Runs once
+ * per isolate off the batch read that precedes any warm.
+ */
+async function sweepOldGenerations(db: D1Database): Promise<void> {
+	if (swept) return;
+	swept = true;
+	const current = `${SCHEMA}::%`;
+	for (const table of ['movies', 'misses']) {
+		await db.prepare(`DELETE FROM ${table} WHERE cache_key NOT LIKE ?`).bind(current).run();
+	}
 }
 
 /** Returns the cached movie, null for a known (fresh) miss, or undefined if unknown. */
@@ -68,6 +88,7 @@ export async function getCachedMany(
 	db: D1Database,
 	keys: string[]
 ): Promise<Map<string, TmdbMovie | null>> {
+	await sweepOldGenerations(db);
 	const known = new Map<string, TmdbMovie | null>();
 	for (const chunk of chunks(keys, MAX_PARAMS)) {
 		const marks = chunk.map(() => '?').join(',');

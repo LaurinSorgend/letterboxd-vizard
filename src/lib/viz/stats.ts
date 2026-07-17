@@ -62,16 +62,16 @@ export function watchesPerYear(films: EnrichedFilm[]): BarDatum[] {
 }
 
 /**
- * Films seen more than once, most-logged first. A single diary entry flagged as a rewatch
- * counts: Letterboxd is reporting a watch that predates the diary, so `count` (logged
- * entries) understates those films rather than inventing a number for them.
+ * Films seen more than once, most-logged first. A film whose only diary entry is flagged as a
+ * rewatch counts: Letterboxd is reporting a watch that predates the diary, so `count` (logged
+ * entries, at least one) understates those films rather than inventing a number for them.
  */
 export function mostRewatched(films: EnrichedFilm[]): BarDatum[] {
 	return films
 		.filter((film) => film.watchedDates.length > 1 || film.rewatch)
 		.map((film) => ({
 			label: film.name,
-			count: film.watchedDates.length,
+			count: Math.max(1, film.watchedDates.length),
 			avg: film.rating,
 			image: imageUrl(film.tmdb?.posterPath ?? null, 'w92'),
 			imageLarge: imageUrl(film.tmdb?.posterPath ?? null, 'w185'),
@@ -114,7 +114,7 @@ const RUNTIME_BANDS: { label: string; below: number }[] = [
 	{ label: '3h+', below: Infinity }
 ];
 
-/** Films per runtime band. Series carry whole-run lengths, so they all land in 3h+. */
+/** Films per runtime band. Series carry whole-run lengths, so a short one lands among films. */
 export function runtimeBuckets(films: EnrichedFilm[]): BarDatum[] {
 	const groups = RUNTIME_BANDS.map((): EnrichedFilm[] => []);
 	for (const film of films) {

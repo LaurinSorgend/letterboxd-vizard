@@ -64,9 +64,10 @@
 	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
 
 	const rewatched = $derived(mostRewatched(films));
-	let runtimeScope: 'films' | 'all' = $state('films');
+	let runtimeScope = $state<'films' | 'all'>('films');
 	const justFilms = $derived(films.filter((f) => f.tmdb?.mediaType !== 'tv'));
 	const hasSeries = $derived(films.some((f) => f.tmdb?.mediaType === 'tv' && f.tmdb.runtime));
+	const runtimes = $derived(runtimeBuckets(runtimeScope === 'all' ? films : justFilms));
 
 	const tiles = $derived.by(() => {
 		const avg = avgRating(films);
@@ -255,11 +256,7 @@
 					bind:value={runtimeScope}
 				/>
 			{/if}
-			<RankedBars
-				data={runtimeBuckets(runtimeScope === 'all' ? films : justFilms)}
-				showAvg
-				description="Films and average rating per runtime band"
-			/>
+			<RankedBars data={runtimes} showAvg description="Films and average rating per runtime band" />
 		</section>
 
 		{#if rewatched.length > 0}
