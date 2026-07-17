@@ -263,7 +263,7 @@
 		{#if rewatched.length > 0}
 			<section>
 				<h2>Films you return to</h2>
-				<p class="sub">
+				<p class="sub chart-note">
 					Bars count diary entries. Films you first saw before you started logging show one, even
 					though Letterboxd marked the watch as a rewatch.
 				</p>
@@ -376,6 +376,9 @@
 	.sub {
 		color: var(--fg-secondary);
 		margin: 4px 0 0;
+	}
+	.chart-note {
+		margin-bottom: 16px;
 	}
 	.error {
 		padding: 8px 12px;

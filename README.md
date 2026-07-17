@@ -95,5 +95,4 @@ npm run deploy
 
 ## AI disclaimer
 
-This project was largely written with the help of an AI coding assistant
-(Claude Code), guided, reviewed and tested by a human.
+This project was written with the help of an AI coding assistant, guided, reviewed and tested by a human.
