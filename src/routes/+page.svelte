@@ -336,8 +336,10 @@
 		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/pulls">Contribute</a>
 	</nav>
 	<p>
-		Film metadata from <a href="https://www.themoviedb.org">TMDB</a>. This product uses the TMDB API
-		but is not endorsed or certified by TMDB. Recommendations powered by
+		An independent project, not affiliated with or endorsed by
+		<a href="https://letterboxd.com">Letterboxd</a>. Film metadata from
+		<a href="https://www.themoviedb.org">TMDB</a>. This product uses the TMDB API but is not
+		endorsed or certified by TMDB. Recommendations powered by
 		<a href="https://trakt.tv">Trakt</a>. Some series data from
 		<a href="https://thetvdb.com">TheTVDB</a>.
 	</p>
