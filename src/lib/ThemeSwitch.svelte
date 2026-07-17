@@ -56,34 +56,40 @@
 	}
 </script>
 
-<label>
-	Theme
-	<select bind:value={flavor} onchange={() => applyFlavor(flavor)}>
-		<option value="system">System</option>
-		{#each flavors as [value, name] (value)}
-			<option {value}>{name}</option>
-		{/each}
-	</select>
-</label>
-<label>
-	Accent
-	<select bind:value={accent} onchange={() => applyAccent(accent)}>
-		{#each accents as [value, name] (value)}
-			<option {value}>{name}</option>
-		{/each}
-	</select>
-</label>
+<div class="switches">
+	<label>
+		Theme
+		<select bind:value={flavor} onchange={() => applyFlavor(flavor)}>
+			<option value="system">System</option>
+			{#each flavors as [value, name] (value)}
+				<option {value}>{name}</option>
+			{/each}
+		</select>
+	</label>
+	<label>
+		Accent
+		<select bind:value={accent} onchange={() => applyAccent(accent)}>
+			{#each accents as [value, name] (value)}
+				<option {value}>{name}</option>
+			{/each}
+		</select>
+	</label>
+</div>
 
 <style>
+	.switches {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 8px 12px;
+	}
 	label {
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
+		min-width: 0;
 		font-size: 0.875rem;
 		color: var(--fg-secondary);
-	}
-	label + label {
-		margin-left: 12px;
 	}
 	select {
 		background: var(--surface);
@@ -91,6 +97,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		padding: 4px 8px;
+		min-width: 0;
 		font: inherit;
 	}
 </style>
