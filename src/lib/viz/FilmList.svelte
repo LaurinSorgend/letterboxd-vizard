@@ -9,7 +9,7 @@
 </script>
 
 <div class="panel">
-	<h4>{title} — {films.length} film{films.length === 1 ? '' : 's'}</h4>
+	<h3>{title} — {films.length} film{films.length === 1 ? '' : 's'}</h3>
 	<ul>
 		{#each sorted as film (film.uri)}
 			<li>
@@ -28,7 +28,7 @@
 		background: var(--bg-secondary);
 		border-radius: 4px;
 	}
-	h4 {
+	h3 {
 		margin: 0 0 8px;
 		font-size: 0.875rem;
 	}

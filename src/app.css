@@ -35,8 +35,9 @@
 	--border: var(--ctp-surface1);
 	--border-strong: var(--ctp-overlay0);
 	--fg: var(--ctp-text);
-	--fg-secondary: var(--ctp-subtext0);
-	--fg-muted: var(--ctp-overlay1);
+	/* Subtext1 for both: Subtext0/Overlay1 fall below WCAG AA (4.5:1) on Latte Base. */
+	--fg-secondary: var(--ctp-subtext1);
+	--fg-muted: var(--ctp-subtext1);
 	--accent: var(--ctp-blue);
 	--on-accent: var(--ctp-base);
 	--focus: var(--ctp-lavender);

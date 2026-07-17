@@ -174,7 +174,8 @@
 				<p>Reading your export…</p>
 			{:else}
 				<p>Looking up film data… {progress.done} / {progress.total}</p>
-				<progress value={progress.done} max={progress.total}></progress>
+				<progress value={progress.done} max={progress.total} aria-label="Film lookup progress"
+				></progress>
 				<p class="sub">First run fetches from TMDB; repeat visits are instant thanks to caching.</p>
 			{/if}
 		</div>
