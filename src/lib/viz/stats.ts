@@ -61,6 +61,26 @@ export function watchesPerYear(films: EnrichedFilm[]): BarDatum[] {
 	return result;
 }
 
+/**
+ * Films seen more than once, most-logged first. A single diary entry flagged as a rewatch
+ * counts: Letterboxd is reporting a watch that predates the diary, so `count` (logged
+ * entries) understates those films rather than inventing a number for them.
+ */
+export function mostRewatched(films: EnrichedFilm[]): BarDatum[] {
+	return films
+		.filter((film) => film.watchedDates.length > 1 || film.rewatch)
+		.map((film) => ({
+			label: film.name,
+			count: film.watchedDates.length,
+			avg: film.rating,
+			image: imageUrl(film.tmdb?.posterPath ?? null, 'w92'),
+			imageLarge: imageUrl(film.tmdb?.posterPath ?? null, 'w185'),
+			href: film.uri,
+			films: [film]
+		}))
+		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
 /** Films per release decade. */
 export function releaseDecades(films: EnrichedFilm[]): BarDatum[] {
 	const groups = new Map<number, EnrichedFilm[]>();
@@ -82,6 +102,33 @@ export function releaseDecades(films: EnrichedFilm[]): BarDatum[] {
 
 export function totalRuntimeMinutes(films: EnrichedFilm[]): number {
 	return films.reduce((sum, f) => sum + (f.tmdb?.runtime ?? 0), 0);
+}
+
+/* Runtime bands in minutes; the last catches everything from 3h up. */
+const RUNTIME_BANDS: { label: string; below: number }[] = [
+	{ label: '< 80m', below: 80 },
+	{ label: '80–99m', below: 100 },
+	{ label: '100–119m', below: 120 },
+	{ label: '120–149m', below: 150 },
+	{ label: '150–179m', below: 180 },
+	{ label: '3h+', below: Infinity }
+];
+
+/** Films per runtime band. Series carry whole-run lengths, so they all land in 3h+ when included. */
+export function runtimeBuckets(films: EnrichedFilm[], includeSeries: boolean): BarDatum[] {
+	const groups = RUNTIME_BANDS.map((): EnrichedFilm[] => []);
+	for (const film of films) {
+		const runtime = film.tmdb?.runtime;
+		if (!runtime) continue;
+		if (!includeSeries && film.tmdb?.mediaType === 'tv') continue;
+		groups[RUNTIME_BANDS.findIndex((band) => runtime < band.below)].push(film);
+	}
+	return RUNTIME_BANDS.map((band, i) => ({
+		label: band.label,
+		count: groups[i].length,
+		avg: avgRating(groups[i]),
+		films: groups[i]
+	}));
 }
 
 function grouped(films: EnrichedFilm[], keysOf: (f: EnrichedFilm) => string[]): BarDatum[] {

@@ -12,6 +12,8 @@ export interface HeatCell {
 	rating: number | null;
 	ratedCount: number;
 	films: EnrichedFilm[];
+	/** Watchtime bin fixed by the builder, for grids whose rows carry their own scale. */
+	watchtimeBin?: number;
 }
 
 /** A rectangular heatmap with sparse row/column labels; bins come from `heatScale`. */
@@ -41,7 +43,7 @@ export function cellBin(
 	thresholds: number[]
 ): number | 'few' | null {
 	if (cell.films.length === 0) return null;
-	if (metric === 'watchtime') return binIndex(cell.minutes, thresholds);
+	if (metric === 'watchtime') return cell.watchtimeBin ?? binIndex(cell.minutes, thresholds);
 	return cell.rating === null ? 'few' : binIndex(cell.rating, thresholds);
 }
 
@@ -137,6 +139,118 @@ function weekOfYear(date: Date): number {
 
 function dailyLabel(day: Date): string {
 	return `${WEEKDAYS[day.getUTCDay()]}, ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()}`;
+}
+
+/**
+ * Five roughly even watchtime bins drawn from the non-empty cells, rounded to whole hours.
+ * Genre totals scale with library size, so fixed cuts would saturate or starve the ramp.
+ */
+function watchtimeBins(minutes: number[]): { thresholds: number[]; legend: string[] } {
+	const sorted = minutes.filter((m) => m > 0).sort((a, b) => a - b);
+	if (sorted.length === 0) return { thresholds: DAILY_THRESHOLDS, legend: DAILY_LEGEND };
+
+	const thresholds: number[] = [];
+	for (const q of [0.2, 0.4, 0.6, 0.8]) {
+		const value = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))];
+		let hours = Math.max(1, Math.ceil(value / 60));
+		while (thresholds.length > 0 && hours * 60 <= thresholds[thresholds.length - 1]) hours++;
+		thresholds.push(hours * 60);
+	}
+
+	const h = (m: number) => Math.round(m / 60);
+	const legend = thresholds.map((t, i) =>
+		i === 0 ? `< ${h(t)}h` : `${h(thresholds[i - 1])}–${h(t)}h`
+	);
+	legend.push(`${h(thresholds[thresholds.length - 1])}h+`);
+	return { thresholds, legend };
+}
+
+/**
+ * How a genre grid colours its cells: `genre` scales each row to its own busiest month,
+ * exposing seasonal shape in small genres; `global` scales every row alike, exposing volume.
+ */
+export type SeasonScale = 'genre' | 'global';
+
+/** Bins each row against its own busiest month, so a quiet genre still spans the ramp. */
+function scaleRowsIndependently(rows: HeatCell[][]): void {
+	for (const row of rows) {
+		const max = Math.max(...row.map((cell) => cell.minutes));
+		if (max <= 0) continue;
+		const thresholds = [0.2, 0.4, 0.6, 0.8].map((fraction) => fraction * max);
+		for (const cell of row) cell.watchtimeBin = binIndex(cell.minutes, thresholds);
+	}
+}
+
+/** One row per genre (most-watched first), one column per calendar month, every year pooled. */
+export function buildSeasonalHeatmap(
+	films: EnrichedFilm[],
+	scale: SeasonScale = 'genre'
+): HeatmapGrid {
+	const byCell = new Map<string, Bucket>();
+	const watches = new Map<string, number>();
+
+	for (const film of films) {
+		const minutes = film.tmdb?.runtime ?? 0;
+		for (const date of film.watchedDates) {
+			const month = Number.parseInt(date.slice(5, 7), 10) - 1;
+			if (!(month >= 0 && month <= 11)) continue;
+			for (const genre of new Set(film.tmdb?.genres ?? [])) {
+				const key = `${genre}:${month}`;
+				let bucket = byCell.get(key);
+				if (!bucket) byCell.set(key, (bucket = { minutes: 0, films: [] }));
+				bucket.minutes += minutes;
+				bucket.films.push(film);
+				watches.set(genre, (watches.get(genre) ?? 0) + 1);
+			}
+		}
+	}
+
+	const genres = [...watches]
+		.sort(([aName, aCount], [bName, bCount]) => bCount - aCount || aName.localeCompare(bName))
+		.map(([genre]) => genre);
+
+	if (genres.length === 0) {
+		return {
+			rows: [],
+			rowLabels: [],
+			colLabels: [],
+			watchtimeThresholds: DAILY_THRESHOLDS,
+			watchtimeLegend: DAILY_LEGEND,
+			period: 'per genre and month',
+			empty: true
+		};
+	}
+
+	const rows = genres.map((genre) =>
+		MONTHS.map((month, i) =>
+			cellOf(`${genre}:${i}`, `${genre} in ${month}`, byCell.get(`${genre}:${i}`))
+		)
+	);
+
+	// Per-genre rows have no shared numeric scale, so the legend degrades to a bare ramp.
+	if (scale === 'genre') {
+		scaleRowsIndependently(rows);
+		return {
+			rows,
+			rowLabels: genres,
+			colLabels: MONTHS,
+			watchtimeThresholds: [],
+			watchtimeLegend: ['', '', '', '', 'More'],
+			period: 'per genre and month, each genre on its own scale',
+			empty: false
+		};
+	}
+
+	const { thresholds, legend } = watchtimeBins(rows.flat().map((cell) => cell.minutes));
+	return {
+		rows,
+		rowLabels: genres,
+		colLabels: MONTHS,
+		watchtimeThresholds: thresholds,
+		watchtimeLegend: legend,
+		period: 'per genre and month, all years pooled',
+		empty: false
+	};
 }
 
 /** GitHub-style calendar: 7 weekday rows × week columns for one year. */

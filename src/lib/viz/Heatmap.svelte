@@ -9,7 +9,11 @@
 		type HeatCell
 	} from './heatmap';
 
-	let { grid, metric = 'watchtime' }: { grid: HeatmapGrid; metric?: HeatMetric } = $props();
+	let {
+		grid,
+		metric = 'watchtime',
+		cellSize = 13
+	}: { grid: HeatmapGrid; metric?: HeatMetric; cellSize?: number } = $props();
 
 	let selectedKey: string | null = $state(null);
 
@@ -52,7 +56,7 @@
 		<div class="scroll">
 			<div
 				class="grid"
-				style="grid-template-columns: auto repeat({cols}, var(--cell)); grid-template-rows: auto repeat({grid
+				style="--cell: {cellSize}px; grid-template-columns: auto repeat({cols}, var(--cell)); grid-template-rows: auto repeat({grid
 					.rows.length}, var(--cell));"
 			>
 				{#each grid.colLabels as label, c (c)}
@@ -115,7 +119,6 @@
 	.grid {
 		display: grid;
 		gap: 3px;
-		--cell: 13px;
 		width: max-content;
 		align-items: center;
 	}

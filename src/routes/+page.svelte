@@ -13,15 +13,23 @@
 	import StatTiles from '$lib/viz/StatTiles.svelte';
 	import Heatmap from '$lib/viz/Heatmap.svelte';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
-	import { buildDailyHeatmap, buildWeeklyHeatmap, type HeatMetric } from '$lib/viz/heatmap';
+	import {
+		buildDailyHeatmap,
+		buildSeasonalHeatmap,
+		buildWeeklyHeatmap,
+		type HeatMetric,
+		type SeasonScale
+	} from '$lib/viz/heatmap';
 	import { effectiveCountries } from '$lib/viz/countries';
 	import {
 		avgRating,
 		byGenre,
 		byLanguage,
 		byPerson,
+		mostRewatched,
 		ratingHistogram,
 		releaseDecades,
+		runtimeBuckets,
 		totalRuntimeMinutes,
 		watchesPerYear
 	} from '$lib/viz/stats';
@@ -52,6 +60,12 @@
 	const dailyHeatmap = $derived(buildDailyHeatmap(films, currentYear));
 	const weeklyHeatmap = $derived(buildWeeklyHeatmap(films));
 	let heatMetric: HeatMetric = $state('watchtime');
+	let seasonScale: SeasonScale = $state('genre');
+	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
+
+	const rewatched = $derived(mostRewatched(films));
+	let runtimeScope: 'films' | 'all' = $state('films');
+	const hasSeries = $derived(films.some((f) => f.tmdb?.mediaType === 'tv' && f.tmdb.runtime));
 
 	const tiles = $derived.by(() => {
 		const avg = avgRating(films);
@@ -212,7 +226,51 @@
 			<Heatmap grid={dailyHeatmap} metric={heatMetric} />
 			<h3 class="spaced">Every week, year over year</h3>
 			<Heatmap grid={weeklyHeatmap} metric={heatMetric} />
+			<h3 class="spaced">Genres by month, every year pooled</h3>
+			{#if heatMetric === 'watchtime'}
+				<MetricToggle
+					name="season-scale"
+					label="Genre heatmap scale"
+					options={[
+						{ value: 'genre', label: 'Each genre on its own scale' },
+						{ value: 'global', label: 'One scale for all genres' }
+					]}
+					bind:value={seasonScale}
+				/>
+			{/if}
+			<Heatmap grid={seasonalHeatmap} metric={heatMetric} cellSize={26} />
 		</section>
+
+		<section>
+			<h2>How long you watch</h2>
+			{#if hasSeries}
+				<MetricToggle
+					name="runtime-scope"
+					label="Runtime scope"
+					options={[
+						{ value: 'films', label: 'Films only' },
+						{ value: 'all', label: 'With series' }
+					]}
+					bind:value={runtimeScope}
+				/>
+			{/if}
+			<RankedBars
+				data={runtimeBuckets(films, runtimeScope === 'all')}
+				showAvg
+				description="Films and average rating per runtime band"
+			/>
+		</section>
+
+		{#if rewatched.length > 0}
+			<section>
+				<h2>Films you return to</h2>
+				<p class="sub">
+					Bars count diary entries. Films you first saw before you started logging show one, even
+					though Letterboxd marked the watch as a rewatch.
+				</p>
+				<RankedBars data={rewatched} showAvg description="Diary entries per rewatched film" />
+			</section>
+		{/if}
 
 		<section>
 			<h2>Genres &amp; languages</h2>
