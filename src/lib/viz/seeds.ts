@@ -94,7 +94,7 @@ export function pickGenreSeeds(films: EnrichedFilm[], genre: string): Seed[] {
 		.map(toSeed);
 }
 
-/** Random sample of a country's watched movies, liked ones only. */
+/** Random sample of a country's watched movies you didn't dislike (unrated, or rated 3+). */
 export function pickCountrySeeds(films: EnrichedFilm[], count: number): Seed[] {
 	const pool = films.filter(
 		(f) =>
