@@ -77,7 +77,7 @@
 			{ label: 'Films watched', value: String(films.length) },
 			{ label: 'Hours watched', value: hours.toLocaleString('en') },
 			{ label: 'Countries', value: String(countries.size) },
-			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) : '—' }
+			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) + " ★"  : '—' }
 		];
 	});
 

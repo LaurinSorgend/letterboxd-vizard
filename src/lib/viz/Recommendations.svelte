@@ -7,6 +7,8 @@
 
 	const GENRE_ROWS = 3;
 	const GENRE_ROW_SIZE = 10;
+	// Growing waits between retries: each request warms the cache, so the next resolves more posters.
+	const RETRY_DELAYS_MS = [1500, 3500, 7000];
 
 	let {
 		films,
@@ -32,10 +34,11 @@
 		const exclude = [...watchedTmdbIds(current), ...watchlistExclude];
 		const safeFetch = (seeds: Seed[]) => fetchRecommendations(seeds, exclude).catch(() => []);
 		const genres = favoriteGenres(current, GENRE_ROWS);
-		const [main, ...perGenre] = await Promise.all([
-			safeFetch(pickDiverseSeeds(current, 25)),
-			...genres.map((genre) => safeFetch(pickGenreSeeds(current, genre)))
-		]);
+		const seedSets = [
+			pickDiverseSeeds(current, 25),
+			...genres.map((genre) => pickGenreSeeds(current, genre))
+		];
+		const [main, ...perGenre] = await Promise.all(seedSets.map(safeFetch));
 		if (!isCurrent()) return; // a newer load started while we awaited; don't overwrite it
 		general = main;
 		const seen = new Set(main.map((r) => r.tmdbId));
@@ -44,6 +47,44 @@
 			for (const rec of fresh) seen.add(rec.tmdbId);
 			return fresh.length > 0 ? [{ genre, recommendations: fresh }] : [];
 		});
+		void fillPending(seedSets, safeFetch, isCurrent);
+	}
+
+	function hasPending(): boolean {
+		return (
+			general.some((r) => r.pending) ||
+			genreRows.some((row) => row.recommendations.some((r) => r.pending))
+		);
+	}
+
+	/** Re-requests while posters are still pending, folding each resolved record in by tmdbId. */
+	async function fillPending(
+		seedSets: Seed[][],
+		safeFetch: (seeds: Seed[]) => Promise<Recommendation[]>,
+		isCurrent: () => boolean
+	) {
+		for (const wait of RETRY_DELAYS_MS) {
+			if (!isCurrent() || !hasPending()) return;
+			await new Promise((resolve) => setTimeout(resolve, wait));
+			if (!isCurrent()) return;
+			const fresh = (await Promise.all(seedSets.map(safeFetch))).flat();
+			if (!isCurrent()) return;
+			const resolved = new Map(fresh.filter((r) => !r.pending).map((r) => [r.tmdbId, r]));
+			const fill = (r: Recommendation) => (r.pending ? (resolved.get(r.tmdbId) ?? r) : r);
+			general = general.map(fill);
+			genreRows = genreRows.map((row) => ({
+				genre: row.genre,
+				recommendations: row.recommendations.map(fill)
+			}));
+		}
+		// Retries spent — settle any stragglers to the plain placeholder rather than pulse forever.
+		if (!isCurrent() || !hasPending()) return;
+		const settle = (r: Recommendation) => (r.pending ? { ...r, pending: false } : r);
+		general = general.map(settle);
+		genreRows = genreRows.map((row) => ({
+			genre: row.genre,
+			recommendations: row.recommendations.map(settle)
+		}));
 	}
 </script>
 
@@ -55,6 +96,8 @@
 				<a href="https://letterboxd.com/tmdb/{rec.tmdbId}" target="_blank" rel="noopener">
 					{#if poster}
 						<img src={poster} alt="" loading="lazy" width="92" height="138" />
+					{:else if rec.pending}
+						<span class="placeholder pending" aria-hidden="true"></span>
 					{:else}
 						<span class="placeholder" aria-hidden="true">🎬</span>
 					{/if}
@@ -128,6 +171,23 @@
 		align-items: center;
 		justify-content: center;
 		font-size: 2rem;
+	}
+	.placeholder.pending {
+		animation: poster-pulse 1.2s ease-in-out infinite;
+	}
+	@keyframes poster-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.45;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.placeholder.pending {
+			animation: none;
+		}
 	}
 	.title {
 		font-size: 0.875rem;

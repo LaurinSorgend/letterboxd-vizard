@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import pLimit, { type LimitFunction } from 'p-limit';
 import type { D1Database } from '@cloudflare/workers-types';
 import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
-import { cacheKey, getCached, putCached } from '$lib/server/cache';
+import { cacheKey, getCachedMany, putCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
 import { fetchRecord } from '$lib/server/tmdb';
 import { relatedMovies, traktAvailable } from '$lib/server/trakt';
@@ -16,28 +16,64 @@ const CONCURRENCY = 5;
 // Subrequests held back from the seed phase so poster/country lookups aren't starved on a cold cache.
 const POSTER_RESERVE = 15;
 
-/** TMDB record for a known id, reusing the title/year cache when it holds the same film. */
-async function movieRecord(
+interface RankedFilm {
+	tmdbId: number;
+	title: string;
+	year: number | null;
+}
+
+interface Result extends RankedFilm {
+	posterPath: string | null;
+	countries: string[];
+	/** True when the budget ran out before this film's record loaded — the client re-requests it. */
+	pending: boolean;
+}
+
+/**
+ * Poster/country records for the ranked films. Cache reads and writes are batched (a couple of
+ * subrequests for the lot, off-budget like /api/enrich) so the budget only pays for TMDB fetches;
+ * films whose fetch is cut off by the budget come back `pending` for the client to ask again later.
+ */
+async function resolveRecords(
 	db: D1Database,
 	budget: FetchBudget,
 	limit: LimitFunction,
-	tmdbId: number,
-	title: string,
-	year: number | null
-): Promise<TmdbMovie | null> {
-	const key = cacheKey(title, year);
-	const cached = await getCached(db, key, budget);
-	if (cached && cached.tmdbId === tmdbId) return cached;
-	try {
-		const record = await limit(() => fetchRecord(budget, 'movie', tmdbId));
-		if (!cached) await putCached(db, key, record, budget);
-		return record;
-	} catch (cause) {
-		if (!(cause instanceof BudgetExhausted)) {
-			console.error(`tmdb details failed for ${tmdbId}`, cause);
-		}
-		return null;
-	}
+	ranked: RankedFilm[]
+): Promise<Result[]> {
+	const cached = await getCachedMany(db, [
+		...new Set(ranked.map((r) => cacheKey(r.title, r.year)))
+	]);
+	const records = new Map<number, TmdbMovie | null>();
+	const pending = new Set<number>();
+	const toWrite: [string, TmdbMovie | null][] = [];
+	await Promise.all(
+		ranked.map((film) =>
+			limit(async () => {
+				const key = cacheKey(film.title, film.year);
+				const hit = cached.get(key);
+				if (hit && hit.tmdbId === film.tmdbId) return void records.set(film.tmdbId, hit);
+				try {
+					const record = await fetchRecord(budget, 'movie', film.tmdbId);
+					records.set(film.tmdbId, record);
+					if (!hit) toWrite.push([key, record]); // keep a colliding title/year entry intact
+				} catch (cause) {
+					if (cause instanceof BudgetExhausted) return void pending.add(film.tmdbId);
+					console.error(`tmdb details failed for ${film.tmdbId}`, cause);
+					records.set(film.tmdbId, null);
+				}
+			})
+		)
+	);
+	if (toWrite.length > 0) await putCachedMany(db, toWrite);
+	return ranked.map((film) => {
+		const record = records.get(film.tmdbId) ?? null;
+		return {
+			...film,
+			posterPath: record?.posterPath ?? null,
+			countries: record ? effectiveCountries(record) : [],
+			pending: pending.has(film.tmdbId)
+		};
+	});
 }
 
 export const POST: RequestHandler = async ({ request, platform }) => {
@@ -98,17 +134,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	const ranked = [...scores.values()]
 		.sort((a, b) => b.score - a.score || (b.traktRating ?? 0) - (a.traktRating ?? 0))
 		.slice(0, MAX_RESULTS);
-	const results = await Promise.all(
-		ranked.map(async ({ tmdbId, title, year }) => {
-			const record = await movieRecord(db, budget, limit, tmdbId, title, year);
-			return {
-				tmdbId,
-				title,
-				year,
-				posterPath: record?.posterPath ?? null,
-				countries: record ? effectiveCountries(record) : []
-			};
-		})
-	);
+	const results = await resolveRecords(db, budget, limit, ranked);
 	return json({ available: true, results });
 };

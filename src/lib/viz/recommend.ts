@@ -6,6 +6,8 @@ export interface Recommendation {
 	year: number | null;
 	posterPath: string | null;
 	countries: string[];
+	/** The server ran out of subrequest budget before this film's poster loaded; re-request to fill it. */
+	pending: boolean;
 }
 
 /** Asks /api/recommend for films related to the seeds; empty when Trakt is unconfigured. */
