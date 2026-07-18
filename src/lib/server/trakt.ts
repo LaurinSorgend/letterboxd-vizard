@@ -36,7 +36,7 @@ export async function relatedMovies(
 	budget: FetchBudget,
 	tmdbId: number
 ): Promise<RelatedMovie[]> {
-	const cached = await getRelatedCached(db, tmdbId);
+	const cached = await getRelatedCached(db, tmdbId, budget);
 	if (cached) return cached;
 
 	const found = (await traktGet(budget, `/search/tmdb/${tmdbId}?type=movie`)) as {
@@ -58,6 +58,6 @@ export async function relatedMovies(
 				traktRating: m.rating ?? null
 			}));
 	}
-	await putRelatedCached(db, tmdbId, related);
+	await putRelatedCached(db, tmdbId, related, budget);
 	return related;
 }

@@ -13,6 +13,8 @@ import type { RequestHandler } from './$types';
 const MAX_SEEDS = 25;
 const MAX_RESULTS = 20;
 const CONCURRENCY = 5;
+// Subrequests held back from the seed phase so poster/country lookups aren't starved on a cold cache.
+const POSTER_RESERVE = 15;
 
 /** TMDB record for a known id, reusing the title/year cache when it holds the same film. */
 async function movieRecord(
@@ -24,11 +26,11 @@ async function movieRecord(
 	year: number | null
 ): Promise<TmdbMovie | null> {
 	const key = cacheKey(title, year);
-	const cached = await getCached(db, key);
+	const cached = await getCached(db, key, budget);
 	if (cached && cached.tmdbId === tmdbId) return cached;
 	try {
 		const record = await limit(() => fetchRecord(budget, 'movie', tmdbId));
-		if (!cached) await putCached(db, key, record);
+		if (!cached) await putCached(db, key, record, budget);
 		return record;
 	} catch (cause) {
 		if (!(cause instanceof BudgetExhausted)) {
@@ -54,7 +56,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 	// Budget and limiter are per-request: Workers cap subrequests per invocation
 	// (50 on the free plan) and forbid I/O queued from another request's context.
-	const budget = new FetchBudget(FETCHES_PER_REQUEST);
+	// The reserve keeps a slice for phase 2 so a cold seed phase can't spend it all.
+	const budget = new FetchBudget(FETCHES_PER_REQUEST, POSTER_RESERVE);
 	const limit = pLimit(CONCURRENCY);
 
 	const scores = new Map<
@@ -88,6 +91,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			})
 		)
 	);
+
+	// Seed lookups are done; hand the reserved subrequests to the poster/country phase below.
+	budget.releaseReserve();
 
 	const ranked = [...scores.values()]
 		.sort((a, b) => b.score - a.score || (b.traktRating ?? 0) - (a.traktRating ?? 0))

@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import type { TmdbMovie } from '$lib/types';
+import type { FetchBudget } from './budget';
 
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const RELATED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -42,16 +43,22 @@ async function sweepOldGenerations(db: D1Database): Promise<void> {
 	}
 }
 
-/** Returns the cached movie, null for a known (fresh) miss, or undefined if unknown. */
+/**
+ * Returns the cached movie, null for a known (fresh) miss, or undefined if unknown. Each of the
+ * two lookups is a subrequest; when `budget` has none left it stops and reports the key unknown.
+ */
 export async function getCached(
 	db: D1Database,
-	key: string
+	key: string,
+	budget?: FetchBudget
 ): Promise<TmdbMovie | null | undefined> {
+	if (budget && !budget.tryTake()) return undefined;
 	const hit = await db
 		.prepare('SELECT data FROM movies WHERE cache_key = ?')
 		.bind(key)
 		.first<{ data: string }>();
 	if (hit) return JSON.parse(hit.data) as TmdbMovie;
+	if (budget && !budget.tryTake()) return undefined;
 	const miss = await db
 		.prepare('SELECT fetched_at FROM misses WHERE cache_key = ?')
 		.bind(key)
@@ -63,8 +70,10 @@ export async function getCached(
 export async function putCached(
 	db: D1Database,
 	key: string,
-	movie: TmdbMovie | null
+	movie: TmdbMovie | null,
+	budget?: FetchBudget
 ): Promise<void> {
+	if (budget && !budget.tryTake()) return;
 	if (movie) {
 		await db
 			.prepare(
@@ -148,8 +157,10 @@ export interface RelatedMovie {
 
 export async function getRelatedCached(
 	db: D1Database,
-	tmdbId: number
+	tmdbId: number,
+	budget?: FetchBudget
 ): Promise<RelatedMovie[] | undefined> {
+	if (budget && !budget.tryTake()) return undefined;
 	const hit = await db
 		.prepare('SELECT data, fetched_at FROM trakt_related WHERE tmdb_id = ?')
 		.bind(tmdbId)
@@ -161,8 +172,10 @@ export async function getRelatedCached(
 export async function putRelatedCached(
 	db: D1Database,
 	tmdbId: number,
-	related: RelatedMovie[]
+	related: RelatedMovie[],
+	budget?: FetchBudget
 ): Promise<void> {
+	if (budget && !budget.tryTake()) return;
 	await db
 		.prepare('INSERT OR REPLACE INTO trakt_related (tmdb_id, data, fetched_at) VALUES (?, ?, ?)')
 		.bind(tmdbId, JSON.stringify(related), Date.now())
