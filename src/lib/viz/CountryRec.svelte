@@ -3,24 +3,30 @@
 	import { imageUrl } from './images';
 	import { fetchRecommendations, type Recommendation } from './recommend';
 	import { pickCountrySeeds } from './seeds';
+	import { runGuard } from './runGuard';
 
 	let { stat, exclude }: { stat: CountryStat; exclude: number[] } = $props();
 
 	let status: 'loading' | 'none' | 'ready' = $state('loading');
 	let recs: Recommendation[] = $state([]);
 
+	const guard = runGuard();
+
 	$effect(() => {
 		void load(stat, exclude);
 	});
 
 	async function load(current: CountryStat, excludeIds: number[]) {
+		const isCurrent = guard.begin();
 		status = 'loading';
 		recs = [];
 		try {
 			const results = await fetchRecommendations(pickCountrySeeds(current.films, 8), excludeIds);
+			if (!isCurrent()) return; // a newer load started while we awaited; don't overwrite it
 			recs = results.filter((r) => r.countries.includes(current.code)).slice(0, 3);
 			status = recs.length > 0 ? 'ready' : 'none';
 		} catch {
+			if (!isCurrent()) return;
 			status = 'none';
 		}
 	}

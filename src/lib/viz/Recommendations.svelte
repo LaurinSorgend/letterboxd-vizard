@@ -2,6 +2,7 @@
 	import { imageUrl } from './images';
 	import { fetchRecommendations, type Recommendation } from './recommend';
 	import { favoriteGenres, pickDiverseSeeds, pickGenreSeeds, watchedTmdbIds } from './seeds';
+	import { runGuard } from './runGuard';
 	import type { EnrichedFilm, Seed } from '$lib/types';
 
 	const GENRE_ROWS = 3;
@@ -20,11 +21,14 @@
 	let general: Recommendation[] = $state([]);
 	let genreRows: { genre: string; recommendations: Recommendation[] }[] = $state([]);
 
+	const guard = runGuard();
+
 	$effect(() => {
 		void load(films, includeWatchlist ? [] : watchlistIds);
 	});
 
 	async function load(current: EnrichedFilm[], watchlistExclude: number[]) {
+		const isCurrent = guard.begin();
 		const exclude = [...watchedTmdbIds(current), ...watchlistExclude];
 		const safeFetch = (seeds: Seed[]) => fetchRecommendations(seeds, exclude).catch(() => []);
 		const genres = favoriteGenres(current, GENRE_ROWS);
@@ -32,6 +36,7 @@
 			safeFetch(pickDiverseSeeds(current, 25)),
 			...genres.map((genre) => safeFetch(pickGenreSeeds(current, genre)))
 		]);
+		if (!isCurrent()) return; // a newer load started while we awaited; don't overwrite it
 		general = main;
 		const seen = new Set(main.map((r) => r.tmdbId));
 		genreRows = genres.flatMap((genre, i) => {
