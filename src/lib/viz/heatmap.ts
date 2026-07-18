@@ -284,7 +284,8 @@ export function buildDailyHeatmap(films: EnrichedFilm[], year: number): HeatmapG
 	const jan1 = new Date(Date.UTC(year, 0, 1));
 	const dec31 = new Date(Date.UTC(year, 11, 31));
 	const start = addDays(jan1, -daysSinceMonday(jan1));
-	const cols = Math.ceil((dec31.getTime() - start.getTime()) / DAY_MS / 7);
+	// Size inclusively: Dec 31 lands in floor(weeks) when it is itself a Monday, so +1 keeps its column.
+	const cols = Math.floor((dec31.getTime() - start.getTime()) / DAY_MS / 7) + 1;
 
 	const rows: (HeatCell | null)[][] = Array.from({ length: 7 }, () => Array(cols).fill(null));
 	const colLabels = Array<string>(cols).fill('');
