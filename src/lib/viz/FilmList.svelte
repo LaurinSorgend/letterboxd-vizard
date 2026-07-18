@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { EnrichedFilm } from '$lib/types';
+	import { webHref } from './href';
 
 	let { title, films }: { title: string; films: EnrichedFilm[] } = $props();
 
@@ -13,7 +14,13 @@
 	<ul>
 		{#each sorted as film (film.uri)}
 			<li>
-				<a href={film.uri} target="_blank" rel="noopener" title={film.name}>{film.name}</a>
+				{#if webHref(film.uri)}
+					<a href={webHref(film.uri)} target="_blank" rel="noopener" title={film.name}
+						>{film.name}</a
+					>
+				{:else}
+					<span class="name" title={film.name}>{film.name}</span>
+				{/if}
 				<span class="meta">{film.year ?? ''}</span>
 				{#if film.rating !== null}<span class="value">★ {film.rating}</span>{/if}
 			</li>
@@ -49,13 +56,16 @@
 	.meta {
 		color: var(--fg-muted);
 	}
-	a {
-		color: var(--accent);
-		text-decoration: none;
+	a,
+	.name {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
+	}
+	a {
+		color: var(--accent);
+		text-decoration: none;
 	}
 	a:hover {
 		text-decoration: underline;

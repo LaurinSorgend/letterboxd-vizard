@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ratingGaps } from './stats';
+	import { webHref } from './href';
 	import type { EnrichedFilm } from '$lib/types';
 
 	let { films }: { films: EnrichedFilm[] } = $props();
@@ -20,7 +21,7 @@
 					<li>
 						<a
 							class="name"
-							href={row.film.uri}
+							href={webHref(row.film.uri) ?? undefined}
 							target="_blank"
 							rel="noopener"
 							title={row.film.name}
