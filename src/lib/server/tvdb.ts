@@ -78,6 +78,10 @@ export async function lookupSeriesOnTvdb(
 				results[0]);
 	if (!match) return null;
 
+	// A non-numeric tvdb_id would poison the negative id and break the INTEGER cache write.
+	const tvdbId = Number.parseInt(match.tvdb_id, 10);
+	if (!Number.isFinite(tvdbId)) return null;
+
 	let details: TvdbSeries = {};
 	try {
 		// meta=episodes rides along on this request; the count is half of the whole-run runtime.
@@ -92,7 +96,7 @@ export async function lookupSeriesOnTvdb(
 
 	const country = match.country ? alpha3to2.get(match.country.toLowerCase()) : undefined;
 	return {
-		tmdbId: -Number.parseInt(match.tvdb_id, 10),
+		tmdbId: -tvdbId,
 		mediaType: 'tv',
 		title: match.name,
 		year: Number.parseInt(match.year ?? '', 10) || null,
