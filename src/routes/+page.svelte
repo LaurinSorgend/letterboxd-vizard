@@ -241,7 +241,7 @@
 					bind:value={seasonScale}
 				/>
 			{/if}
-			<Heatmap grid={seasonalHeatmap} metric={heatMetric} cellSize={26} />
+			<Heatmap grid={seasonalHeatmap} metric={heatMetric} cellSize={26} fitWidth />
 		</section>
 
 		<section>

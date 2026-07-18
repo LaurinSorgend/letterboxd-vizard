@@ -12,12 +12,18 @@
 	let {
 		grid,
 		metric = 'watchtime',
-		cellSize = 13
-	}: { grid: HeatmapGrid; metric?: HeatMetric; cellSize?: number } = $props();
+		cellSize = 13,
+		fitWidth = false
+	}: { grid: HeatmapGrid; metric?: HeatMetric; cellSize?: number; fitWidth?: boolean } = $props();
 
 	let selectedKey: string | null = $state(null);
 
 	const cols = $derived(grid.rows[0]?.length ?? 0);
+	// Grids with few columns can shrink their cells to fit a phone instead of scrolling; ~180px
+	// covers the row labels, gaps and page padding that sit beside the cells.
+	const cellLength = $derived(
+		fitWidth ? `min(${cellSize}px, (100vw - 180px) / ${cols})` : `${cellSize}px`
+	);
 	const scale = $derived(heatScale(grid, metric));
 	const description = $derived(
 		`${metric === 'rating' ? 'Average rating' : 'Watchtime'} ${grid.period}`
@@ -56,7 +62,7 @@
 		<div class="scroll">
 			<div
 				class="grid"
-				style="--cell: {cellSize}px; grid-template-columns: auto repeat({cols}, var(--cell)); grid-template-rows: auto repeat({grid
+				style="--cell: {cellLength}; grid-template-columns: auto repeat({cols}, var(--cell)); grid-template-rows: auto repeat({grid
 					.rows.length}, var(--cell));"
 			>
 				{#each grid.colLabels as label, c (c)}
