@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
 import type { Person, TmdbMovie } from '$lib/types';
-import type { FetchBudget } from './budget';
+import { BudgetExhausted, type FetchBudget } from './budget';
 import { lookupSeriesOnTvdb } from './tvdb';
 
 const BASE = 'https://api.themoviedb.org/3';
@@ -40,7 +40,9 @@ async function tmdbGet(
 		if (response.ok) return response.json();
 		const detail = await response.text();
 		const retryable = response.status === 429 || response.status >= 500;
-		if (!retryable || attempt > 0 || budget.exhausted) {
+		// A budget spent during the backoff means "deferred", not a real TMDB failure — keep it typed.
+		if (budget.exhausted) throw new BudgetExhausted();
+		if (!retryable || attempt > 0) {
 			throw new Error(`TMDB ${path} failed: ${response.status} ${detail}`);
 		}
 		const after = Number(response.headers.get('Retry-After')) * 1000;
