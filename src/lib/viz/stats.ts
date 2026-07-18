@@ -168,30 +168,49 @@ function letterboxdSlug(name: string): string {
 }
 
 export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): BarDatum[] {
-	const groups = new Map<string, { films: EnrichedFilm[]; profilePath: string | null }>();
+	// Group on tmdbId, not name: TMDB has several people sharing a name, and pooling them would
+	// merge their films, counts and averages into one bogus bar. People without an id (rare) keep
+	// grouping by name, the best we can do for them.
+	interface PersonGroup {
+		name: string;
+		tmdbId: number | null;
+		films: EnrichedFilm[];
+		profilePath: string | null;
+	}
+	const groups = new Map<string, PersonGroup>();
 	for (const film of films) {
 		const seen = new Set<string>();
 		for (const person of film.tmdb?.[role] ?? []) {
-			if (seen.has(person.name)) continue;
-			seen.add(person.name);
-			let group = groups.get(person.name);
+			const key = person.tmdbId !== null ? `id:${person.tmdbId}` : `name:${person.name}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			let group = groups.get(key);
 			if (!group) {
-				group = { films: [], profilePath: null };
-				groups.set(person.name, group);
+				group = { name: person.name, tmdbId: person.tmdbId, films: [], profilePath: null };
+				groups.set(key, group);
 			}
 			group.profilePath ??= person.profilePath;
 			group.films.push(film);
 		}
 	}
+
+	// A bare name-slug lands on whoever owns it on Letterboxd, so it is only safe when the name is
+	// unique in this library; anyone sharing a name here links to their unambiguous TMDB page instead.
+	const nameCounts = new Map<string, number>();
+	for (const { name } of groups.values()) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+
 	const kind = role === 'directors' ? 'director' : 'actor';
-	return [...groups]
-		.map(([name, group]) => ({
-			label: name,
+	return [...groups.values()]
+		.map((group) => ({
+			label: group.name,
 			count: group.films.length,
 			avg: avgRating(group.films),
 			image: imageUrl(group.profilePath, 'w45'),
 			imageLarge: imageUrl(group.profilePath, 'w185'),
-			href: `https://letterboxd.com/${kind}/${letterboxdSlug(name)}/`,
+			href:
+				group.tmdbId !== null && (nameCounts.get(group.name) ?? 0) > 1
+					? `https://www.themoviedb.org/person/${group.tmdbId}`
+					: `https://letterboxd.com/${kind}/${letterboxdSlug(group.name)}/`,
 			films: group.films
 		}))
 		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
