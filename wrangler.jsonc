@@ -15,6 +15,18 @@
 			"database_id": "f5246d56-7cff-43c3-bbc6-0f75ce3bf669"
 		}
 	],
+	"ratelimits": [
+		{
+			"name": "ENRICH_LIMITER",
+			"namespace_id": "1001",
+			"simple": { "limit": 60, "period": 60 }
+		},
+		{
+			"name": "RECOMMEND_LIMITER",
+			"namespace_id": "1002",
+			"simple": { "limit": 60, "period": 60 }
+		}
+	],
 	"observability": {
 		"enabled": false,
 		"head_sampling_rate": 1,

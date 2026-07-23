@@ -84,6 +84,7 @@ npx wrangler d1 create letterboxed-vizard-db --jurisdiction eu
 # paste the printed database_id into wrangler.jsonc
 npx wrangler d1 execute letterboxed-vizard-db --remote --file=schema.sql
 npx wrangler secret put TMDB_API_KEY
+npx wrangler secret put SESSION_SECRET
 # optional: repeat for TRAKT_CLIENT_ID and TVDB_API_KEY
 ```
 

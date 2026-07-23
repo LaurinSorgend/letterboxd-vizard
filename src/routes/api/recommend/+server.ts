@@ -4,6 +4,8 @@ import type { D1Database } from '@cloudflare/workers-types';
 import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { cacheKey, getCachedMany, putCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
+import { checkRateLimit } from '$lib/server/ratelimit';
+import { requireSession } from '$lib/server/session';
 import { fetchRecord } from '$lib/server/tmdb';
 import { relatedMovies, traktAvailable } from '$lib/server/trakt';
 import { effectiveCountries } from '$lib/viz/countries';
@@ -76,7 +78,10 @@ async function resolveRecords(
 	});
 }
 
-export const POST: RequestHandler = async ({ request, platform }) => {
+export const POST: RequestHandler = async ({ request, platform, cookies, getClientAddress }) => {
+	await requireSession(cookies);
+	await checkRateLimit(platform?.env?.RECOMMEND_LIMITER, getClientAddress());
+
 	if (!traktAvailable()) return json({ available: false, results: [] });
 
 	const db = await getDb(platform);

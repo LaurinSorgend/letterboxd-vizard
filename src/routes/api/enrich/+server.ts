@@ -3,6 +3,8 @@ import pLimit from 'p-limit';
 import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { cacheKey, getCachedMany, putCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
+import { checkRateLimit } from '$lib/server/ratelimit';
+import { requireSession } from '$lib/server/session';
 import { lookupMovie } from '$lib/server/tmdb';
 import type { EnrichRequestItem, TmdbMovie } from '$lib/types';
 import type { RequestHandler } from './$types';
@@ -10,7 +12,10 @@ import type { RequestHandler } from './$types';
 const MAX_BATCH = 100;
 const CONCURRENCY = 5;
 
-export const POST: RequestHandler = async ({ request, platform }) => {
+export const POST: RequestHandler = async ({ request, platform, cookies, getClientAddress }) => {
+	await requireSession(cookies);
+	await checkRateLimit(platform?.env?.ENRICH_LIMITER, getClientAddress());
+
 	const db = await getDb(platform);
 	const body = (await request.json().catch(() => null)) as { items?: EnrichRequestItem[] } | null;
 	const items = body?.items;
@@ -18,7 +23,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		error(400, 'Expected body: { items: { name: string, year: number | null }[] }');
 	}
 	if (items.length > MAX_BATCH) {
-		error(400, `Batch too large — send at most ${MAX_BATCH} items`);
+		error(400, `Batch too large, send at most ${MAX_BATCH} items`);
 	}
 
 	const keys = items.map((item) => cacheKey(item.name, item.year));
