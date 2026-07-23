@@ -96,4 +96,4 @@ npm run deploy
 
 ## AI disclaimer
 
-This project was written with the help of an AI coding assistant, guided, reviewed and tested by a human.
+This project was initially generated with the help of an AI coding assistant. It's now maintained by a human.

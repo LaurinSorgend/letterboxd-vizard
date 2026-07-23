@@ -145,7 +145,6 @@
 	.cell {
 		width: var(--cell);
 		height: var(--cell);
-		border-radius: 2px;
 		padding: 0;
 		margin: 0;
 		border: none;
@@ -211,7 +210,6 @@
 	.swatch {
 		width: 13px;
 		height: 13px;
-		border-radius: 2px;
 		display: inline-block;
 	}
 	.swatch.empty,

@@ -289,7 +289,6 @@
 		padding: 8px;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border);
-		border-radius: 4px;
 		font-size: 0.875rem;
 		pointer-events: none;
 		z-index: 1;
@@ -319,7 +318,6 @@
 	.swatch {
 		width: 14px;
 		height: 14px;
-		border-radius: 2px;
 		display: inline-block;
 	}
 	.swatch.nodata,

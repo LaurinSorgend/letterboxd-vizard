@@ -67,13 +67,11 @@
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		border-radius: 4px 4px 0 0;
 	}
 	.bar {
 		width: 100%;
 		max-width: 24px;
 		background: var(--accent);
-		border-radius: 4px 4px 0 0;
 	}
 	.col:hover .bar {
 		filter: brightness(1.15);

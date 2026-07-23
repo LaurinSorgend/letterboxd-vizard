@@ -252,8 +252,12 @@
 	--accent: var(--ctp-lavender);
 }
 
-* {
+*,
+*::before,
+*::after {
 	box-sizing: border-box;
+	/* DESIGN.md: sharp corners only, no exceptions. */
+	border-radius: 0;
 }
 
 body {

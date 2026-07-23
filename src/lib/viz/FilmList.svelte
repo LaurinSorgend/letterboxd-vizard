@@ -33,7 +33,6 @@
 		margin-top: 12px;
 		padding: 12px;
 		background: var(--bg-secondary);
-		border-radius: 4px;
 	}
 	h3 {
 		margin: 0 0 8px;

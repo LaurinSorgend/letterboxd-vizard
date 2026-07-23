@@ -95,7 +95,7 @@
 			<li>
 				<a href="https://letterboxd.com/tmdb/{rec.tmdbId}" target="_blank" rel="noopener">
 					{#if poster}
-						<img src={poster} alt="" loading="lazy" width="92" height="138" />
+						<img src={poster} alt="" loading="lazy" width="92" height="164" />
 					{:else if rec.pending}
 						<span class="placeholder pending" aria-hidden="true"></span>
 					{:else}
@@ -161,9 +161,8 @@
 	img,
 	.placeholder {
 		width: 100%;
-		aspect-ratio: 2 / 3;
+		aspect-ratio: 9 / 16;
 		object-fit: cover;
-		border-radius: 4px;
 		background: var(--surface);
 	}
 	.placeholder {

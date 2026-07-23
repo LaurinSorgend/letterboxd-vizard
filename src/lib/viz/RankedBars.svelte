@@ -115,7 +115,6 @@
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		border-radius: 50%;
 	}
 	.pic .preview {
 		display: none;
@@ -124,10 +123,8 @@
 		left: 0;
 		width: 150px;
 		height: auto;
-		border-radius: 8px;
 		border: 1px solid var(--border-strong);
 		background: var(--surface);
-		box-shadow: 0 2px 8px color-mix(in srgb, var(--ctp-crust) 60%, transparent);
 		z-index: 10;
 	}
 	button.pic:hover .preview,
@@ -138,7 +135,6 @@
 	.pic img {
 		width: 24px;
 		height: 24px;
-		border-radius: 50%;
 		object-fit: cover;
 		display: block;
 		background: var(--surface);
@@ -171,13 +167,11 @@
 		border: none;
 		text-align: left;
 		cursor: pointer;
-		border-radius: 4px;
 	}
 	.bar {
 		height: 14px;
 		min-width: 2px;
 		background: var(--accent);
-		border-radius: 0 4px 4px 0;
 	}
 	.track:hover .bar {
 		filter: brightness(1.15);
@@ -204,7 +198,6 @@
 		color: var(--fg);
 		background: transparent;
 		border: 1px solid var(--border);
-		border-radius: 4px;
 		cursor: pointer;
 	}
 	.more:hover {

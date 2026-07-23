@@ -55,7 +55,6 @@
 		margin-top: 12px;
 		padding: 12px;
 		background: var(--bg-secondary);
-		border-radius: 4px;
 	}
 	.note {
 		font-size: 0.875rem;
@@ -80,7 +79,6 @@
 		text-decoration: underline;
 	}
 	img {
-		border-radius: 2px;
 		background: var(--surface);
 	}
 	.year {

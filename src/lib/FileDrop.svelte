@@ -42,7 +42,6 @@
 		gap: 8px;
 		padding: 48px 24px;
 		border: 2px dashed var(--border-strong);
-		border-radius: 8px;
 		background: var(--bg-secondary);
 		cursor: pointer;
 		text-align: center;

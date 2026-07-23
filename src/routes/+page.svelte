@@ -382,7 +382,6 @@
 	}
 	.error {
 		padding: 8px 12px;
-		border-radius: 4px;
 		background: color-mix(in srgb, var(--error) 12%, transparent);
 		color: var(--error);
 	}

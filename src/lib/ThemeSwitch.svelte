@@ -95,7 +95,6 @@
 		background: var(--surface);
 		color: var(--fg);
 		border: 1px solid var(--border);
-		border-radius: 4px;
 		padding: 4px 8px;
 		min-width: 0;
 		font: inherit;
