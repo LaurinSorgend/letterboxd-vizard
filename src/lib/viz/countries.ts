@@ -1,5 +1,6 @@
 import codes from './country-codes.json';
 import { avgRating } from './stats';
+import { getOrCreate } from '$lib/collections';
 import type { EnrichedFilm, TmdbMovie } from '$lib/types';
 
 /** ISO 3166-1 numeric (world-atlas feature id) → alpha-2 (TMDB country code). */
@@ -37,11 +38,14 @@ export function aggregateCountries(films: EnrichedFilm[]): Map<string, CountrySt
 	for (const film of films) {
 		if (!film.tmdb) continue;
 		for (const code of new Set(effectiveCountries(film.tmdb))) {
-			let stat = stats.get(code);
-			if (!stat) {
-				stat = { code, name: countryName(code), films: [], count: 0, ratedCount: 0, avg: null };
-				stats.set(code, stat);
-			}
+			const stat = getOrCreate(stats, code, () => ({
+				code,
+				name: countryName(code),
+				films: [],
+				count: 0,
+				ratedCount: 0,
+				avg: null
+			}));
 			stat.films.push(film);
 			stat.count += 1;
 		}

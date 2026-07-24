@@ -1,5 +1,6 @@
 import { binIndex, RATING_BIN_LABELS, RATING_THRESHOLDS } from './ramp';
 import { avgRating } from './stats';
+import { getOrCreate } from '$lib/collections';
 import type { EnrichedFilm } from '$lib/types';
 
 export type HeatMetric = 'watchtime' | 'rating';
@@ -60,6 +61,10 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 interface Bucket {
 	minutes: number;
 	films: EnrichedFilm[];
+}
+
+function emptyBucket(): Bucket {
+	return { minutes: 0, films: [] };
 }
 
 /** Total watched runtime as a human string; "runtime unknown" when the sum is zero. */
@@ -136,8 +141,7 @@ function bucketsByDay(films: EnrichedFilm[]): Map<string, Bucket> {
 		for (const date of film.watchedDates) {
 			const day = diaryDay(date);
 			if (day === null) continue;
-			let bucket = days.get(day);
-			if (!bucket) days.set(day, (bucket = { minutes: 0, films: [] }));
+			const bucket = getOrCreate(days, day, emptyBucket);
 			bucket.minutes += minutes;
 			bucket.films.push(film);
 		}
@@ -234,8 +238,7 @@ export function buildSeasonalHeatmap(
 			if (!(month >= 0 && month <= 11)) continue;
 			for (const genre of genresOf) {
 				const key = `${genre}:${month}`;
-				let bucket = byCell.get(key);
-				if (!bucket) byCell.set(key, (bucket = { minutes: 0, films: [] }));
+				const bucket = getOrCreate(byCell, key, emptyBucket);
 				bucket.minutes += minutes;
 				bucket.films.push(film);
 				watches.set(genre, (watches.get(genre) ?? 0) + 1);
@@ -350,8 +353,7 @@ export function buildWeeklyHeatmap(films: EnrichedFilm[]): HeatmapGrid {
 		maxYear = Math.max(maxYear, year);
 		maxWeek = Math.max(maxWeek, week);
 		const key = `${year}:${week}`;
-		let agg = byWeek.get(key);
-		if (!agg) byWeek.set(key, (agg = { minutes: 0, films: [] }));
+		const agg = getOrCreate(byWeek, key, emptyBucket);
 		agg.minutes += bucket.minutes;
 		agg.films.push(...bucket.films);
 	}

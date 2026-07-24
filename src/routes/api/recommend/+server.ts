@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import pLimit, { type LimitFunction } from 'p-limit';
 import type { D1Database } from '@cloudflare/workers-types';
+import { getOrCreate } from '$lib/collections';
 import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { cacheKey, getCachedMany, putCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
@@ -117,11 +118,7 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 				try {
 					for (const movie of await relatedMovies(db, budget, seed.tmdbId)) {
 						if (excluded.has(movie.tmdbId)) continue;
-						let entry = scores.get(movie.tmdbId);
-						if (!entry) {
-							entry = { ...movie, score: 0 };
-							scores.set(movie.tmdbId, entry);
-						}
+						const entry = getOrCreate(scores, movie.tmdbId, () => ({ ...movie, score: 0 }));
 						entry.score += Math.max(0.5, seed.rating - 2.5);
 					}
 				} catch (cause) {

@@ -1,4 +1,5 @@
 import { imageUrl } from './images';
+import { getOrCreate } from '$lib/collections';
 import type { EnrichedFilm } from '$lib/types';
 
 export interface BarDatum {
@@ -44,7 +45,7 @@ export function watchesPerYear(films: EnrichedFilm[]): BarDatum[] {
 			const year = Number.parseInt(date.slice(0, 4), 10);
 			if (!Number.isFinite(year)) continue;
 			counts.set(year, (counts.get(year) ?? 0) + 1);
-			(groups.get(year) ?? groups.set(year, new Set()).get(year))!.add(film);
+			getOrCreate(groups, year, () => new Set<EnrichedFilm>()).add(film);
 		}
 	}
 	if (counts.size === 0) return [];
@@ -88,7 +89,7 @@ export function releaseDecades(films: EnrichedFilm[]): BarDatum[] {
 		const year = film.tmdb?.year ?? film.year;
 		if (year === null) continue;
 		const decade = Math.floor(year / 10) * 10;
-		(groups.get(decade) ?? groups.set(decade, []).get(decade))!.push(film);
+		getOrCreate(groups, decade, () => []).push(film);
 	}
 	return [...groups]
 		.sort(([a], [b]) => a - b)
@@ -134,7 +135,7 @@ function grouped(films: EnrichedFilm[], keysOf: (f: EnrichedFilm) => string[]): 
 	const groups = new Map<string, EnrichedFilm[]>();
 	for (const film of films) {
 		for (const key of new Set(keysOf(film))) {
-			(groups.get(key) ?? groups.set(key, []).get(key))!.push(film);
+			getOrCreate(groups, key, () => []).push(film);
 		}
 	}
 	return [...groups]
@@ -184,11 +185,12 @@ export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): Bar
 			const key = person.tmdbId !== null ? `id:${person.tmdbId}` : `name:${person.name}`;
 			if (seen.has(key)) continue;
 			seen.add(key);
-			let group = groups.get(key);
-			if (!group) {
-				group = { name: person.name, tmdbId: person.tmdbId, films: [], profilePath: null };
-				groups.set(key, group);
-			}
+			const group = getOrCreate(groups, key, () => ({
+				name: person.name,
+				tmdbId: person.tmdbId,
+				films: [],
+				profilePath: null
+			}));
 			group.profilePath ??= person.profilePath;
 			group.films.push(film);
 		}
