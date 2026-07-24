@@ -260,6 +260,17 @@
 	border-radius: 0;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+	html {
+		scroll-behavior: smooth;
+	}
+}
+
+/* Breathing room above a section the side nav jumped to. */
+section[id] {
+	scroll-margin-top: 24px;
+}
+
 body {
 	margin: 0;
 	background: var(--bg);

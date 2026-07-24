@@ -11,6 +11,7 @@
 	import RatingGaps from '$lib/viz/RatingGaps.svelte';
 	import Recommendations from '$lib/viz/Recommendations.svelte';
 	import StatTiles from '$lib/viz/StatTiles.svelte';
+	import SectionNav from '$lib/viz/SectionNav.svelte';
 	import Heatmap from '$lib/viz/Heatmap.svelte';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
 	import {
@@ -50,6 +51,7 @@
 	let includeWatchlist = $state(false);
 	let remember = $state(false);
 	let saveError: string | null = $state(null);
+	let mainEl: HTMLElement | null = $state(null);
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
 	const watchlistExclude = $derived(includeWatchlist ? [] : watchlistIds);
@@ -79,7 +81,7 @@
 			{ label: 'Films watched', value: String(films.length) },
 			{ label: 'Hours watched', value: hours.toLocaleString('en') },
 			{ label: 'Countries', value: String(countries.size) },
-			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) + " ★"  : '—' }
+			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) + ' ★' : '—' }
 		];
 	});
 
@@ -147,7 +149,7 @@
 	<title>Letterboxd Vizard</title>
 </svelte:head>
 
-<main>
+<main bind:this={mainEl}>
 	<header>
 		<div>
 			<div class="title">
@@ -184,14 +186,16 @@
 	{:else}
 		<RememberToggle checked={remember} error={saveError} onchange={toggleRemember} />
 
+		<SectionNav container={mainEl} />
+
 		<StatTiles {tiles} />
 
-		<section>
+		<section id="world">
 			<h2>Your films around the world</h2>
 			<WorldMap {films} {initialMetric} {presetCountry} {watchlistExclude} />
 		</section>
 
-		<section>
+		<section id="ratings">
 			<h2>Rating habits</h2>
 			<div class="pair">
 				<div>
@@ -202,7 +206,7 @@
 			</div>
 		</section>
 
-		<section>
+		<section id="years">
 			<h2>Through the years</h2>
 			<div class="pair">
 				<div>
@@ -216,7 +220,7 @@
 			</div>
 		</section>
 
-		<section>
+		<section id="when">
 			<h2>When you watch</h2>
 			<MetricToggle
 				name="heat-metric"
@@ -246,7 +250,7 @@
 			<Heatmap grid={seasonalHeatmap} metric={heatMetric} cellSize={26} fitWidth />
 		</section>
 
-		<section>
+		<section id="runtime">
 			<h2>How long you watch</h2>
 			{#if hasSeries}
 				<MetricToggle
@@ -263,7 +267,7 @@
 		</section>
 
 		{#if rewatched.length > 0}
-			<section>
+			<section id="rewatches">
 				<h2>Films you return to</h2>
 				<p class="sub chart-note">
 					Bars count diary entries. Films you first saw before you started logging show one, even
@@ -273,7 +277,7 @@
 			</section>
 		{/if}
 
-		<section>
+		<section id="genres">
 			<h2>Genres &amp; languages</h2>
 			<div class="pair">
 				<div>
@@ -295,7 +299,7 @@
 			</div>
 		</section>
 
-		<section>
+		<section id="people">
 			<h2>People</h2>
 			<div class="pair">
 				<div>

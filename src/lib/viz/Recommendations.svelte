@@ -110,7 +110,7 @@
 {/snippet}
 
 {#if general.length > 0 || genreRows.length > 0}
-	<section>
+	<section id="recommendations">
 		<div class="heading">
 			<h2>You might like</h2>
 			{#if watchlistIds.length > 0}
