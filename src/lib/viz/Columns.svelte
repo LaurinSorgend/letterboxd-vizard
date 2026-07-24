@@ -1,19 +1,13 @@
 <script lang="ts">
 	import FilmList from './FilmList.svelte';
+	import { selectByLabel } from './selection.svelte';
 	import type { BarDatum } from './stats';
 
 	let { data, description }: { data: BarDatum[]; description: string } = $props();
 
-	let selectedLabel: string | null = $state(null);
+	const selection = selectByLabel(() => data);
 	const max = $derived(Math.max(1, ...data.map((d) => d.count)));
 	const showEvery = $derived(Math.ceil(data.length / 16));
-	const selected = $derived(
-		selectedLabel === null ? null : (data.find((d) => d.label === selectedLabel) ?? null)
-	);
-
-	function toggle(label: string) {
-		selectedLabel = selectedLabel === label ? null : label;
-	}
 </script>
 
 <div class="chart" role="group" aria-label={description}>
@@ -22,9 +16,9 @@
 			<button
 				type="button"
 				class="col"
-				aria-pressed={selectedLabel === d.label}
+				aria-pressed={selection.isSelected(d.label)}
 				title="{d.label}: {d.count} — click to list films"
-				onclick={() => toggle(d.label)}
+				onclick={() => selection.toggle(d.label)}
 			>
 				<span class="val">{d.count}</span>
 				<span class="bar" style="height: {Math.max(3, (d.count / max) * 140)}px"></span>
@@ -39,7 +33,8 @@
 		{/if}
 	{/each}
 </div>
-{#if selected}
+{#if selection.selected}
+	{@const selected = selection.selected}
 	<FilmList title={selected.label} films={selected.films} />
 {/if}
 

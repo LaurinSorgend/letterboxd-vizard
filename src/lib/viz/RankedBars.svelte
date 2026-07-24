@@ -1,5 +1,6 @@
 <script lang="ts">
 	import FilmList from './FilmList.svelte';
+	import { selectByLabel } from './selection.svelte';
 	import type { BarDatum } from './stats';
 
 	let {
@@ -10,18 +11,11 @@
 	}: { data: BarDatum[]; limit?: number; showAvg?: boolean; description: string } = $props();
 
 	let expanded = $state(false);
-	let selectedLabel: string | null = $state(null);
 	let pinnedLabel: string | null = $state(null);
+	const selection = selectByLabel(() => data);
 	const rows = $derived(expanded ? data : data.slice(0, limit));
 	const max = $derived(Math.max(1, ...rows.map((d) => d.count)));
 	const hasImages = $derived(data.some((d) => d.image !== undefined));
-	const selected = $derived(
-		selectedLabel === null ? null : (data.find((d) => d.label === selectedLabel) ?? null)
-	);
-
-	function toggle(label: string) {
-		selectedLabel = selectedLabel === label ? null : label;
-	}
 
 	function togglePin(label: string) {
 		pinnedLabel = pinnedLabel === label ? null : label;
@@ -69,11 +63,11 @@
 		<button
 			type="button"
 			class="track"
-			aria-pressed={selectedLabel === d.label}
+			aria-pressed={selection.isSelected(d.label)}
 			title="{d.label}: {d.count}{d.avg !== null
 				? `, avg ${d.avg.toFixed(1)}`
 				: ''} — click to list films"
-			onclick={() => toggle(d.label)}
+			onclick={() => selection.toggle(d.label)}
 		>
 			<span class="bar" style="width: {(d.count / max) * 100}%"></span>
 			<span class="val">{d.count}</span>
@@ -88,7 +82,8 @@
 		{expanded ? 'Show fewer' : `Show all (${data.length})`}
 	</button>
 {/if}
-{#if selected}
+{#if selection.selected}
+	{@const selected = selection.selected}
 	<FilmList title={selected.label} films={selected.films} />
 {/if}
 
