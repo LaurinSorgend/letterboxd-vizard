@@ -14,6 +14,7 @@
 	import Heatmap from '$lib/viz/Heatmap.svelte';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
 	import {
+		bucketsByDay,
 		buildDailyHeatmap,
 		buildSeasonalHeatmap,
 		buildWeeklyHeatmap,
@@ -57,8 +58,9 @@
 	const presetCountry = page.url.searchParams.get('country');
 
 	const currentYear = new Date().getFullYear();
-	const dailyHeatmap = $derived(buildDailyHeatmap(films, currentYear));
-	const weeklyHeatmap = $derived(buildWeeklyHeatmap(films));
+	const dayBuckets = $derived(bucketsByDay(films));
+	const dailyHeatmap = $derived(buildDailyHeatmap(dayBuckets, currentYear));
+	const weeklyHeatmap = $derived(buildWeeklyHeatmap(dayBuckets));
 	let heatMetric: HeatMetric = $state('watchtime');
 	let seasonScale: SeasonScale = $state('genre');
 	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));

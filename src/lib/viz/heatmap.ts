@@ -67,6 +67,9 @@ function emptyBucket(): Bucket {
 	return { minutes: 0, films: [] };
 }
 
+/** Watch buckets keyed by calendar day (YYYY-MM-DD); the daily and weekly grids share one. */
+export type DayBuckets = Map<string, Bucket>;
+
 /** Total watched runtime as a human string; "runtime unknown" when the sum is zero. */
 export function formatWatchtime(minutes: number): string {
 	if (minutes <= 0) return 'runtime unknown';
@@ -134,7 +137,7 @@ function periodMinutes(film: EnrichedFilm): number {
 }
 
 /** Sum each diary watch's runtime into its calendar day (YYYY-MM-DD). */
-function bucketsByDay(films: EnrichedFilm[]): Map<string, Bucket> {
+export function bucketsByDay(films: EnrichedFilm[]): DayBuckets {
 	const days = new Map<string, Bucket>();
 	for (const film of films) {
 		const minutes = periodMinutes(film);
@@ -282,8 +285,7 @@ export function buildSeasonalHeatmap(
 }
 
 /** GitHub-style calendar: 7 weekday rows × week columns for one year. */
-export function buildDailyHeatmap(films: EnrichedFilm[], year: number): HeatmapGrid {
-	const byDay = bucketsByDay(films);
+export function buildDailyHeatmap(byDay: DayBuckets, year: number): HeatmapGrid {
 	const jan1 = new Date(Date.UTC(year, 0, 1));
 	const dec31 = new Date(Date.UTC(year, 11, 31));
 	const start = addDays(jan1, -daysSinceMonday(jan1));
@@ -339,13 +341,13 @@ function weeklyColLabels(refYear: number, cols: number): string[] {
 }
 
 /** One row per year (newest first), one column per week of the year. */
-export function buildWeeklyHeatmap(films: EnrichedFilm[]): HeatmapGrid {
+export function buildWeeklyHeatmap(byDay: DayBuckets): HeatmapGrid {
 	const byWeek = new Map<string, Bucket>();
 	let minYear = Infinity;
 	let maxYear = -Infinity;
 	let maxWeek = 52;
 
-	for (const [day, bucket] of bucketsByDay(films)) {
+	for (const [day, bucket] of byDay) {
 		const date = toUtcDate(day);
 		const year = date.getUTCFullYear();
 		const week = weekOfYear(date);
