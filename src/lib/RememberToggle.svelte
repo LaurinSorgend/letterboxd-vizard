@@ -32,7 +32,7 @@
 		gap: 8px;
 		cursor: pointer;
 		color: var(--fg-secondary);
-		font-size: 0.875rem;
+		font-size: var(--text-base);
 	}
 	input {
 		accent-color: var(--accent);
@@ -43,14 +43,16 @@
 		outline: 2px solid var(--focus);
 		outline-offset: 2px;
 	}
+	/* Sentence-length help text, so it stays at the 16px floor and takes its
+	 * secondary rank from colour rather than size. */
 	.hint {
 		margin: 4px 0 0;
-		font-size: 0.75rem;
+		font-size: var(--text-base);
 		color: var(--fg-muted);
 	}
 	.error {
 		margin: 4px 0 0;
-		font-size: 0.75rem;
+		font-size: var(--text-base);
 		color: var(--error);
 	}
 </style>

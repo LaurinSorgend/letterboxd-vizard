@@ -28,7 +28,7 @@
 						>
 							{row.film.name}
 						</a>
-						<span class="nums">
+						<span class="nums" data-numeric>
 							you <strong>{row.yours}</strong> · TMDB <strong>{row.tmdb.toFixed(1)}</strong>
 						</span>
 					</li>
@@ -60,7 +60,7 @@
 		gap: 12px;
 		padding: 4px 0;
 		border-bottom: 1px solid var(--border);
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 	}
 	.name {
 		overflow: hidden;

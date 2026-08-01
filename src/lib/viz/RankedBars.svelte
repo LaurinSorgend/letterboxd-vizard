@@ -70,10 +70,10 @@
 			onclick={() => selection.toggle(d.label)}
 		>
 			<span class="bar" style="width: {(d.count / max) * 100}%"></span>
-			<span class="val">{d.count}</span>
+			<span class="val" data-numeric>{d.count}</span>
 		</button>
 		{#if showAvg}
-			<span class="avg">{d.avg !== null ? `★ ${d.avg.toFixed(1)}` : '—'}</span>
+			<span class="avg" data-numeric>{d.avg !== null ? `★ ${d.avg.toFixed(1)}` : '—'}</span>
 		{/if}
 	{/each}
 </div>
@@ -135,7 +135,7 @@
 		background: var(--surface);
 	}
 	.lab {
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		color: var(--fg-secondary);
 		max-width: 160px;
 		overflow: hidden;
@@ -175,21 +175,19 @@
 		box-shadow: 0 0 0 1.5px var(--fg);
 	}
 	.val {
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-muted);
-		font-variant-numeric: tabular-nums;
 	}
 	.avg {
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-secondary);
-		font-variant-numeric: tabular-nums;
 		justify-self: end;
 	}
 	.more {
 		margin-top: 8px;
 		padding: 4px 12px;
 		font: inherit;
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		color: var(--fg);
 		background: transparent;
 		border: 1px solid var(--border);

@@ -10,7 +10,7 @@
 </script>
 
 <div class="panel">
-	<h3>{title} — {films.length} film{films.length === 1 ? '' : 's'}</h3>
+	<h3>{title}: {films.length} film{films.length === 1 ? '' : 's'}</h3>
 	<ul>
 		{#each sorted as film (film.uri)}
 			<li>
@@ -21,8 +21,8 @@
 				{:else}
 					<span class="name" title={film.name}>{film.name}</span>
 				{/if}
-				<span class="meta">{film.year ?? ''}</span>
-				{#if film.rating !== null}<span class="value">★ {film.rating}</span>{/if}
+				<span class="meta" data-numeric>{film.year ?? ''}</span>
+				{#if film.rating !== null}<span class="value" data-numeric>★ {film.rating}</span>{/if}
 			</li>
 		{/each}
 	</ul>
@@ -36,7 +36,7 @@
 	}
 	h3 {
 		margin: 0 0 8px;
-		font-size: 0.875rem;
+		font-size: var(--text-base);
 	}
 	ul {
 		margin: 0;
@@ -50,7 +50,7 @@
 		gap: 8px;
 		padding: 2px 0;
 		break-inside: avoid;
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 	}
 	.meta {
 		color: var(--fg-muted);
@@ -71,7 +71,6 @@
 	}
 	.value {
 		margin-left: auto;
-		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
 	@media (max-width: 640px) {

@@ -1,0 +1,242 @@
+/* Typography — Ronzino (UI), Sinistre (title), Ortica Linear (long-form),
+ * Fira Code (code and every numeral). All SIL OFL 1.1; files and licenses
+ * ship in static/fonts/. Never load them from a third-party CDN.
+ */
+
+/* Ronzino's slanted cuts are drawn obliques, not true italics. Declaring them
+ * as font-style: italic lets <em> resolve to a real file instead of falling
+ * through to the synthesis that font-synthesis: none blocks. */
+@font-face {
+	font-family: 'Ronzino';
+	src: url('/fonts/ronzino-regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ronzino';
+	src: url('/fonts/ronzino-oblique.woff2') format('woff2');
+	font-weight: 400;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ronzino';
+	src: url('/fonts/ronzino-medium.woff2') format('woff2');
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ronzino';
+	src: url('/fonts/ronzino-medium-oblique.woff2') format('woff2');
+	font-weight: 500;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ronzino';
+	src: url('/fonts/ronzino-bold.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ronzino';
+	src: url('/fonts/ronzino-bold-oblique.woff2') format('woff2');
+	font-weight: 700;
+	font-style: italic;
+	font-display: swap;
+}
+
+/* Variable faces. The declared ranges are generous; the browser clamps to the
+ * file's actual fvar limits. */
+@font-face {
+	font-family: 'Sinistre';
+	src: url('/fonts/sinistre-variable.woff2') format('woff2-variations');
+	font-weight: 100 900;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Fira Code';
+	src: url('/fonts/fira-code-variable.woff2') format('woff2-variations');
+	font-weight: 300 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+/* Ortica has no slanted style; see the emphasis rule below. */
+@font-face {
+	font-family: 'Ortica Linear';
+	src: url('/fonts/ortica-linear-light.woff2') format('woff2');
+	font-weight: 300;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ortica Linear';
+	src: url('/fonts/ortica-linear-regular.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Ortica Linear';
+	src: url('/fonts/ortica-linear-bold.woff2') format('woff2');
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+}
+
+/* Metric-matched fallback so the Ronzino swap does not shift layout. Ronzino
+ * is drawn as a reimagining of Arial, so 100% is a measured start, not a guess.
+ * Sinistre gets no override — no system face resembles it, so it is preloaded
+ * instead. */
+@font-face {
+	font-family: 'Ronzino Fallback';
+	src: local('Arial'), local('Helvetica Neue'), local('Liberation Sans');
+	size-adjust: 100%;
+	ascent-override: 90%;
+	descent-override: 21%;
+	line-gap-override: 0%;
+}
+
+:root {
+	--font-sans: 'Ronzino', 'Ronzino Fallback', Arial, 'Helvetica Neue', Helvetica, sans-serif;
+	--font-display: 'Sinistre', Georgia, 'Times New Roman', serif;
+	--font-serif: 'Ortica Linear', Georgia, 'Times New Roman', serif;
+	--font-mono:
+		'Fira Code', 'Fira Mono', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas,
+		monospace;
+
+	--text-2xs: 0.75rem; /* 12px — micro-labels, legal. Absolute floor. */
+	--text-xs: 0.8125rem; /* 13px — dense cells, metadata */
+	--text-sm: 0.875rem; /* 14px — UI labels, captions, secondary */
+	--text-base: 1rem; /* 16px — UI body. Minimum for any sentence. */
+	--text-md: 1.125rem; /* 18px — long-form body */
+	--text-lg: 1.25rem; /* 20px — lead paragraphs, small headings */
+	--text-xl: 1.5rem; /* 24px */
+	--text-2xl: 1.875rem; /* 30px */
+	--text-3xl: 2.25rem; /* 36px — display floor */
+	--text-4xl: 3rem; /* 48px */
+	--text-5xl: 4rem; /* 64px */
+
+	--leading-tight: 1.1; /* display only, >= --text-3xl */
+	--leading-snug: 1.25; /* headings */
+	--leading-normal: 1.5; /* UI body. Floor for all running text. */
+	--leading-relaxed: 1.65; /* long-form body in Ortica */
+
+	--measure: 66ch;
+	--measure-narrow: 45ch;
+	--measure-wide: 80ch;
+}
+
+html {
+	font-synthesis: none;
+	-webkit-text-size-adjust: 100%;
+}
+
+/* Sinistre is the display face and takes the page title alone: one per
+ * viewport, never below 36px, never uppercased, never in UI chrome. */
+h1 {
+	font-family: var(--font-display);
+	font-weight: 400;
+	font-size: var(--text-4xl);
+	line-height: var(--leading-tight);
+	text-transform: none;
+}
+
+/* Uncial forms need size, so a narrow viewport holds the 36px floor and lets
+ * the title wrap rather than condensing it. */
+@media (max-width: 640px) {
+	h1 {
+		font-size: var(--text-3xl);
+	}
+}
+
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: var(--font-sans);
+	font-weight: 700;
+	line-height: var(--leading-snug);
+}
+
+h2 {
+	font-size: var(--text-2xl);
+}
+h3 {
+	font-size: var(--text-xl);
+}
+h4 {
+	font-size: var(--text-lg);
+}
+h5,
+h6 {
+	font-size: var(--text-base);
+}
+
+/* Long-form reading. Regular, not Light: Light is too weak at 18px against
+ * Catppuccin's soft Text tones. */
+.prose {
+	font-family: var(--font-serif);
+	font-weight: 400;
+	font-size: var(--text-md);
+	line-height: var(--leading-relaxed);
+	max-width: var(--measure);
+}
+
+/* Ortica ships no slanted style and synthesis is off, so emphasis borrows
+ * Ronzino's drawn Oblique. font-size-adjust aligns the x-heights so the switch
+ * reads as a change of voice rather than a mistake. */
+.prose em,
+.prose i {
+	font-family: var(--font-sans);
+	font-style: italic;
+	font-size-adjust: from-font;
+}
+
+.prose strong,
+.prose b {
+	font-weight: 700;
+}
+
+/* Programming ligatures belong here and nowhere else: outside code they
+ * silently rewrite != as ≠ in content the reader must take literally. */
+code,
+kbd,
+samp,
+pre {
+	font-family: var(--font-mono);
+	font-variant-ligatures: contextual;
+	font-size: 0.9375em;
+}
+
+/* Numerals come from the mono so column alignment never depends on an
+ * undocumented figure set. */
+table,
+.metric,
+.tabular,
+[data-numeric] {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	font-variant-ligatures: none;
+}
+
+/* WCAG 1.4.12: text containers grow, they do not clip. */
+p,
+li,
+td,
+th,
+dd,
+dt,
+figcaption,
+label,
+button,
+.prose {
+	min-height: 0;
+	height: auto;
+}

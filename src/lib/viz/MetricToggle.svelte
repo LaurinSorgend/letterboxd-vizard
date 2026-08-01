@@ -34,7 +34,7 @@
 		padding: 4px 12px;
 		border: 1px solid var(--border);
 		cursor: pointer;
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 	}
 	label.active {
 		background: var(--accent);

@@ -1,3 +1,5 @@
+@import './typography.css';
+
 :root {
 	/* Catppuccin Latte (light, default) — see DESIGN.md */
 	--ctp-base: #eff1f5;
@@ -275,34 +277,13 @@ body {
 	margin: 0;
 	background: var(--bg);
 	color: var(--fg);
-	font-family:
-		system-ui,
-		-apple-system,
-		'Segoe UI',
-		Roboto,
-		'Helvetica Neue',
-		Arial,
-		sans-serif;
-	font-size: 16px;
-	line-height: 1.5;
+	font-family: var(--font-sans);
+	font-size: var(--text-base);
+	line-height: var(--leading-normal);
 }
 
-h1 {
-	font-size: 1.5rem;
-	font-weight: 600;
-	line-height: 1.25;
-}
-
-h2 {
-	font-size: 1.25rem;
-	font-weight: 600;
-	line-height: 1.25;
-}
-
+/* Sizes and faces live in typography.css; this is the only colour override. */
 h3 {
-	font-size: 1rem;
-	font-weight: 600;
-	line-height: 1.25;
 	color: var(--ctp-subtext1);
 }
 

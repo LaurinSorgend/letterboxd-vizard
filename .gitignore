@@ -36,5 +36,8 @@ CLAUDE.md
 DESIGN.md
 .superpowers
 
+# Local design kit; the fonts it ships are copied into static/fonts/
+/design
+
 # Local demo data
 /static/demo-export.zip

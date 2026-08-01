@@ -6,7 +6,7 @@
 	{#each tiles as tile (tile.label)}
 		<div class="tile">
 			<span class="label">{tile.label}</span>
-			<span class="value">{tile.value}</span>
+			<span class="value metric">{tile.value}</span>
 		</div>
 	{/each}
 </div>
@@ -25,11 +25,11 @@
 		gap: 4px;
 	}
 	.label {
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		color: var(--fg-secondary);
 	}
 	.value {
-		font-size: 1.5rem;
-		font-weight: 600;
+		font-size: var(--text-xl);
+		font-weight: 700;
 	}
 </style>

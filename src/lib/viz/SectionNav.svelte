@@ -97,8 +97,8 @@
 		display: block;
 		padding: 4px 10px;
 		border-left: 2px solid var(--border);
-		font-size: 0.8125rem;
-		line-height: 1.3;
+		font-size: var(--text-xs);
+		line-height: var(--leading-snug);
 		color: var(--fg-secondary);
 		text-decoration: none;
 	}
@@ -109,6 +109,6 @@
 	a[aria-current] {
 		border-left-color: var(--accent);
 		color: var(--fg);
-		font-weight: 600;
+		font-weight: 700;
 	}
 </style>

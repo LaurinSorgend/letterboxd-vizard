@@ -102,7 +102,7 @@
 						<span class="placeholder" aria-hidden="true">🎬</span>
 					{/if}
 					<span class="title">{rec.title}</span>
-					<span class="year">{rec.year ?? ''}</span>
+					<span class="year" data-numeric>{rec.year ?? ''}</span>
 				</a>
 			</li>
 		{/each}
@@ -133,7 +133,7 @@
 
 <style>
 	.note {
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		color: var(--fg-muted);
 		margin: 0 0 12px;
 	}
@@ -169,7 +169,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 2rem;
+		font-size: var(--text-2xl);
 	}
 	.placeholder.pending {
 		animation: poster-pulse 1.2s ease-in-out infinite;
@@ -189,11 +189,11 @@
 		}
 	}
 	.title {
-		font-size: 0.875rem;
-		line-height: 1.25;
+		font-size: var(--text-sm);
+		line-height: var(--leading-snug);
 	}
 	.year {
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-muted);
 	}
 	.heading {
@@ -210,7 +210,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		color: var(--fg-secondary);
 	}
 	.toggle input {

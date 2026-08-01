@@ -64,7 +64,7 @@
 		color: var(--fg-secondary);
 	}
 	.hint {
-		font-size: 0.875rem;
+		font-size: var(--text-base);
 		color: var(--fg-muted);
 		max-width: 48ch;
 	}

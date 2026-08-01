@@ -153,7 +153,7 @@
 	<header>
 		<div>
 			<div class="title">
-				<img class="logo" src="/letterbox-vizard-icon.svg" alt="" width="32" height="32" />
+				<img class="logo" src="/letterbox-vizard-icon.svg" alt="" width="40" height="40" />
 				<h1>Letterboxd Vizard</h1>
 			</div>
 			{#if data?.profile && phase === 'ready'}
@@ -372,8 +372,8 @@
 		gap: 12px;
 	}
 	.logo {
-		width: 32px;
-		height: 32px;
+		width: 40px;
+		height: 40px;
 		flex-shrink: 0;
 	}
 	h1 {
@@ -432,7 +432,7 @@
 		margin: 0 auto;
 		padding: 16px;
 		border-top: 1px solid var(--border);
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-muted);
 	}
 	footer nav {

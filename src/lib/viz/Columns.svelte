@@ -20,15 +20,15 @@
 				title="{d.label}: {d.count} — click to list films"
 				onclick={() => selection.toggle(d.label)}
 			>
-				<span class="val">{d.count}</span>
+				<span class="val" data-numeric>{d.count}</span>
 				<span class="bar" style="height: {Math.max(3, (d.count / max) * 140)}px"></span>
-				<span class="lab">{i % showEvery === 0 ? d.label : ''}</span>
+				<span class="lab" data-numeric>{i % showEvery === 0 ? d.label : ''}</span>
 			</button>
 		{:else}
 			<div class="col" title="{d.label}: 0">
 				<span class="val"></span>
 				<span class="bar" style="height: 0"></span>
-				<span class="lab">{i % showEvery === 0 ? d.label : ''}</span>
+				<span class="lab" data-numeric>{i % showEvery === 0 ? d.label : ''}</span>
 			</div>
 		{/if}
 	{/each}
@@ -48,7 +48,9 @@
 	}
 	.col {
 		flex: 1 1 0;
-		max-width: 32px;
+		/* Wide enough for a mono axis label like "1930s"; .bar caps its own width,
+		 * so this spaces the columns out rather than fattening the bars. */
+		max-width: 48px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -75,12 +77,11 @@
 		box-shadow: 0 0 0 1.5px var(--fg);
 	}
 	.val {
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-muted);
-		font-variant-numeric: tabular-nums;
 	}
 	.lab {
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-secondary);
 		padding-top: 4px;
 		white-space: nowrap;

@@ -167,10 +167,10 @@
 			<div class="tooltip" style="left: {hoverPos.x}px; top: {hoverPos.y}px">
 				<strong>{hoverStat.name}</strong>
 				<div>
-					<span class="value">{hoverStat.count}</span>
+					<span class="value" data-numeric>{hoverStat.count}</span>
 					film{hoverStat.count === 1 ? '' : 's'}
 					{#if hoverStat.avg !== null}
-						· <span class="value">{hoverStat.avg.toFixed(2)}</span> avg
+						· <span class="value" data-numeric>{hoverStat.avg.toFixed(2)}</span> avg
 						{#if metric === 'rating' && hoverStat.ratedCount < hoverStat.count}
 							({hoverStat.ratedCount} rated)
 						{/if}
@@ -187,7 +187,7 @@
 
 	<div class="legend" aria-hidden="true">
 		{#each binLabels as label, i (i)}
-			<span><i class="swatch bin-{i}"></i>{label}</span>
+			<span data-numeric><i class="swatch bin-{i}"></i>{label}</span>
 		{/each}
 		{#if metric === 'rating'}
 			<span><i class="swatch few"></i>no ratings</span>
@@ -289,7 +289,7 @@
 		padding: 8px;
 		background: var(--bg-tertiary);
 		border: 1px solid var(--border);
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		pointer-events: none;
 		z-index: 1;
 	}
@@ -299,7 +299,7 @@
 		color: var(--fg-secondary);
 	}
 	.value {
-		font-weight: 600;
+		font-weight: 700;
 	}
 
 	.legend {
@@ -307,7 +307,7 @@
 		flex-wrap: wrap;
 		gap: 12px;
 		margin-top: 8px;
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-secondary);
 	}
 	.legend span {
@@ -326,7 +326,7 @@
 	}
 
 	.note {
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-muted);
 		margin: 4px 0 0;
 	}
@@ -337,12 +337,12 @@
 	summary {
 		cursor: pointer;
 		color: var(--fg-secondary);
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 	}
 	table {
 		border-collapse: collapse;
 		margin-top: 8px;
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 	}
 	th,
 	td {
@@ -355,6 +355,5 @@
 	}
 	.num {
 		text-align: right;
-		font-variant-numeric: tabular-nums;
 	}
 </style>

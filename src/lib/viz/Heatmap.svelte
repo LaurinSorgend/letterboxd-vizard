@@ -36,6 +36,9 @@
 		return null;
 	});
 
+	/** Fira Code is for numerals; word axes (weekdays, months, genres) keep the UI face. */
+	const numeric = (label: string) => /\d/.test(label) || undefined;
+
 	function toggle(cell: HeatCell) {
 		if (cell.films.length === 0) return;
 		selectedKey = selectedKey === cell.key ? null : cell.key;
@@ -67,14 +70,20 @@
 			>
 				{#each grid.colLabels as label, c (c)}
 					{#if label}
-						<span class="col-label" style="grid-row: 1; grid-column: {c + 2};">{label}</span>
+						<span
+							class="col-label"
+							data-numeric={numeric(label)}
+							style="grid-row: 1; grid-column: {c + 2};">{label}</span
+						>
 					{/if}
 				{/each}
 
 				{#each grid.rows as row, r (r)}
 					{#if grid.rowLabels[r]}
-						<span class="row-label" style="grid-row: {r + 2}; grid-column: 1;"
-							>{grid.rowLabels[r]}</span
+						<span
+							class="row-label"
+							data-numeric={numeric(grid.rowLabels[r])}
+							style="grid-row: {r + 2}; grid-column: 1;">{grid.rowLabels[r]}</span
 						>
 					{/if}
 					{#each row as cell, c (c)}
@@ -103,7 +112,7 @@
 		<div class="legend" aria-hidden="true">
 			<span class="less">Less</span>
 			{#each scale.legend as label, i (i)}
-				<span class="key"><i class="swatch bin-{i}"></i>{label}</span>
+				<span class="key" data-numeric={numeric(label)}><i class="swatch bin-{i}"></i>{label}</span>
 			{/each}
 			{#if metric === 'rating'}
 				<span class="key"><i class="swatch few"></i>no ratings</span>
@@ -130,7 +139,7 @@
 	}
 	.col-label,
 	.row-label {
-		font-size: 0.7rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-secondary);
 		white-space: nowrap;
 	}
@@ -196,7 +205,7 @@
 		align-items: center;
 		gap: 8px;
 		margin-top: 8px;
-		font-size: 0.75rem;
+		font-size: var(--text-2xs);
 		color: var(--fg-secondary);
 	}
 	.legend .key {
@@ -217,7 +226,7 @@
 		border: 1px solid var(--border);
 	}
 	.empty-msg {
-		font-size: 0.875rem;
+		font-size: var(--text-base);
 		color: var(--fg-secondary);
 	}
 </style>

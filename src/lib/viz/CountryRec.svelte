@@ -44,7 +44,7 @@
 					<img src={poster} alt="" width="31" height="46" loading="lazy" />
 				{/if}
 				<span class="title" title={rec.title}>{rec.title}</span>
-				<span class="year">{rec.year ?? ''}</span>
+				<span class="year" data-numeric>{rec.year ?? ''}</span>
 			</a>
 		{/each}
 	</div>
@@ -57,7 +57,7 @@
 		background: var(--bg-secondary);
 	}
 	.note {
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		color: var(--fg-muted);
 		margin: 0;
 	}
@@ -73,7 +73,7 @@
 		gap: 8px;
 		color: var(--accent);
 		text-decoration: none;
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 	}
 	a:hover .title {
 		text-decoration: underline;

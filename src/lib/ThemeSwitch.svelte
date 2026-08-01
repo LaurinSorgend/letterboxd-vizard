@@ -88,7 +88,7 @@
 		align-items: center;
 		gap: 8px;
 		min-width: 0;
-		font-size: 0.875rem;
+		font-size: var(--text-sm);
 		color: var(--fg-secondary);
 	}
 	select {
