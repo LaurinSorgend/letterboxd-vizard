@@ -7,7 +7,7 @@
 
 	const GENRE_ROWS = 3;
 	const GENRE_ROW_SIZE = 10;
-	// Growing waits between retries: each request warms the cache, so the next resolves more posters.
+	// Growing waits between retries: each request warms the cache, so the next resolves more records.
 	const RETRY_DELAYS_MS = [1500, 3500, 7000];
 
 	let {
@@ -57,7 +57,7 @@
 		);
 	}
 
-	/** Re-requests while posters are still pending, folding each resolved record in by tmdbId. */
+	/** Re-requests while records are still pending, folding each resolved one in by tmdbId. */
 	async function fillPending(
 		seedSets: Seed[][],
 		safeFetch: (seeds: Seed[]) => Promise<Recommendation[]>,
@@ -120,7 +120,7 @@
 				</label>
 			{/if}
 		</div>
-		<p class="note">Based on Trakt's related films for your highest-rated movies.</p>
+		<p class="note">Based on what TMDB users also rated highly alongside your favourite films.</p>
 		{#if general.length > 0}
 			{@render posterGrid(general)}
 		{/if}

@@ -8,8 +8,9 @@ CREATE TABLE IF NOT EXISTS misses (
 	cache_key TEXT PRIMARY KEY,
 	fetched_at INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS trakt_related (
+CREATE TABLE IF NOT EXISTS related (
 	tmdb_id INTEGER PRIMARY KEY,
 	data TEXT NOT NULL,
 	fetched_at INTEGER NOT NULL
 );
+DROP TABLE IF EXISTS trakt_related;

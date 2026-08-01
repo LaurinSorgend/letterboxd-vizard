@@ -152,7 +152,8 @@ export interface RelatedMovie {
 	tmdbId: number;
 	title: string;
 	year: number | null;
-	traktRating: number | null;
+	rating: number | null;
+	posterPath: string | null;
 }
 
 export async function getRelatedCached(
@@ -162,7 +163,7 @@ export async function getRelatedCached(
 ): Promise<RelatedMovie[] | undefined> {
 	if (budget && !budget.tryTake()) return undefined;
 	const hit = await db
-		.prepare('SELECT data, fetched_at FROM trakt_related WHERE tmdb_id = ?')
+		.prepare('SELECT data, fetched_at FROM related WHERE tmdb_id = ?')
 		.bind(tmdbId)
 		.first<{ data: string; fetched_at: number }>();
 	if (!hit || Date.now() - hit.fetched_at >= RELATED_TTL_MS) return undefined;
@@ -177,7 +178,7 @@ export async function putRelatedCached(
 ): Promise<void> {
 	if (budget && !budget.tryTake()) return;
 	await db
-		.prepare('INSERT OR REPLACE INTO trakt_related (tmdb_id, data, fetched_at) VALUES (?, ?, ?)')
+		.prepare('INSERT OR REPLACE INTO related (tmdb_id, data, fetched_at) VALUES (?, ?, ?)')
 		.bind(tmdbId, JSON.stringify(related), Date.now())
 		.run();
 }

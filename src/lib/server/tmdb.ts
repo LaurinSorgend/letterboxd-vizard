@@ -22,7 +22,7 @@ function apiKey(): string {
 }
 
 /** Supports both v3 API keys (query param) and v4 read access tokens (JWT bearer). */
-async function tmdbGet(
+export async function tmdbGet(
 	budget: FetchBudget,
 	path: string,
 	params: Record<string, string>

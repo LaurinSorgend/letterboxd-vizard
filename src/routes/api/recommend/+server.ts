@@ -3,12 +3,12 @@ import pLimit, { type LimitFunction } from 'p-limit';
 import type { D1Database } from '@cloudflare/workers-types';
 import { getOrCreate } from '$lib/collections';
 import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
-import { cacheKey, getCachedMany, putCachedMany } from '$lib/server/cache';
+import { cacheKey, getCachedMany, putCachedMany, type RelatedMovie } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
 import { checkRateLimit } from '$lib/server/ratelimit';
+import { relatedMovies } from '$lib/server/related';
 import { requireSession } from '$lib/server/session';
 import { fetchRecord } from '$lib/server/tmdb';
-import { relatedMovies, traktAvailable } from '$lib/server/trakt';
 import { effectiveCountries } from '$lib/viz/countries';
 import type { Seed, TmdbMovie } from '$lib/types';
 import type { RequestHandler } from './$types';
@@ -19,13 +19,10 @@ const CONCURRENCY = 5;
 // Subrequests held back from the seed phase so poster/country lookups aren't starved on a cold cache.
 const POSTER_RESERVE = 15;
 
-interface RankedFilm {
+interface Result {
 	tmdbId: number;
 	title: string;
 	year: number | null;
-}
-
-interface Result extends RankedFilm {
 	posterPath: string | null;
 	countries: string[];
 	/** True when the budget ran out before this film's record loaded — the client re-requests it. */
@@ -33,7 +30,7 @@ interface Result extends RankedFilm {
 }
 
 /**
- * Poster/country records for the ranked films. Cache reads and writes are batched (a couple of
+ * Country records for the ranked films. Cache reads and writes are batched (a couple of
  * subrequests for the lot, off-budget like /api/enrich) so the budget only pays for TMDB fetches;
  * films whose fetch is cut off by the budget come back `pending` for the client to ask again later.
  */
@@ -41,7 +38,7 @@ async function resolveRecords(
 	db: D1Database,
 	budget: FetchBudget,
 	limit: LimitFunction,
-	ranked: RankedFilm[]
+	ranked: RelatedMovie[]
 ): Promise<Result[]> {
 	const cached = await getCachedMany(db, [
 		...new Set(ranked.map((r) => cacheKey(r.title, r.year)))
@@ -71,8 +68,11 @@ async function resolveRecords(
 	return ranked.map((film) => {
 		const record = records.get(film.tmdbId) ?? null;
 		return {
-			...film,
-			posterPath: record?.posterPath ?? null,
+			tmdbId: film.tmdbId,
+			title: film.title,
+			year: film.year,
+			// The recommendation itself carried a poster, so a deferred record still shows its art.
+			posterPath: record?.posterPath ?? film.posterPath,
 			countries: record ? effectiveCountries(record) : [],
 			pending: pending.has(film.tmdbId)
 		};
@@ -82,8 +82,6 @@ async function resolveRecords(
 export const POST: RequestHandler = async ({ request, platform, cookies, getClientAddress }) => {
 	await requireSession(cookies);
 	await checkRateLimit(platform?.env?.RECOMMEND_LIMITER, getClientAddress());
-
-	if (!traktAvailable()) return json({ available: false, results: [] });
 
 	const db = await getDb(platform);
 	const body = (await request.json().catch(() => null)) as {
@@ -102,18 +100,11 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	const budget = new FetchBudget(FETCHES_PER_REQUEST, POSTER_RESERVE);
 	const limit = pLimit(CONCURRENCY);
 
-	const scores = new Map<
-		number,
-		{
-			tmdbId: number;
-			title: string;
-			year: number | null;
-			score: number;
-			traktRating: number | null;
-		}
-	>();
+	const scores = new Map<number, RelatedMovie & { score: number }>();
+	const attempted = seeds.slice(0, MAX_SEEDS);
+	let failed = 0;
 	await Promise.all(
-		seeds.slice(0, MAX_SEEDS).map((seed) =>
+		attempted.map((seed) =>
 			limit(async () => {
 				try {
 					for (const movie of await relatedMovies(db, budget, seed.tmdbId)) {
@@ -122,19 +113,24 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 						entry.score += Math.max(0.5, seed.rating - 2.5);
 					}
 				} catch (cause) {
-					if (!(cause instanceof BudgetExhausted)) {
-						console.error(`trakt related failed for tmdb ${seed.tmdbId}`, cause);
-					}
+					if (cause instanceof BudgetExhausted) return;
+					failed++;
+					console.error(`tmdb recommendations failed for ${seed.tmdbId}`, cause);
 				}
 			})
 		)
 	);
+	// Every seed erroring means TMDB is unreachable or misconfigured, which the client should
+	// show as unavailable rather than as an honest "nothing to recommend".
+	if (attempted.length > 0 && failed === attempted.length) {
+		return json({ available: false, results: [] });
+	}
 
 	// Seed lookups are done; hand the reserved subrequests to the poster/country phase below.
 	budget.releaseReserve();
 
 	const ranked = [...scores.values()]
-		.sort((a, b) => b.score - a.score || (b.traktRating ?? 0) - (a.traktRating ?? 0))
+		.sort((a, b) => b.score - a.score || (b.rating ?? 0) - (a.rating ?? 0))
 		.slice(0, MAX_RESULTS);
 	const results = await resolveRecords(db, budget, limit, ranked);
 	return json({ available: true, results });

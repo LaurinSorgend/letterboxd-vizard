@@ -20,10 +20,11 @@ cp .env.example .env   # put your TMDB API key in .env
 Get a free TMDB API key at themoviedb.org → Settings → API. Both v3 keys and v4 read
 access tokens work.
 
+The same key drives the "You might like" section, which is built on TMDB's
+recommendations endpoint.
+
 Optional extras in `.env`:
 
-- `TRAKT_CLIENT_ID` (trakt.tv → Settings → Your API Apps) enables the
-  "You might like" recommendations section.
 - `TVDB_API_KEY` (thetvdb.com/api-information) adds a last-resort series lookup
   for titles TMDB doesn't know; without it, TMDB's own TV search is still used.
 
@@ -85,7 +86,7 @@ npx wrangler d1 create letterboxed-vizard-db --jurisdiction eu
 npx wrangler d1 execute letterboxed-vizard-db --remote --file=schema.sql
 npx wrangler secret put TMDB_API_KEY
 npx wrangler secret put SESSION_SECRET
-# optional: repeat for TRAKT_CLIENT_ID and TVDB_API_KEY
+# optional: repeat for TVDB_API_KEY
 ```
 
 Then deploy (and redeploy) with:
