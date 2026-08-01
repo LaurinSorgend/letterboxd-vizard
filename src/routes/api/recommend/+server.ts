@@ -6,7 +6,7 @@ import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/b
 import { cacheKey, getCachedMany, putCachedMany, type RelatedMovie } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
 import { checkRateLimit } from '$lib/server/ratelimit';
-import { relatedMovies } from '$lib/server/related';
+import { relatedMoviesMany } from '$lib/server/related';
 import { requireSession } from '$lib/server/session';
 import { fetchRecord } from '$lib/server/tmdb';
 import { effectiveCountries } from '$lib/viz/countries';
@@ -25,7 +25,7 @@ interface Result {
 	year: number | null;
 	posterPath: string | null;
 	countries: string[];
-	/** True when the budget ran out before this film's record loaded — the client re-requests it. */
+	/** True when the budget ran out before this film's record loaded; the client re-requests it. */
 	pending: boolean;
 }
 
@@ -100,30 +100,22 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	const budget = new FetchBudget(FETCHES_PER_REQUEST, POSTER_RESERVE);
 	const limit = pLimit(CONCURRENCY);
 
-	const scores = new Map<number, RelatedMovie & { score: number }>();
-	const attempted = seeds.slice(0, MAX_SEEDS);
-	let failed = 0;
-	await Promise.all(
-		attempted.map((seed) =>
-			limit(async () => {
-				try {
-					for (const movie of await relatedMovies(db, budget, seed.tmdbId)) {
-						if (excluded.has(movie.tmdbId)) continue;
-						const entry = getOrCreate(scores, movie.tmdbId, () => ({ ...movie, score: 0 }));
-						entry.score += Math.max(0.5, seed.rating - 2.5);
-					}
-				} catch (cause) {
-					if (cause instanceof BudgetExhausted) return;
-					failed++;
-					console.error(`tmdb recommendations failed for ${seed.tmdbId}`, cause);
-				}
-			})
-		)
-	);
+	const chosen = seeds.slice(0, MAX_SEEDS);
+	const seedIds = [...new Set(chosen.map((seed) => seed.tmdbId))];
+	const { related, failed } = await relatedMoviesMany(db, budget, limit, seedIds);
 	// Every seed erroring means TMDB is unreachable or misconfigured, which the client should
 	// show as unavailable rather than as an honest "nothing to recommend".
-	if (attempted.length > 0 && failed === attempted.length) {
+	if (seedIds.length > 0 && failed === seedIds.length) {
 		return json({ available: false, results: [] });
+	}
+
+	const scores = new Map<number, RelatedMovie & { score: number }>();
+	for (const seed of chosen) {
+		for (const movie of related.get(seed.tmdbId) ?? []) {
+			if (excluded.has(movie.tmdbId)) continue;
+			const entry = getOrCreate(scores, movie.tmdbId, () => ({ ...movie, score: 0 }));
+			entry.score += Math.max(0.5, seed.rating - 2.5);
+		}
 	}
 
 	// Seed lookups are done; hand the reserved subrequests to the poster/country phase below.

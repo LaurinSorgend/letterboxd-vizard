@@ -3,7 +3,8 @@ import type { TmdbMovie } from '$lib/types';
 import type { FetchBudget } from './budget';
 
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const RELATED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** TMDB's recommendations shift slowly, so a related list stays useful far longer than a week. */
+const RELATED_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 /** D1 allows at most 100 bound parameters per query. */
 const MAX_PARAMS = 100;
@@ -156,29 +157,38 @@ export interface RelatedMovie {
 	posterPath: string | null;
 }
 
-export async function getRelatedCached(
+/**
+ * Related lists for many seeds in a query or two, off-budget like `getCachedMany`: a warm seed
+ * phase then costs one subrequest rather than one per seed. Stale and unknown seeds are absent.
+ */
+export async function getRelatedCachedMany(
 	db: D1Database,
-	tmdbId: number,
-	budget?: FetchBudget
-): Promise<RelatedMovie[] | undefined> {
-	if (budget && !budget.tryTake()) return undefined;
-	const hit = await db
-		.prepare('SELECT data, fetched_at FROM related WHERE tmdb_id = ?')
-		.bind(tmdbId)
-		.first<{ data: string; fetched_at: number }>();
-	if (!hit || Date.now() - hit.fetched_at >= RELATED_TTL_MS) return undefined;
-	return JSON.parse(hit.data) as RelatedMovie[];
+	tmdbIds: number[]
+): Promise<Map<number, RelatedMovie[]>> {
+	const known = new Map<number, RelatedMovie[]>();
+	const cutoff = Date.now() - RELATED_TTL_MS;
+	for (const chunk of chunks(tmdbIds, MAX_PARAMS - 1)) {
+		const marks = chunk.map(() => '?').join(',');
+		const { results } = await db
+			.prepare(`SELECT tmdb_id, data FROM related WHERE tmdb_id IN (${marks}) AND fetched_at > ?`)
+			.bind(...chunk, cutoff)
+			.all<{ tmdb_id: number; data: string }>();
+		for (const row of results) known.set(row.tmdb_id, JSON.parse(row.data) as RelatedMovie[]);
+	}
+	return known;
 }
 
-export async function putRelatedCached(
+/** Multi-row upsert so a cold seed phase spends a couple of subrequests, not one per seed. */
+export async function putRelatedCachedMany(
 	db: D1Database,
-	tmdbId: number,
-	related: RelatedMovie[],
-	budget?: FetchBudget
+	entries: [number, RelatedMovie[]][]
 ): Promise<void> {
-	if (budget && !budget.tryTake()) return;
-	await db
-		.prepare('INSERT OR REPLACE INTO related (tmdb_id, data, fetched_at) VALUES (?, ?, ?)')
-		.bind(tmdbId, JSON.stringify(related), Date.now())
-		.run();
+	const now = Date.now();
+	for (const chunk of chunks(entries, Math.floor(MAX_PARAMS / 3))) {
+		const marks = chunk.map(() => '(?, ?, ?)').join(',');
+		await db
+			.prepare(`INSERT OR REPLACE INTO related (tmdb_id, data, fetched_at) VALUES ${marks}`)
+			.bind(...chunk.flatMap(([tmdbId, related]) => [tmdbId, JSON.stringify(related), now]))
+			.run();
+	}
 }
