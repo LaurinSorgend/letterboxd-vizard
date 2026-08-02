@@ -49,6 +49,116 @@
 	let hoverPos = $state({ x: 0, y: 0 });
 	let mapBox: DOMRect | null = null;
 
+	const MIN_ZOOM = 1;
+	const MAX_ZOOM = 12;
+	/** Past this much movement the gesture is a drag, so releasing must not also select a country. */
+	const DRAG_SLOP_PX = 4;
+
+	let svgEl: SVGSVGElement | undefined = $state();
+	let view = $state({ x: 0, y: 0, k: MIN_ZOOM });
+	const viewBox = $derived(`${view.x} ${view.y} ${WIDTH / view.k} ${HEIGHT / view.k}`);
+
+	const pointers = new Map<number, { x: number; y: number }>();
+	let gestureStart: { x: number; y: number } | null = null;
+	let pinchSpread = 0;
+	let panned = false;
+
+	/** Keeps the visible window inside the map and the zoom within its limits. */
+	function clampView(next: { x: number; y: number; k: number }) {
+		const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next.k));
+		return {
+			k,
+			x: Math.min(Math.max(next.x, 0), WIDTH - WIDTH / k),
+			y: Math.min(Math.max(next.y, 0), HEIGHT - HEIGHT / k)
+		};
+	}
+
+	/** A client point in the map's own coordinates. */
+	function toMap(clientX: number, clientY: number): { x: number; y: number } {
+		const box = svgEl?.getBoundingClientRect();
+		if (!box) return { x: 0, y: 0 };
+		return {
+			x: view.x + ((clientX - box.left) / box.width) * (WIDTH / view.k),
+			y: view.y + ((clientY - box.top) / box.height) * (HEIGHT / view.k)
+		};
+	}
+
+	/** Zooms to `k`, holding whatever lies under `client` still; centres the change without one. */
+	function zoomTo(k: number, client?: { x: number; y: number }) {
+		const anchor = client
+			? toMap(client.x, client.y)
+			: { x: view.x + WIDTH / view.k / 2, y: view.y + HEIGHT / view.k / 2 };
+		const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
+		view = clampView({
+			k: next,
+			x: anchor.x - (anchor.x - view.x) * (view.k / next),
+			y: anchor.y - (anchor.y - view.y) * (view.k / next)
+		});
+	}
+
+	function spread(): number {
+		const [a, b] = [...pointers.values()];
+		return Math.hypot(a.x - b.x, a.y - b.y);
+	}
+
+	function midpoint(): { x: number; y: number } {
+		const [a, b] = [...pointers.values()];
+		return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+	}
+
+	function startGesture(event: PointerEvent) {
+		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+		if (pointers.size === 1) {
+			gestureStart = { x: event.clientX, y: event.clientY };
+			panned = false;
+		}
+		if (pointers.size === 2) pinchSpread = spread();
+	}
+
+	function moveGesture(event: PointerEvent) {
+		const previous = pointers.get(event.pointerId);
+		if (!previous) return;
+		pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+		const travel = gestureStart
+			? Math.hypot(event.clientX - gestureStart.x, event.clientY - gestureStart.y)
+			: 0;
+		if (travel > DRAG_SLOP_PX) panned = true;
+
+		if (pointers.size >= 2) {
+			const next = spread();
+			if (pinchSpread > 0) zoomTo((view.k * next) / pinchSpread, midpoint());
+			pinchSpread = next;
+			panned = true;
+			return;
+		}
+		if (!panned || view.k === MIN_ZOOM) return;
+		const box = svgEl?.getBoundingClientRect();
+		if (!box) return;
+		hoverStat = null;
+		view = clampView({
+			k: view.k,
+			x: view.x - ((event.clientX - previous.x) / box.width) * (WIDTH / view.k),
+			y: view.y - ((event.clientY - previous.y) / box.height) * (HEIGHT / view.k)
+		});
+	}
+
+	function endGesture(event: PointerEvent) {
+		pointers.delete(event.pointerId);
+		if (pointers.size < 2) pinchSpread = 0;
+		if (pointers.size === 0) gestureStart = null;
+	}
+
+	/** Ctrl or ⌘ only, so a plain scroll still moves the page. Trackpad pinch sends ctrl for us. */
+	function onWheel(event: WheelEvent) {
+		if (!event.ctrlKey && !event.metaKey) return;
+		event.preventDefault();
+		zoomTo(view.k * (event.deltaY < 0 ? 1.25 : 0.8), { x: event.clientX, y: event.clientY });
+	}
+
+	function select(stat: CountryStat) {
+		selected = selected?.code === stat.code ? null : stat;
+	}
+
 	const maxCount = $derived(Math.max(1, ...[...stats.values()].map((s) => s.count)));
 	const thresholds = $derived(metric === 'count' ? countThresholds(maxCount) : RATING_THRESHOLDS);
 	const binLabels = $derived(metric === 'count' ? countBinLabels(thresholds) : RATING_BIN_LABELS);
@@ -102,9 +212,9 @@
 		} else {
 			const shape = shapes.find((s) => s.code === code);
 			if (!shape) return;
-			const scale = mapBox.width / WIDTH;
-			x = shape.centroid[0] * scale;
-			y = shape.centroid[1] * scale;
+			const scale = mapBox.width / (WIDTH / view.k);
+			x = (shape.centroid[0] - view.x) * scale;
+			y = (shape.centroid[1] - view.y) * scale;
 		}
 		hoverPos = { x: Math.min(x + 12, mapBox.width - 180), y: y + 12 };
 		hoverStat = stat;
@@ -133,7 +243,19 @@
 	/>
 
 	<div class="map" bind:this={container}>
-		<svg viewBox="0 0 {WIDTH} {HEIGHT}" role="group" aria-label="World map of your films">
+		<svg
+			bind:this={svgEl}
+			{viewBox}
+			class:zoomed={view.k > MIN_ZOOM}
+			role="group"
+			aria-label="World map of your films"
+			onpointerdown={startGesture}
+			onpointermove={moveGesture}
+			onpointerup={endGesture}
+			onpointercancel={endGesture}
+			onpointerleave={endGesture}
+			onwheel={onWheel}
+		>
 			{#each shapes as shape (shape.d)}
 				{@const stat = shape.code ? stats.get(shape.code) : undefined}
 				{#if stat}
@@ -149,11 +271,13 @@
 						onpointerleave={() => (hoverStat = null)}
 						onfocus={(e) => showHover(shape.code, e)}
 						onblur={() => (hoverStat = null)}
-						onclick={() => (selected = selected?.code === stat.code ? null : stat)}
+						onclick={() => {
+							if (!panned) select(stat);
+						}}
 						onkeydown={(e) => {
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
-								selected = selected?.code === stat.code ? null : stat;
+								select(stat);
 							}
 						}}
 					/>
@@ -183,6 +307,19 @@
 				</ul>
 			</div>
 		{/if}
+
+		<div class="zoom">
+			<button type="button" aria-label="Zoom in" onclick={() => zoomTo(view.k * 1.6)}>+</button>
+			<button type="button" aria-label="Zoom out" onclick={() => zoomTo(view.k / 1.6)}>−</button>
+			<button
+				type="button"
+				aria-label="Reset zoom"
+				disabled={view.k === MIN_ZOOM}
+				onclick={() => (view = { x: 0, y: 0, k: MIN_ZOOM })}
+			>
+				Reset
+			</button>
+		</div>
 	</div>
 
 	<div class="legend" aria-hidden="true">
@@ -194,7 +331,10 @@
 		{/if}
 		<span><i class="swatch nodata"></i>no films</span>
 	</div>
-	<p class="note">A film with several production countries counts for each of them.</p>
+	<p class="note">
+		A film with several production countries counts for each of them. Pinch or use the buttons to
+		zoom, then drag to move around; on a mouse, hold Ctrl while scrolling.
+	</p>
 
 	{#if selected}
 		{#key selected.code}
@@ -257,10 +397,23 @@
 		display: block;
 		width: 100%;
 		height: auto;
+		user-select: none;
+		/*
+		 * At the default fit a vertical swipe should still scroll the page past the map; once
+		 * zoomed the surface belongs to the map, so a drag in any direction pans it instead.
+		 * Neither value hands pinch to the browser, so two fingers always zoom the map itself.
+		 */
+		touch-action: pan-y;
 	}
+	svg.zoomed {
+		touch-action: none;
+		cursor: grab;
+	}
+	/* Widths stay in screen pixels, so borders do not fatten as the viewBox zooms in. */
 	svg path {
 		stroke: var(--bg);
 		stroke-width: 0.5;
+		vector-effect: non-scaling-stroke;
 	}
 	svg path[role='button'] {
 		cursor: pointer;
@@ -281,6 +434,33 @@
 
 	.map {
 		position: relative;
+	}
+
+	.zoom {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.zoom button {
+		font: inherit;
+		font-size: var(--text-sm);
+		line-height: 1;
+		min-width: 32px;
+		padding: 6px 8px;
+		color: var(--fg);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		cursor: pointer;
+	}
+	.zoom button:hover:not(:disabled) {
+		background: var(--surface);
+	}
+	.zoom button:disabled {
+		color: var(--fg-muted);
+		cursor: default;
 	}
 
 	.tooltip {

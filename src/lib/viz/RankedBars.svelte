@@ -41,14 +41,14 @@
 					onclick={() => togglePin(d.label)}
 				>
 					{#if d.image}
-						<img src={d.image} alt="" loading="lazy" width="24" height="24" />
+						<img src={d.image} alt="" loading="lazy" width="40" height="40" />
 					{/if}
 					<img class="preview" src={d.imageLarge} alt="" loading="lazy" width="150" />
 				</button>
 			{:else}
 				<span class="pic">
 					{#if d.image}
-						<img src={d.image} alt="" loading="lazy" width="24" height="24" />
+						<img src={d.image} alt="" loading="lazy" width="40" height="40" />
 					{/if}
 				</span>
 			{/if}
@@ -96,12 +96,12 @@
 		position: relative;
 	}
 	.chart.with-images {
-		grid-template-columns: 24px minmax(72px, max-content) 1fr auto;
+		grid-template-columns: 40px minmax(72px, max-content) 1fr auto;
 		gap: 4px 8px;
 	}
 	.pic {
-		width: 24px;
-		height: 24px;
+		width: 40px;
+		height: 40px;
 		position: relative;
 	}
 	button.pic {
@@ -114,7 +114,7 @@
 	.pic .preview {
 		display: none;
 		position: absolute;
-		top: 28px;
+		top: 44px;
 		left: 0;
 		width: 150px;
 		height: auto;
@@ -128,8 +128,8 @@
 		display: block;
 	}
 	.pic img {
-		width: 24px;
-		height: 24px;
+		width: 40px;
+		height: 40px;
 		object-fit: cover;
 		display: block;
 		background: var(--surface);

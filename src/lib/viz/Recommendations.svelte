@@ -77,7 +77,7 @@
 				recommendations: row.recommendations.map(fill)
 			}));
 		}
-		// Retries spent — settle any stragglers to the plain placeholder rather than pulse forever.
+		// Retries spent, settle any stragglers to the plain placeholder rather than pulse forever.
 		if (!isCurrent() || !hasPending()) return;
 		const settle = (r: Recommendation) => (r.pending ? { ...r, pending: false } : r);
 		general = general.map(settle);
@@ -158,9 +158,16 @@
 	a:hover .title {
 		text-decoration: underline;
 	}
+	/*
+	 * `height: auto` is what makes the ratio hold: the height attribute is a presentational hint,
+	 * and a definite width and height together make the browser ignore aspect-ratio. Without it
+	 * the box stayed a fixed 164px tall over a fluid width, so the shape drifted with the column
+	 * and was furthest from 9/16 on narrow screens.
+	 */
 	img,
 	.placeholder {
 		width: 100%;
+		height: auto;
 		aspect-ratio: 9 / 16;
 		object-fit: cover;
 		background: var(--surface);

@@ -309,7 +309,7 @@ export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): Bar
 			label: group.name,
 			count: group.films.length,
 			avg: avgRating(group.films),
-			image: imageUrl(group.profilePath, 'w45'),
+			image: imageUrl(group.profilePath, 'w92'),
 			imageLarge: imageUrl(group.profilePath, 'w185'),
 			href:
 				group.tmdbId !== null && (nameCounts.get(group.name) ?? 0) > 1
