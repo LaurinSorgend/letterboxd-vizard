@@ -164,7 +164,7 @@
 		cursor: pointer;
 	}
 	.bar {
-		height: 22px;
+		height: 18px;
 		min-width: 2px;
 		background: var(--accent);
 	}
