@@ -1,6 +1,7 @@
-/* Typography — Ronzino (UI), Sinistre (title), Ortica Linear (long-form),
- * Fira Code (code and every numeral). All SIL OFL 1.1; files and licenses
- * ship in static/fonts/. Never load them from a third-party CDN.
+/* Typography: Ronzino (UI), Sinistre (title), Ortica Linear (long-form),
+ * Fira Code (code and chart/table numerals), Mazius (rare showcase-value
+ * accent). All SIL OFL 1.1; files and licenses ship in static/fonts/. Never
+ * load them from a third-party CDN.
  */
 
 /* Ronzino's slanted cuts are drawn obliques, not true italics. Declaring them
@@ -89,9 +90,19 @@
 	font-display: swap;
 }
 
+/* Rare accent, one showcase value at a time; see the "Mazius: the rare
+ * accent" section of design/DESIGN.md for the scoping rules. */
+@font-face {
+	font-family: 'Mazius Display Extra Italic';
+	src: url('/fonts/mazius-display-extra-italic.woff2') format('woff2');
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
 /* Metric-matched fallback so the Ronzino swap does not shift layout. Ronzino
  * is drawn as a reimagining of Arial, so 100% is a measured start, not a guess.
- * Sinistre gets no override — no system face resembles it, so it is preloaded
+ * Sinistre gets no override; no system face resembles it, so it is preloaded
  * instead. */
 @font-face {
 	font-family: 'Ronzino Fallback';
@@ -109,16 +120,17 @@
 	--font-mono:
 		'Fira Code', 'Fira Mono', ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas,
 		monospace;
+	--font-accent: 'Mazius Display Extra Italic', var(--font-display);
 
-	--text-2xs: 0.75rem; /* 12px — micro-labels, legal. Absolute floor. */
-	--text-xs: 0.8125rem; /* 13px — dense cells, metadata */
-	--text-sm: 0.875rem; /* 14px — UI labels, captions, secondary */
-	--text-base: 1rem; /* 16px — UI body. Minimum for any sentence. */
-	--text-md: 1.125rem; /* 18px — long-form body */
-	--text-lg: 1.25rem; /* 20px — lead paragraphs, small headings */
+	--text-2xs: 0.75rem; /* 12px: micro-labels, legal. Absolute floor. */
+	--text-xs: 0.8125rem; /* 13px: dense cells, metadata */
+	--text-sm: 0.875rem; /* 14px: UI labels, captions, secondary */
+	--text-base: 1rem; /* 16px: UI body. Minimum for any sentence. */
+	--text-md: 1.125rem; /* 18px: long-form body */
+	--text-lg: 1.25rem; /* 20px: lead paragraphs, small headings */
 	--text-xl: 1.5rem; /* 24px */
 	--text-2xl: 1.875rem; /* 30px */
-	--text-3xl: 2.25rem; /* 36px — display floor */
+	--text-3xl: 2.25rem; /* 36px: display floor */
 	--text-4xl: 3rem; /* 48px */
 	--text-5xl: 4rem; /* 64px */
 
@@ -216,7 +228,11 @@ pre {
 }
 
 /* Numerals come from the mono so column alignment never depends on an
- * undocumented figure set. */
+ * undocumented figure set. Scoped to charts, tables and stat readouts;
+ * a number embedded in a prose sentence stays in the running face. Mazius
+ * (--font-accent) is the one named exception, for a value staged as a
+ * showcase rather than read as data; its component-scoped font-family wins
+ * on specificity even if [data-numeric] is also present. */
 table,
 .metric,
 .tabular,

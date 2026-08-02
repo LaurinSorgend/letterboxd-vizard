@@ -45,7 +45,7 @@
 				</select>
 			</label>
 			{#if recap.partial}
-				<span class="partial">{recap.year} is still running — this is the year so far.</span>
+				<span class="partial">{recap.year} is still running; this is the year so far.</span>
 			{/if}
 		</div>
 
@@ -53,7 +53,7 @@
 			{@render numberCard(
 				'Films watched',
 				String(recap.films.length),
-				`${recap.watches} diary entries — a film seen twice counts once here.`
+				`${recap.watches} diary entries, a film seen twice counts once here.`
 			)}
 			{@render numberCard(
 				'Hours in front of a screen',
@@ -81,7 +81,7 @@
 									href={href ?? undefined}
 									target={href ? '_blank' : undefined}
 									rel={href ? 'noopener' : undefined}
-									title="{film.name} — ★ {film.rating}"
+									title="{film.name}, ★ {film.rating}"
 								>
 									{#if src}
 										<img {src} alt={film.name} loading="lazy" />
@@ -220,7 +220,7 @@
 		color: var(--fg-muted);
 	}
 	.value {
-		font-family: var(--font-display);
+		font-family: var(--font-accent);
 		font-size: var(--text-2xl);
 		line-height: var(--leading-tight);
 		font-weight: 400;

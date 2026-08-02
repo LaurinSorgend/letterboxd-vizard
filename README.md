@@ -38,8 +38,8 @@ Get your Letterboxd export at letterboxd.com → Settings → Data → Export yo
 
 The `DEPLOY_TARGET` env var selects how the app is built and where the cache lives:
 
-- unset / `cloudflare` (default) — Cloudflare Workers with a D1 cache.
-- `node` — a plain Node server (`adapter-node`) with a local SQLite cache in
+- unset / `cloudflare` (default): Cloudflare Workers with a D1 cache.
+- `node`: a plain Node server (`adapter-node`) with a local SQLite cache in
   `data/cache.db` (override with `CACHE_DB_PATH`). Use this for Docker or your own
   infrastructure; no Cloudflare account or tooling needed.
 
@@ -98,6 +98,16 @@ Then deploy (and redeploy) with:
 ```sh
 npm run deploy
 ```
+
+## Fonts
+
+Self-hosted, all SIL OFL 1.1; licenses ship in `static/fonts/licenses/`:
+
+- [Ronzino](https://www.collletttivo.it/typefaces/ronzino) (UI): Luigi Gorlero & Nunzio Mazzaferro, Collletttivo
+- [Sinistre](https://www.collletttivo.it/typefaces/sinistre) (titles): Jules Durand, Collletttivo, Cyrillic by Varya Goncharova
+- [Ortica Linear](https://www.collletttivo.it/typefaces/ortica) (long-form): Ben Bovani, Collletttivo
+- [Mazius Display](https://www.collletttivo.it/typefaces/mazius) (rare accent): Collletttivo
+- [Fira Code](https://github.com/tonsky/FiraCode) (code and numerals): Nikita Prokopov, on Carrois Apostrophe's Fira Mono
 
 ## AI disclaimer
 

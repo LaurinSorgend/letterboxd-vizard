@@ -1,6 +1,6 @@
 <script lang="ts">
-	import FilmList from './FilmList.svelte';
 	import MetricToggle from './MetricToggle.svelte';
+	import { webHref } from './href';
 	import { RATING_BIN_LABELS } from './ramp';
 	import { buildNetwork, NET_HEIGHT, NET_WIDTH, type NetworkNode } from './network';
 	import type { EnrichedFilm } from '$lib/types';
@@ -11,18 +11,21 @@
 	const MAX_NODES = 150;
 	/** Minimum pointer target in graph units, so a small node is still comfortably clickable. */
 	const HIT_RADIUS = 20;
+	/** Every pair sharing anybody at all counts as a link; the cast-depth toggle is the real filter. */
+	const MIN_SHARED = 1;
 
-	let castDepth = $state('5');
-	let minShared = $state('2');
+	let castDepth = $state('10');
 	let selected: number | null = $state(null);
 	let hover: NetworkNode | null = $state(null);
-	let hoverPos = $state({ x: 0, y: 0 });
+	let hoverPos = $state({ x: 0, y: 0, above: true });
 	let container: HTMLElement | undefined = $state();
+	/** Rough tooltip height in px: below this much room above the point, flip it under instead. */
+	const TOOLTIP_HEIGHT = 90;
 
 	const graph = $derived(
 		buildNetwork(films, {
 			castDepth: Number(castDepth),
-			minShared: Number(minShared),
+			minShared: MIN_SHARED,
 			maxNodes: MAX_NODES
 		})
 	);
@@ -38,9 +41,17 @@
 		return near;
 	});
 
-	const neighbourFilms = $derived(
-		focus === null ? [] : [...focus].map((index) => graph.nodes[index].film)
-	);
+	/** For the selected film, who it connects to and which billed people the two share. */
+	const connections = $derived.by(() => {
+		if (selected === null) return [];
+		return graph.edges
+			.filter((edge) => edge.source === selected || edge.target === selected)
+			.map((edge) => ({
+				film: graph.nodes[edge.source === selected ? edge.target : edge.source].film,
+				shared: edge.shared
+			}))
+			.sort((a, b) => a.film.name.localeCompare(b.film.name));
+	});
 
 	function describe(node: NetworkNode): string {
 		const year = node.film.tmdb?.year ? ` (${node.film.tmdb.year})` : '';
@@ -56,13 +67,20 @@
 		selected = selected === index ? null : index;
 	}
 
+	/** Anchored above the point by default, flipping below when there isn't room, so it never clips
+	 *  against either edge of the frame. */
 	function showHover(node: NetworkNode, event: PointerEvent | FocusEvent) {
 		if (!container) return;
 		const box = container.getBoundingClientRect();
 		const scale = box.width / NET_WIDTH;
 		const x = event instanceof PointerEvent ? event.clientX - box.left : node.x * scale;
 		const y = event instanceof PointerEvent ? event.clientY - box.top : node.y * scale;
-		hoverPos = { x: Math.min(x + 12, Math.max(0, box.width - 200)), y: y + 12 };
+		const above = y >= TOOLTIP_HEIGHT;
+		hoverPos = {
+			x: Math.min(x + 12, Math.max(0, box.width - 200)),
+			y: above ? y - 12 : y + 12,
+			above
+		};
 		hover = node;
 	}
 
@@ -76,21 +94,10 @@
 		name="net-cast"
 		label="Billed cast per film"
 		options={[
-			{ value: '3', label: 'Top 3' },
-			{ value: '5', label: 'Top 5' },
-			{ value: '10', label: 'Top 10' }
+			{ value: '10', label: 'Top 10' },
+			{ value: '20', label: 'Top 20' }
 		]}
 		bind:value={castDepth}
-	/>
-	<MetricToggle
-		name="net-shared"
-		label="People two films must share"
-		options={[
-			{ value: '1', label: '1+' },
-			{ value: '2', label: '2+' },
-			{ value: '3', label: '3+' }
-		]}
-		bind:value={minShared}
 	/>
 </div>
 
@@ -145,7 +152,11 @@
 		</svg>
 
 		{#if hover}
-			<div class="tooltip" style="left: {hoverPos.x}px; top: {hoverPos.y}px">
+			<div
+				class="tooltip"
+				class:below={!hoverPos.above}
+				style="left: {hoverPos.x}px; top: {hoverPos.y}px"
+			>
 				<strong>{hover.film.name}</strong>
 				<div>
 					{#if hover.film.tmdb?.year}<span data-numeric>{hover.film.tmdb.year}</span> ·{/if}
@@ -167,20 +178,38 @@
 
 	<p class="note">
 		Line strength: how many billed people two films share. Dot size: connections; dot colour: your
-		rating. People in more than 40 of your films are skipped — they would link nearly everything to
+		rating. People in more than 40 of your films are skipped; they would link nearly everything to
 		everything.
 		{#if graph.omitted > 0}
-			Showing the <span data-numeric>{graph.nodes.length}</span> most connected of
-			<span data-numeric>{graph.nodes.length + graph.omitted}</span> linked films.
+			Showing the {graph.nodes.length} most connected of
+			{graph.nodes.length + graph.omitted} linked films.
 		{/if}
 		{#if graph.isolated > 0}
-			<span data-numeric>{graph.isolated}</span> films share nobody with the rest and sit outside the
-			graph.
+			{graph.isolated} films share nobody with the rest and sit outside the graph.
 		{/if}
 	</p>
 
 	{#if selected !== null}
-		<FilmList title="Films connected to {graph.nodes[selected].film.name}" films={neighbourFilms} />
+		<div class="connections">
+			<h3>
+				Films connected to {graph.nodes[selected].film.name}: {connections.length}
+			</h3>
+			<ul>
+				{#each connections as connection (connection.film.uri)}
+					{@const href = webHref(connection.film.uri)}
+					<li>
+						{#if href}
+							<a {href} target="_blank" rel="noopener" title={connection.film.name}
+								>{connection.film.name}</a
+							>
+						{:else}
+							<span class="name" title={connection.film.name}>{connection.film.name}</span>
+						{/if}
+						<span class="shared">via {connection.shared.join(', ')}</span>
+					</li>
+				{/each}
+			</ul>
+		</div>
 	{/if}
 
 	<details>
@@ -303,6 +332,12 @@
 		font-size: var(--text-sm);
 		pointer-events: none;
 		z-index: 1;
+		/* Anchored at its bottom edge by default, growing upward from the point. Flipped to grow
+		   downward near the top of the frame instead, so it clips against neither edge. */
+		transform: translateY(-100%);
+	}
+	.tooltip.below {
+		transform: translateY(0);
 	}
 
 	.legend {
@@ -335,6 +370,48 @@
 	}
 	.empty {
 		font-size: var(--text-sm);
+	}
+
+	.connections {
+		margin-top: 12px;
+		padding: 12px;
+		background: var(--bg-secondary);
+	}
+	.connections h3 {
+		margin: 0 0 8px;
+		font-size: var(--text-base);
+	}
+	.connections ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.connections li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		column-gap: 8px;
+		padding: 4px 0;
+		border-bottom: 1px solid var(--border);
+		font-size: var(--text-sm);
+	}
+	.connections li:last-child {
+		border-bottom: none;
+	}
+	.connections a,
+	.connections .name {
+		color: var(--fg);
+		text-decoration: none;
+	}
+	.connections a {
+		color: var(--accent);
+	}
+	.connections a:hover {
+		text-decoration: underline;
+	}
+	.connections .shared {
+		color: var(--fg-muted);
+		font-size: var(--text-2xs);
 	}
 
 	details {

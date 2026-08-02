@@ -205,16 +205,15 @@
 
 {#if fit}
 	<p class="readout">
-		<span data-numeric>r = {fit.r.toFixed(2)}</span>
-		across <span data-numeric>{fit.n.toLocaleString('en')}</span> films —
+		r = {fit.r.toFixed(2)} across {fit.n.toLocaleString('en')} films:
 		{describeFit(fit)}.
 	</p>
 {/if}
 <p class="note">
-	Feature films only — series carry a whole-run length, and shorts under 40 minutes play by
-	different rules.
+	Feature films only; series carry a whole-run length, and shorts under 40 minutes play by different
+	rules.
 	{#if dropped > 0}
-		<span data-numeric>{dropped}</span> rated films left out for that reason.
+		{dropped} rated films left out for that reason.
 	{/if}
 	Points are nudged vertically so equal ratings stay countable.
 </p>

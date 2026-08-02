@@ -66,7 +66,7 @@
 			aria-pressed={selection.isSelected(d.label)}
 			title="{d.label}: {d.count}{d.avg !== null
 				? `, avg ${d.avg.toFixed(1)}`
-				: ''} — click to list films"
+				: ''}; click to list films"
 			onclick={() => selection.toggle(d.label)}
 		>
 			<span class="bar" style="width: {(d.count / max) * 100}%"></span>
@@ -79,7 +79,11 @@
 </div>
 {#if data.length > limit}
 	<button type="button" class="more" onclick={() => (expanded = !expanded)}>
-		{expanded ? 'Show fewer' : `Show all (${data.length})`}
+		{#if expanded}
+			Show fewer
+		{:else}
+			Show all (<span data-numeric>{data.length}</span>)
+		{/if}
 	</button>
 {/if}
 {#if selection.selected}

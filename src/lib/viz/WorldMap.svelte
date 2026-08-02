@@ -296,13 +296,17 @@
 					{#if hoverStat.avg !== null}
 						· <span class="value" data-numeric>{hoverStat.avg.toFixed(2)}</span> avg
 						{#if metric === 'rating' && hoverStat.ratedCount < hoverStat.count}
-							({hoverStat.ratedCount} rated)
+							(<span data-numeric>{hoverStat.ratedCount}</span> rated)
 						{/if}
 					{/if}
 				</div>
 				<ul>
 					{#each hoverFilms as film (film.uri)}
-						<li>{film.name}{film.rating !== null ? ` — ${film.rating}` : ''}</li>
+						<li>
+							{film.name}{film.rating !== null ? ': ' : ''}{#if film.rating !== null}<span
+									data-numeric>{film.rating}</span
+								>{/if}
+						</li>
 					{/each}
 				</ul>
 			</div>
