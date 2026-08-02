@@ -166,9 +166,9 @@
 	</div>
 
 	<p class="note">
-		A line means two films share that many of their billed people. Dot size follows how many films a
-		film connects to, and its colour your rating. Anyone appearing in more than 40 of your films is
-		skipped, since they would link nearly everything to everything.
+		Line strength: how many billed people two films share. Dot size: connections; dot colour: your
+		rating. People in more than 40 of your films are skipped — they would link nearly everything to
+		everything.
 		{#if graph.omitted > 0}
 			Showing the <span data-numeric>{graph.nodes.length}</span> most connected of
 			<span data-numeric>{graph.nodes.length + graph.omitted}</span> linked films.

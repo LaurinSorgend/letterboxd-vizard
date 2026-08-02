@@ -211,12 +211,12 @@
 	</p>
 {/if}
 <p class="note">
-	Feature films only: series carry a whole-run length rather than a sitting, and shorts under 40
-	minutes answer to different expectations.
+	Feature films only — series carry a whole-run length, and shorts under 40 minutes play by
+	different rules.
 	{#if dropped > 0}
-		<span data-numeric>{dropped}</span> rated films are left out for that reason.
+		<span data-numeric>{dropped}</span> rated films left out for that reason.
 	{/if}
-	Points are nudged vertically so that films sharing a rating stay countable.
+	Points are nudged vertically so equal ratings stay countable.
 </p>
 
 <details>

@@ -36,9 +36,8 @@
 
 {#if data.length > limit}
 	<p class="note">
-		Showing the <span data-numeric>{limit}</span> most common of
-		<span data-numeric>{data.length}</span> keywords. Switch to bars for the full list and the ratings
-		behind each one.
+		The <span data-numeric>{limit}</span> most common of
+		<span data-numeric>{data.length}</span> keywords. Bars view: the full list, with ratings.
 	</p>
 {/if}
 

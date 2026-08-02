@@ -130,7 +130,7 @@
 		} else {
 			remember = false;
 			saveError =
-				'Could not save — your library is too large for this browser. Data stays for this visit only.';
+				'Could not save: your library is too large for this browser. Data stays for this visit only.';
 		}
 	}
 
@@ -191,7 +191,7 @@
 	{#if phase === 'idle'}
 		{#if errorMessage}
 			<p class="error" role="alert">
-				{errorMessage} — make sure you drop the unmodified zip downloaded from Letterboxd.
+				{errorMessage}. Make sure you drop the unmodified zip downloaded from Letterboxd.
 			</p>
 		{/if}
 		<FileDrop onfile={handleFile} />
@@ -203,7 +203,7 @@
 				<p>Looking up film data… {progress.done} / {progress.total}</p>
 				<progress value={progress.done} max={progress.total} aria-label="Film lookup progress"
 				></progress>
-				<p class="sub">First run fetches from TMDB; repeat visits are instant thanks to caching.</p>
+				<p class="sub">First run only; lookups are cached, so next time is instant.</p>
 			{/if}
 		</div>
 	{:else}
@@ -230,9 +230,9 @@
 						description="Films per rating step, split by whether you hearted them"
 					/>
 					<p class="sub chart-note">
-						You hearted {likes.liked} of {films.length} films.
+						{likes.liked} of your {films.length} films hearted.
 						{#if likes.unrated > 0}
-							{likes.unrated} of those are unrated, so they sit outside these bars.
+							{likes.unrated} of those carry no rating and sit outside these bars.
 						{/if}
 					</p>
 				</div>
@@ -258,9 +258,9 @@
 			<h2>From release to watch</h2>
 			<p class="sub chart-note">
 				{#if medianLag !== null}
-					Half your logged films you first watched within {formatDays(medianLag)} of release.
+					Median gap: {formatDays(medianLag)} from release to first watch.
 				{/if}
-				Films you never logged in the diary are left out.
+				Films without a diary entry are left out.
 			</p>
 			<RankedBars
 				data={watchLag(films)}
@@ -324,8 +324,8 @@
 			<section id="rewatches">
 				<h2>Films you return to</h2>
 				<p class="sub chart-note">
-					Bars count diary entries. Films you first saw before you started logging show one, even
-					though Letterboxd marked the watch as a rewatch.
+					Bars count diary entries. Films first seen before you started logging show one, even where
+					Letterboxd marks the watch as a rewatch.
 				</p>
 				<RankedBars data={rewatched} showAvg description="Diary entries per rewatched film" />
 			</section>
@@ -358,7 +358,7 @@
 				<h2>Franchises you follow</h2>
 				<p class="sub chart-note">
 					{franchiseShare.inCollection} of your {franchiseShare.total} matched films belong to a TMDB
-					franchise. Franchises you have seen only one film of are left out.
+					franchise. One-film franchises are left out.
 				</p>
 				<RankedBars
 					data={franchises}
@@ -372,9 +372,8 @@
 			<section id="keywords">
 				<h2>Themes you return to</h2>
 				<p class="sub chart-note">
-					{themeCoverage.withKeywords} of your {themeCoverage.total} matched films carry TMDB keywords,
-					so this is a partial picture. A keyword sits here once at least two of your films share it,
-					and its size follows that count on a square-root scale.
+					A partial picture: TMDB keywords cover {themeCoverage.withKeywords} of your {themeCoverage.total}
+					matched films. Shown from two shared films up, sized by count on a square-root scale.
 				</p>
 				<MetricToggle
 					name="keyword-view"
@@ -404,10 +403,9 @@
 		<section id="obscurity">
 			<h2>Crowds &amp; deep cuts</h2>
 			<p class="sub chart-note">
-				How many people have rated your films on TMDB, as a stand-in for how widely each one has
-				been seen.
+				TMDB rating counts, as a stand-in for how widely seen each film is.
 				{#if obscure !== null}
-					{Math.round(obscure * 100)}% of yours have fewer than 1,000 ratings.
+					{Math.round(obscure * 100)}% of yours: fewer than 1,000 ratings.
 				{/if}
 			</p>
 			<RankedBars
@@ -442,8 +440,8 @@
 		<section id="network">
 			<h2>How your films connect</h2>
 			<p class="sub chart-note">
-				Two films are joined when they share billed cast or a director. Clusters are the corners of
-				cinema you keep returning to; pick a film to see everything it links to.
+				Films joined by shared billed cast or a director. Clusters are the corners of cinema you
+				keep returning to. Pick a film to see its links.
 			</p>
 			<Network {films} />
 		</section>
@@ -451,8 +449,8 @@
 		<section id="mosaic">
 			<h2>Every film you have watched</h2>
 			<p class="sub chart-note">
-				Your whole library as a wall of posters. Reorder it by rating, by when you watched, by
-				release year, or read the posters' own colours and lay them out as a spectrum.
+				Your whole library as a wall of posters. Sort by rating, watch date or release year, or by
+				the posters' own colours, laid out as a spectrum.
 			</p>
 			<Mosaic {films} />
 		</section>

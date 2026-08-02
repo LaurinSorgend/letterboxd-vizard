@@ -29,8 +29,8 @@
 	<strong>Drop your Letterboxd export zip here</strong>
 	<span>or click to choose the file</span>
 	<span class="hint">
-		Get it from letterboxd.com → Settings → Data → Export your data. Your data is analyzed in your
-		browser; only film titles are sent to look up movie metadata.
+		Get it from letterboxd.com → Settings → Data → Export your data. Everything is analyzed in your
+		browser; only titles and years go out, to look up TMDB metadata.
 	</span>
 </label>
 

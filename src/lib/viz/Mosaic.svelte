@@ -67,7 +67,7 @@
 
 	function label(film: EnrichedFilm): string {
 		const year = film.tmdb?.year ?? film.year;
-		const rating = film.rating !== null ? ` — ★ ${film.rating}` : '';
+		const rating = film.rating !== null ? `, ★ ${film.rating}` : '';
 		return `${film.name}${year ? ` (${year})` : ''}${rating}`;
 	}
 </script>
@@ -95,8 +95,8 @@
 
 {#if refused}
 	<p class="note">
-		Colour sorting has to read the poster images pixel by pixel, and this browser will not allow
-		that for images served from TMDB. The other orderings are unaffected.
+		Colour sorting needs pixel access to the posters, which this browser blocks for TMDB images. The
+		other orderings still work.
 	</p>
 {/if}
 

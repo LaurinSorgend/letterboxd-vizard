@@ -16,8 +16,8 @@
 	{:else}
 		<p class="hint">
 			{checked
-				? 'Saved in this browser only; never uploaded. Untick to forget it.'
-				: 'Tick to keep your analysed data in this browser so you can skip the upload next time.'}
+				? 'Saved in this browser only, never uploaded. Untick to forget it.'
+				: 'Keeps your analysed data in this browser; next visit skips the upload.'}
 		</p>
 	{/if}
 </div>

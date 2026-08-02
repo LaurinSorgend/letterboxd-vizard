@@ -1,19 +1,20 @@
 # Letterboxd Vizard
 
 Drop your Letterboxd data-export zip and get visualizations of your film history:
-world maps of how many films you watched per country and how you rate them, rating
-habits vs TMDB, what you heart, how long after release you get to a film, how widely
-seen it is, watches over time, genres, languages, directors and actors.
+a world map of your watches, rating habits vs TMDB, what you heart, how long after
+release you get to a film and how widely seen it is, watches over time, genres,
+languages, directors, actors, franchises, recurring themes, a network of films
+joined by shared cast, your library as a poster wall and a recap of every year.
 
 ![Example Image 1](/docs/assets/1.jpg)
 ![Example Image 2](/docs/assets/2.jpg)
 ![Example Image 3](/docs/assets/3.jpg)
 
 Your export is parsed entirely in the browser - only film titles and years are sent
-to the server to look up metadata on TMDB. Lookups are cached in SQLite so each film
-is fetched from TMDB at most once, no matter how many users analyze it. The cache is a
+to the server to look up metadata on TMDB. Lookups are cached in SQLite, so each film
+is fetched from TMDB at most once no matter how many users analyze it. The cache is a
 Cloudflare D1 database when deployed to Workers, or a local `better-sqlite3` file when
-self-hosted - the app picks the backend automatically.
+self-hosted - the app picks the backend on its own.
 
 ## Setup
 
@@ -23,9 +24,7 @@ cp .env.example .env   # put your TMDB API key in .env
 ```
 
 Get a free TMDB API key at themoviedb.org → Settings → API. Both v3 keys and v4 read
-access tokens work.
-
-The same key drives the "You might like" section, which is built on TMDB's
+access tokens work. The same key drives the "You might like" section, built on TMDB's
 recommendations endpoint.
 
 Optional extras in `.env`:
@@ -42,7 +41,7 @@ The `DEPLOY_TARGET` env var selects how the app is built and where the cache liv
 - unset / `cloudflare` (default) — Cloudflare Workers with a D1 cache.
 - `node` — a plain Node server (`adapter-node`) with a local SQLite cache in
   `data/cache.db` (override with `CACHE_DB_PATH`). Use this for Docker or your own
-  infrastructure; no Cloudflare account or tooling required.
+  infrastructure; no Cloudflare account or tooling needed.
 
 ## Run locally
 
@@ -67,8 +66,8 @@ docker compose up -d --build
 ```
 
 Serves on port 3000. Set `ORIGIN` in `.env` to your public URL (defaults to
-`http://localhost:3000`) so form submissions aren't rejected. The TMDB cache is
-persisted on the host in `./data` via a bind mount.
+`http://localhost:3000`) so form submissions aren't rejected. The TMDB cache lives
+on the host in `./data` via a bind mount.
 
 ## Self-host without Docker
 

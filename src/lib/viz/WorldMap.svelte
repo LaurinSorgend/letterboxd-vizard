@@ -332,8 +332,8 @@
 		<span><i class="swatch nodata"></i>no films</span>
 	</div>
 	<p class="note">
-		A film with several production countries counts for each of them. Pinch or use the buttons to
-		zoom, then drag to move around; on a mouse, hold Ctrl while scrolling.
+		Films with several production countries count once for each. Zoom by pinch or buttons, drag to
+		pan; on a mouse, hold Ctrl and scroll.
 	</p>
 
 	{#if selected}
