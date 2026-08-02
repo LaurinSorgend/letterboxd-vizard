@@ -43,7 +43,7 @@
 		if (!root) return;
 		// Band near the top of the viewport: whichever section crosses it is the one being read.
 		spy = new IntersectionObserver(onIntersect, { rootMargin: '-8% 0px -80% 0px' });
-		// Sections appear late — the rewatch chart is conditional and recommendations arrive async.
+		// Sections appear late: the rewatch chart is conditional and recommendations arrive async.
 		const added = new MutationObserver(() => sync(root));
 		added.observe(root, { childList: true });
 		// Untracked: sync reads the state it writes, and re-running would tear the observers down.
@@ -106,9 +106,14 @@
 		color: var(--fg);
 		background: var(--surface);
 	}
+	/*
+	 * Stroked rather than `font-weight: 700`: a heavier face is wider, and a title that rewraps
+	 * onto a second line changes the height of a nav that is centred on itself, so every other
+	 * item jumps by half the difference as you scroll. Stroking leaves the metrics alone.
+	 */
 	a[aria-current] {
 		border-left-color: var(--accent);
 		color: var(--fg);
-		font-weight: 700;
+		-webkit-text-stroke: 0.35px currentColor;
 	}
 </style>
