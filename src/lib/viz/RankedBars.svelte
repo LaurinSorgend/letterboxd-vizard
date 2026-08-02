@@ -164,7 +164,7 @@
 		cursor: pointer;
 	}
 	.bar {
-		height: 14px;
+		height: 22px;
 		min-width: 2px;
 		background: var(--accent);
 	}
@@ -175,11 +175,11 @@
 		box-shadow: 0 0 0 1.5px var(--fg);
 	}
 	.val {
-		font-size: var(--text-2xs);
+		font-size: var(--text-sm);
 		color: var(--fg-muted);
 	}
 	.avg {
-		font-size: var(--text-2xs);
+		font-size: var(--text-sm);
 		color: var(--fg-secondary);
 		justify-self: end;
 	}
