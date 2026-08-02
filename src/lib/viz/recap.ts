@@ -201,7 +201,12 @@ export function buildRecap(films: EnrichedFilm[], year: number, now = new Date()
 		avg,
 		top: [...slice]
 			.filter((film) => film.rating !== null)
-			.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name))
+			.sort(
+				(a, b) =>
+					(b.rating ?? 0) - (a.rating ?? 0) ||
+					Number(b.liked) - Number(a.liked) ||
+					a.name.localeCompare(b.name)
+			)
 			.slice(0, 5),
 		topGenre: byGenre(slice)[0] ?? null,
 		topDirector,

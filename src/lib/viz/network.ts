@@ -1,5 +1,7 @@
+import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import { getOrCreate } from '$lib/collections';
 import { binIndex, RATING_THRESHOLDS } from './ramp';
+import { clamp, seeded } from './seeded';
 import type { EnrichedFilm } from '$lib/types';
 
 export const NET_WIDTH = 1000;
@@ -86,55 +88,21 @@ function sharedPairs(index: PersonIndex, minShared: number): Map<string, string[
 	return new Map([...pairs].filter(([, shared]) => shared.length >= minShared));
 }
 
-/** Deterministic 0–1 from an integer, so a library always lays out the same way. */
-function seeded(n: number): number {
-	const x = Math.sin(n * 12.9898) * 43758.5453;
-	return x - Math.floor(x);
-}
-
-function clamp(value: number, low: number, high: number): number {
-	return Math.min(high, Math.max(low, value));
-}
-
-/** One Fruchterman–Reingold pass: repulsion between every pair, attraction along every edge. */
-function applyForces(
-	nodes: NetworkNode[],
-	edges: NetworkEdge[],
-	k: number,
-	dx: Float64Array,
-	dy: Float64Array
-): void {
-	dx.fill(0);
-	dy.fill(0);
-	for (let i = 0; i < nodes.length; i++) {
-		for (let j = i + 1; j < nodes.length; j++) {
-			const ox = nodes[i].x - nodes[j].x;
-			const oy = nodes[i].y - nodes[j].y;
-			const distance = Math.hypot(ox, oy) || 0.01;
-			const push = (k * k) / (distance * distance);
-			dx[i] += ox * push;
-			dy[i] += oy * push;
-			dx[j] -= ox * push;
-			dy[j] -= oy * push;
-		}
-	}
-	for (const edge of edges) {
-		const ox = nodes[edge.source].x - nodes[edge.target].x;
-		const oy = nodes[edge.source].y - nodes[edge.target].y;
-		const distance = Math.hypot(ox, oy) || 0.01;
-		const pull = distance / k;
-		dx[edge.source] -= ox * pull;
-		dy[edge.source] -= oy * pull;
-		dx[edge.target] += ox * pull;
-		dy[edge.target] += oy * pull;
-	}
-}
-
 const ITERATIONS = 300;
 
 /**
- * Settles the graph in place. It runs to completion before anything is drawn rather than
- * animating, which keeps the picture stable and leaves nothing to suppress for reduced motion.
+ * Settles the graph in place with a standard charge/link/collide simulation: nodes repel each
+ * other, edges pull their two films together, and collision keeps circles from overlapping (the
+ * hand-rolled Fruchterman–Reingold pass this replaced had no collision term at all). Runs to
+ * completion before anything is drawn rather than animating, which keeps the picture stable and
+ * leaves nothing to suppress for reduced motion. `forceLink` mutates its link objects' `source`/
+ * `target` from index to node reference, so it runs against throwaway clones; the real `edges`
+ * array keeps the plain numeric indices the rest of this module and Network.svelte expect.
+ *
+ * Repulsion is short-range (`distanceMax`) and mild, and a weak per-node pull toward the centre
+ * stands in for the "gravity" term classic force layouts use to stop the graph drifting apart;
+ * `forceCenter` alone only re-centres the average position, so a film with a single edge still
+ * gets flung to the canvas edge by everything repelling it with nothing pulling it back.
  */
 function layout(nodes: NetworkNode[], edges: NetworkEdge[]): void {
 	const count = nodes.length;
@@ -150,21 +118,22 @@ function layout(nodes: NetworkNode[], edges: NetworkEdge[]): void {
 		return;
 	}
 
-	const k = Math.sqrt((NET_WIDTH * NET_HEIGHT) / count);
-	const dx = new Float64Array(count);
-	const dy = new Float64Array(count);
-	const start = NET_WIDTH / 10;
+	const simEdges = edges.map((edge) => ({ ...edge }));
+	const simulation = forceSimulation(nodes)
+		.force('charge', forceManyBody().strength(-90).distanceMax(260))
+		.force('link', forceLink(simEdges).distance(55).strength(0.35))
+		.force('x', forceX(NET_WIDTH / 2).strength(0.02))
+		.force('y', forceY(NET_HEIGHT / 2).strength(0.02))
+		.force(
+			'collide',
+			forceCollide<NetworkNode>((n) => n.r + 2)
+		)
+		.stop();
+	for (let i = 0; i < ITERATIONS; i++) simulation.tick();
 
-	for (let step = 0; step < ITERATIONS; step++) {
-		applyForces(nodes, edges, k, dx, dy);
-		const temperature = start * (1 - step / ITERATIONS);
-		for (let i = 0; i < count; i++) {
-			const node = nodes[i];
-			const distance = Math.hypot(dx[i], dy[i]) || 0.01;
-			const move = Math.min(distance, temperature);
-			node.x = clamp(node.x + (dx[i] / distance) * move, node.r, NET_WIDTH - node.r);
-			node.y = clamp(node.y + (dy[i] / distance) * move, node.r, NET_HEIGHT - node.r);
-		}
+	for (const node of nodes) {
+		node.x = clamp(node.x, node.r, NET_WIDTH - node.r);
+		node.y = clamp(node.y, node.r, NET_HEIGHT - node.r);
 	}
 }
 
