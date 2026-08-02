@@ -1,6 +1,6 @@
 import { imageUrl } from './images';
 import { getOrCreate } from '$lib/collections';
-import type { EnrichedFilm } from '$lib/types';
+import type { Collection, EnrichedFilm } from '$lib/types';
 
 export interface BarDatum {
 	label: string;
@@ -207,7 +207,7 @@ export function formatDays(days: number): string {
 
 /*
  * TMDB vote count stands in for how widely a film has been seen. Its scale is far smaller than
- * IMDb's — even the most-rated films sit in the low tens of thousands — so the top band starts
+ * IMDb's (even the most-rated films sit in the low tens of thousands), so the top band starts
  * at 15k rather than the six figures an IMDb-shaped guess would suggest.
  */
 const AUDIENCE_BANDS: Band[] = [
@@ -233,7 +233,8 @@ export function obscurityShare(films: EnrichedFilm[], below = 1_000): number | n
 		: counts.filter((count) => count < below).length / counts.length;
 }
 
-function grouped(films: EnrichedFilm[], keysOf: (f: EnrichedFilm) => string[]): BarDatum[] {
+/** Films grouped by every key they carry, count-desc; a film counts once per distinct key. */
+export function grouped(films: EnrichedFilm[], keysOf: (f: EnrichedFilm) => string[]): BarDatum[] {
 	const groups = new Map<string, EnrichedFilm[]>();
 	for (const film of films) {
 		for (const key of new Set(keysOf(film))) {
@@ -318,6 +319,41 @@ export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): Bar
 			films: group.films
 		}))
 		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+/**
+ * Franchises you have seen more than one film of, most-watched first. A single film from a
+ * collection says nothing about following the franchise, so those groups drop out.
+ */
+export function byCollection(films: EnrichedFilm[]): BarDatum[] {
+	const groups = new Map<number, { collection: Collection; films: EnrichedFilm[] }>();
+	for (const film of films) {
+		const collection = film.tmdb?.collection;
+		if (!collection) continue;
+		getOrCreate(groups, collection.id, () => ({ collection, films: [] })).films.push(film);
+	}
+	return [...groups.values()]
+		.filter((group) => group.films.length > 1)
+		.map(({ collection, films: group }) => ({
+			// TMDB names every franchise "<name> Collection", which reads as noise once they are a list.
+			label: collection.name.replace(/ Collection$/, ''),
+			count: group.length,
+			avg: avgRating(group),
+			image: imageUrl(collection.posterPath, 'w92'),
+			imageLarge: imageUrl(collection.posterPath, 'w185'),
+			href: `https://www.themoviedb.org/collection/${collection.id}`,
+			films: group
+		}))
+		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+/** How many TMDB-matched films belong to any franchise at all, and how many were matched. */
+export function collectionShare(films: EnrichedFilm[]): { inCollection: number; total: number } {
+	const matched = films.filter((film) => film.tmdb);
+	return {
+		inCollection: matched.filter((film) => film.tmdb?.collection).length,
+		total: matched.length
+	};
 }
 
 export interface RatingGap {

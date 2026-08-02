@@ -111,6 +111,8 @@ export async function lookupSeriesOnTvdb(
 		voteCount: null,
 		posterPath: match.thumbnail ?? null,
 		directors: [],
-		cast: []
+		cast: [],
+		collection: null,
+		keywords: []
 	};
 }

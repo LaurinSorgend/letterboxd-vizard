@@ -32,6 +32,13 @@ export interface Person {
 	profilePath: string | null;
 }
 
+/** A TMDB franchise, e.g. "The Matrix Collection". */
+export interface Collection {
+	id: number;
+	name: string;
+	posterPath: string | null;
+}
+
 /** Compact metadata record stored in the server cache and returned by /api/enrich. */
 export interface TmdbMovie {
 	/** Negative ids are TheTVDB ids (mediaType 'tv' with no TMDB match). */
@@ -49,12 +56,16 @@ export interface TmdbMovie {
 	releaseDate: string | null;
 	originalLanguage: string | null;
 	voteAverage: number | null;
-	/** How many TMDB users rated it — a proxy for how widely the film has been seen. */
+	/** How many TMDB users rated it, a proxy for how widely the film has been seen. */
 	voteCount: number | null;
 	/** TMDB image path, or a full URL for TheTVDB artwork. */
 	posterPath: string | null;
 	directors: Person[];
 	cast: Person[];
+	/** The franchise this belongs to; null for standalone films and every series. */
+	collection: Collection | null;
+	/** TMDB theme tags, lowercase; empty when TMDB has none, which is common. */
+	keywords: string[];
 }
 
 export interface EnrichRequestItem {

@@ -13,6 +13,12 @@
 	import StatTiles from '$lib/viz/StatTiles.svelte';
 	import SectionNav from '$lib/viz/SectionNav.svelte';
 	import Heatmap from '$lib/viz/Heatmap.svelte';
+	import Scatter from '$lib/viz/Scatter.svelte';
+	import KeywordCloud from '$lib/viz/KeywordCloud.svelte';
+	import Network from '$lib/viz/Network.svelte';
+	import Mosaic from '$lib/viz/Mosaic.svelte';
+	import YearRecap from '$lib/viz/YearRecap.svelte';
+	import { byKeyword, keywordCoverage } from '$lib/viz/keywords';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
 	import {
 		bucketsByDay,
@@ -27,8 +33,10 @@
 		audienceBands,
 		avgRating,
 		byGenre,
+		byCollection,
 		byLanguage,
 		byPerson,
+		collectionShare,
 		formatDays,
 		likeTotals,
 		medianWatchLag,
@@ -74,6 +82,11 @@
 	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
 
 	const rewatched = $derived(mostRewatched(films));
+	const franchises = $derived(byCollection(films));
+	const franchiseShare = $derived(collectionShare(films));
+	const themes = $derived(byKeyword(films));
+	const themeCoverage = $derived(keywordCoverage(films));
+	let keywordView = $state<'cloud' | 'bars'>('cloud');
 	const likes = $derived(likeTotals(films));
 	const medianLag = $derived(medianWatchLag(films));
 	const obscure = $derived(obscurityShare(films));
@@ -302,6 +315,11 @@
 			<RankedBars data={runtimes} showAvg description="Films and average rating per runtime band" />
 		</section>
 
+		<section id="length">
+			<h2>Does length buy quality?</h2>
+			<Scatter {films} />
+		</section>
+
 		{#if rewatched.length > 0}
 			<section id="rewatches">
 				<h2>Films you return to</h2>
@@ -334,6 +352,54 @@
 				</div>
 			</div>
 		</section>
+
+		{#if franchises.length > 0}
+			<section id="franchises">
+				<h2>Franchises you follow</h2>
+				<p class="sub chart-note">
+					{franchiseShare.inCollection} of your {franchiseShare.total} matched films belong to a TMDB
+					franchise. Franchises you have seen only one film of are left out.
+				</p>
+				<RankedBars
+					data={franchises}
+					showAvg
+					description="Films and average rating per franchise"
+				/>
+			</section>
+		{/if}
+
+		{#if themes.length > 0}
+			<section id="keywords">
+				<h2>Themes you return to</h2>
+				<p class="sub chart-note">
+					{themeCoverage.withKeywords} of your {themeCoverage.total} matched films carry TMDB keywords,
+					so this is a partial picture. A keyword sits here once at least two of your films share it,
+					and its size follows that count on a square-root scale.
+				</p>
+				<MetricToggle
+					name="keyword-view"
+					label="Keyword view"
+					options={[
+						{ value: 'cloud', label: 'Cloud' },
+						{ value: 'bars', label: 'Bars' }
+					]}
+					bind:value={keywordView}
+				/>
+				{#if keywordView === 'cloud'}
+					<KeywordCloud
+						data={themes}
+						description="Your most common TMDB keywords, sized by film count"
+					/>
+				{:else}
+					<RankedBars
+						data={themes}
+						showAvg
+						limit={20}
+						description="Films and average rating per TMDB keyword"
+					/>
+				{/if}
+			</section>
+		{/if}
 
 		<section id="obscurity">
 			<h2>Crowds &amp; deep cuts</h2>
@@ -372,6 +438,26 @@
 				</div>
 			</div>
 		</section>
+
+		<section id="network">
+			<h2>How your films connect</h2>
+			<p class="sub chart-note">
+				Two films are joined when they share billed cast or a director. Clusters are the corners of
+				cinema you keep returning to; pick a film to see everything it links to.
+			</p>
+			<Network {films} />
+		</section>
+
+		<section id="mosaic">
+			<h2>Every film you have watched</h2>
+			<p class="sub chart-note">
+				Your whole library as a wall of posters. Reorder it by rating, by when you watched, by
+				release year, or read the posters' own colours and lay them out as a spectrum.
+			</p>
+			<Mosaic {films} />
+		</section>
+
+		<YearRecap {films} />
 
 		<Recommendations {films} {watchlistIds} bind:includeWatchlist />
 

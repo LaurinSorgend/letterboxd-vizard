@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import type { Person, TmdbMovie } from '$lib/types';
+import type { Collection, Person, TmdbMovie } from '$lib/types';
 import { BudgetExhausted, type FetchBudget } from './budget';
 import { lookupSeriesOnTvdb } from './tvdb';
 
@@ -121,6 +121,22 @@ interface Details {
 	poster_path?: string | null;
 	created_by?: CreditPerson[];
 	credits?: { cast?: CreditPerson[]; crew?: CreditPerson[] };
+	belongs_to_collection?: { id: number; name: string; poster_path?: string | null } | null;
+	/** Movies put the list under `keywords`, series under `results`. */
+	keywords?: { keywords?: { name: string }[]; results?: { name: string }[] };
+}
+
+/** Enough tags to characterise a film without bloating every cached record. */
+const MAX_KEYWORDS = 25;
+
+function toCollection(d: Details): Collection | null {
+	const c = d.belongs_to_collection;
+	return c ? { id: c.id, name: c.name, posterPath: c.poster_path ?? null } : null;
+}
+
+function toKeywords(d: Details): string[] {
+	const list = d.keywords?.keywords ?? d.keywords?.results ?? [];
+	return list.slice(0, MAX_KEYWORDS).map((k) => k.name.toLowerCase());
 }
 
 function toPerson(p: CreditPerson): Person {
@@ -147,7 +163,10 @@ export async function fetchRecord(
 	kind: 'movie' | 'tv',
 	id: number
 ): Promise<TmdbMovie> {
-	const d = (await tmdbGet(budget, `/${kind}/${id}`, { append_to_response: 'credits' })) as Details;
+	// Both extras ride along on this one request, so neither costs a subrequest against the budget.
+	const d = (await tmdbGet(budget, `/${kind}/${id}`, {
+		append_to_response: 'credits,keywords'
+	})) as Details;
 	const crewDirectors = d.credits?.crew?.filter((p) => p.job === 'Director') ?? [];
 	const directors =
 		kind === 'tv' && crewDirectors.length === 0 ? (d.created_by ?? []) : crewDirectors;
@@ -166,7 +185,9 @@ export async function fetchRecord(
 		voteCount: d.vote_count ?? null,
 		posterPath: d.poster_path ?? null,
 		directors: dedupe(directors.map(toPerson)),
-		cast: d.credits?.cast?.slice(0, 10).map(toPerson) ?? []
+		cast: d.credits?.cast?.slice(0, 10).map(toPerson) ?? [],
+		collection: toCollection(d),
+		keywords: toKeywords(d)
 	};
 }
 

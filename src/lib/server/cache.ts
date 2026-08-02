@@ -22,7 +22,7 @@ function chunks<T>(list: T[], size: number): T[][] {
  * the media type is known, so a bump invalidates every record — when only one kind of record
  * changed, a targeted delete costs a great deal less than the re-warm a bump forces.
  */
-const SCHEMA = 'v3';
+const SCHEMA = 'v4';
 
 export function cacheKey(name: string, year: number | null): string {
 	return `${SCHEMA}::${name.trim().toLowerCase()}::${year ?? ''}`;
