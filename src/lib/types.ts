@@ -45,8 +45,12 @@ export interface TmdbMovie {
 	genres: string[];
 	/** Minutes: a film's length, or a series' estimated whole-run length. */
 	runtime: number | null;
+	/** ISO release date, or a series' first air date; null when TMDB has none. */
+	releaseDate: string | null;
 	originalLanguage: string | null;
 	voteAverage: number | null;
+	/** How many TMDB users rated it — a proxy for how widely the film has been seen. */
+	voteCount: number | null;
 	/** TMDB image path, or a full URL for TheTVDB artwork. */
 	posterPath: string | null;
 	directors: Person[];

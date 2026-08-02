@@ -24,15 +24,21 @@
 	} from '$lib/viz/heatmap';
 	import { effectiveCountries } from '$lib/viz/countries';
 	import {
+		audienceBands,
 		avgRating,
 		byGenre,
 		byLanguage,
 		byPerson,
+		formatDays,
+		likeTotals,
+		medianWatchLag,
 		mostRewatched,
+		obscurityShare,
 		ratingHistogram,
 		releaseDecades,
 		runtimeBuckets,
 		totalRuntimeMinutes,
+		watchLag,
 		watchesPerYear
 	} from '$lib/viz/stats';
 	import { parseExport } from '$lib/ingest/parse';
@@ -68,6 +74,9 @@
 	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
 
 	const rewatched = $derived(mostRewatched(films));
+	const likes = $derived(likeTotals(films));
+	const medianLag = $derived(medianWatchLag(films));
+	const obscure = $derived(obscurityShare(films));
 	let runtimeScope = $state<'films' | 'all'>('films');
 	const justFilms = $derived(films.filter((f) => f.tmdb?.mediaType !== 'tv'));
 	const hasSeries = $derived(films.some((f) => f.tmdb?.mediaType === 'tv' && f.tmdb.runtime));
@@ -81,7 +90,8 @@
 			{ label: 'Films watched', value: String(films.length) },
 			{ label: 'Hours watched', value: hours.toLocaleString('en') },
 			{ label: 'Countries', value: String(countries.size) },
-			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) + ' ★' : '—' }
+			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) + ' ★' : '—' },
+			{ label: 'Films hearted', value: String(likes.liked) }
 		];
 	});
 
@@ -199,8 +209,19 @@
 			<h2>Rating habits</h2>
 			<div class="pair">
 				<div>
-					<h3>How you rate</h3>
-					<Columns data={ratingHistogram(films)} description="Number of films per rating step" />
+					<h3>How you rate, and what you heart</h3>
+					<Columns
+						data={ratingHistogram(films)}
+						highlightLabel="Hearted"
+						restLabel="Not hearted"
+						description="Films per rating step, split by whether you hearted them"
+					/>
+					<p class="sub chart-note">
+						You hearted {likes.liked} of {films.length} films.
+						{#if likes.unrated > 0}
+							{likes.unrated} of those are unrated, so they sit outside these bars.
+						{/if}
+					</p>
 				</div>
 				<RatingGaps {films} />
 			</div>
@@ -218,6 +239,21 @@
 					<Columns data={releaseDecades(films)} description="Films per release decade" />
 				</div>
 			</div>
+		</section>
+
+		<section id="lag">
+			<h2>From release to watch</h2>
+			<p class="sub chart-note">
+				{#if medianLag !== null}
+					Half your logged films you first watched within {formatDays(medianLag)} of release.
+				{/if}
+				Films you never logged in the diary are left out.
+			</p>
+			<RankedBars
+				data={watchLag(films)}
+				showAvg
+				description="Films and average rating per gap between release and first watch"
+			/>
 		</section>
 
 		<section id="when">
@@ -299,6 +335,22 @@
 			</div>
 		</section>
 
+		<section id="obscurity">
+			<h2>Crowds &amp; deep cuts</h2>
+			<p class="sub chart-note">
+				How many people have rated your films on TMDB, as a stand-in for how widely each one has
+				been seen.
+				{#if obscure !== null}
+					{Math.round(obscure * 100)}% of yours have fewer than 1,000 ratings.
+				{/if}
+			</p>
+			<RankedBars
+				data={audienceBands(films)}
+				showAvg
+				description="Films and average rating per TMDB vote-count band"
+			/>
+		</section>
+
 		<section id="people">
 			<h2>People</h2>
 			<div class="pair">
@@ -344,10 +396,9 @@
 	</nav>
 	<p>
 		An independent project, not affiliated with or endorsed by
-		<a href="https://letterboxd.com">Letterboxd</a>. Film metadata from
+		<a href="https://letterboxd.com">Letterboxd</a>. Film metadata and recommendations from
 		<a href="https://www.themoviedb.org">TMDB</a>. This product uses the TMDB API but is not
-		endorsed or certified by TMDB. Recommendations powered by
-		<a href="https://trakt.tv">Trakt</a>. Some series data from
+		endorsed or certified by TMDB. Some series data from
 		<a href="https://thetvdb.com">TheTVDB</a>.
 	</p>
 </footer>

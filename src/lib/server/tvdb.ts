@@ -104,8 +104,11 @@ export async function lookupSeriesOnTvdb(
 		originCountries: country ? [country] : [],
 		genres: details.genres?.map((g) => g.name) ?? [],
 		runtime: seriesRuntime(details),
+		// TheTVDB search gives a year but no full date, and no vote counts at all.
+		releaseDate: null,
 		originalLanguage: match.primary_language ?? null,
 		voteAverage: null,
+		voteCount: null,
 		posterPath: match.thumbnail ?? null,
 		directors: [],
 		cast: []

@@ -51,9 +51,13 @@ export async function tmdbGet(
 	}
 }
 
+/** TMDB leaves the date an empty string when it has none, so fall through on falsy, not nullish. */
+function releaseDate(result: SearchResult): string | null {
+	return result.release_date || result.first_air_date || null;
+}
+
 function releaseYear(result: SearchResult): number | null {
-	const date = result.release_date ?? result.first_air_date;
-	const year = Number.parseInt(date?.slice(0, 4) ?? '', 10);
+	const year = Number.parseInt(releaseDate(result)?.slice(0, 4) ?? '', 10);
 	return Number.isFinite(year) ? year : null;
 }
 
@@ -113,6 +117,7 @@ interface Details {
 	last_episode_to_air?: { runtime?: number | null } | null;
 	original_language?: string;
 	vote_average?: number;
+	vote_count?: number;
 	poster_path?: string | null;
 	created_by?: CreditPerson[];
 	credits?: { cast?: CreditPerson[]; crew?: CreditPerson[] };
@@ -155,8 +160,10 @@ export async function fetchRecord(
 		originCountries: d.origin_country ?? [],
 		genres: d.genres?.map((g) => g.name) ?? [],
 		runtime: kind === 'tv' ? seriesRuntime(d) : (d.runtime ?? null),
+		releaseDate: releaseDate(d),
 		originalLanguage: d.original_language ?? null,
 		voteAverage: d.vote_average ?? null,
+		voteCount: d.vote_count ?? null,
 		posterPath: d.poster_path ?? null,
 		directors: dedupe(directors.map(toPerson)),
 		cast: d.credits?.cast?.slice(0, 10).map(toPerson) ?? []

@@ -2,7 +2,8 @@
 
 Drop your Letterboxd data-export zip and get visualizations of your film history:
 world maps of how many films you watched per country and how you rate them, rating
-habits vs TMDB, watches over time, genres, languages, directors and actors.
+habits vs TMDB, what you heart, how long after release you get to a film, how widely
+seen it is, watches over time, genres, languages, directors and actors.
 
 Your export is parsed entirely in the browser - only film titles and years are sent
 to the server to look up metadata on TMDB. Lookups are cached in SQLite so each film

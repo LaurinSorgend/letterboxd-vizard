@@ -6,6 +6,8 @@ export interface BarDatum {
 	label: string;
 	count: number;
 	avg: number | null;
+	/** A subset of `films`, drawn as its own segment of the bar. */
+	highlight?: { count: number; films: EnrichedFilm[] };
 	image?: string | null;
 	imageLarge?: string | null;
 	href?: string;
@@ -21,19 +23,29 @@ export function avgRating(films: EnrichedFilm[]): number | null {
 	return ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
 }
 
-/** Counts per rating step 0.5–5; steps with no films included. */
+/** Counts per rating step 0.5–5, each split by whether you hearted it; empty steps included. */
 export function ratingHistogram(films: EnrichedFilm[]): BarDatum[] {
 	const groups = new Map<number, EnrichedFilm[]>();
 	for (let r = 0.5; r <= 5; r += 0.5) groups.set(r, []);
 	for (const film of films) {
 		if (film.rating !== null) groups.get(film.rating)?.push(film);
 	}
-	return [...groups].map(([rating, group]) => ({
-		label: String(rating),
-		count: group.length,
-		avg: null,
-		films: group
-	}));
+	return [...groups].map(([rating, group]) => {
+		const liked = group.filter((film) => film.liked);
+		return {
+			label: String(rating),
+			count: group.length,
+			avg: null,
+			highlight: { count: liked.length, films: liked },
+			films: group
+		};
+	});
+}
+
+/** Films you hearted, and how many of those you left unrated. */
+export function likeTotals(films: EnrichedFilm[]): { liked: number; unrated: number } {
+	const liked = films.filter((film) => film.liked);
+	return { liked: liked.length, unrated: liked.filter((film) => film.rating === null).length };
 }
 
 /** Diary watch events per calendar year, gaps filled with zeros. */
@@ -105,8 +117,34 @@ export function totalRuntimeMinutes(films: EnrichedFilm[]): number {
 	return films.reduce((sum, f) => sum + (f.tmdb?.runtime ?? 0), 0);
 }
 
+/** An ordered bucket holding everything below `below` that no earlier band took. */
+interface Band {
+	label: string;
+	below: number;
+}
+
+/** Films bucketed into ordered bands by a measure; films the measure returns null for drop out. */
+function banded(
+	films: EnrichedFilm[],
+	bands: Band[],
+	measure: (film: EnrichedFilm) => number | null
+): BarDatum[] {
+	const groups = bands.map((): EnrichedFilm[] => []);
+	for (const film of films) {
+		const value = measure(film);
+		if (value === null) continue;
+		groups[bands.findIndex((band) => value < band.below)].push(film);
+	}
+	return bands.map((band, i) => ({
+		label: band.label,
+		count: groups[i].length,
+		avg: avgRating(groups[i]),
+		films: groups[i]
+	}));
+}
+
 /* Runtime bands in minutes; the last catches everything from 3h up. */
-const RUNTIME_BANDS: { label: string; below: number }[] = [
+const RUNTIME_BANDS: Band[] = [
 	{ label: '< 80m', below: 80 },
 	{ label: '80–99m', below: 100 },
 	{ label: '100–119m', below: 120 },
@@ -117,18 +155,82 @@ const RUNTIME_BANDS: { label: string; below: number }[] = [
 
 /** Films per runtime band. Series carry whole-run lengths, so a short one lands among films. */
 export function runtimeBuckets(films: EnrichedFilm[]): BarDatum[] {
-	const groups = RUNTIME_BANDS.map((): EnrichedFilm[] => []);
-	for (const film of films) {
-		const runtime = film.tmdb?.runtime;
-		if (!runtime) continue;
-		groups[RUNTIME_BANDS.findIndex((band) => runtime < band.below)].push(film);
-	}
-	return RUNTIME_BANDS.map((band, i) => ({
-		label: band.label,
-		count: groups[i].length,
-		avg: avgRating(groups[i]),
-		films: groups[i]
-	}));
+	return banded(films, RUNTIME_BANDS, (film) => film.tmdb?.runtime || null);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/* Gap bands in days between release and first watch; the last catches everything from 25y up. */
+const LAG_BANDS: Band[] = [
+	{ label: '< 1 month', below: 30 },
+	{ label: '1–6 months', below: 183 },
+	{ label: '6–12 months', below: 365 },
+	{ label: '1–3 years', below: 3 * 365 },
+	{ label: '3–10 years', below: 10 * 365 },
+	{ label: '10–25 years', below: 25 * 365 },
+	{ label: '25 years+', below: Infinity }
+];
+
+/**
+ * Days between a film's release and the first time you logged it, or null when either date is
+ * missing. Festival and regional screenings can predate TMDB's date, so those count as day zero.
+ */
+function daysToFirstWatch(film: EnrichedFilm): number | null {
+	const released = film.tmdb?.releaseDate;
+	if (!released) return null;
+	const releasedAt = Date.parse(released);
+	const watches = film.watchedDates.map((date) => Date.parse(date)).filter(Number.isFinite);
+	if (!Number.isFinite(releasedAt) || watches.length === 0) return null;
+	return Math.max(0, (Math.min(...watches) - releasedAt) / DAY_MS);
+}
+
+/** Films per gap between release and first diary entry. */
+export function watchLag(films: EnrichedFilm[]): BarDatum[] {
+	return banded(films, LAG_BANDS, daysToFirstWatch);
+}
+
+/** Median days between release and first watch, or null if no film has both dates. */
+export function medianWatchLag(films: EnrichedFilm[]): number | null {
+	const days = films
+		.map(daysToFirstWatch)
+		.filter((value): value is number => value !== null)
+		.sort((a, b) => a - b);
+	return days.length === 0 ? null : days[Math.floor(days.length / 2)];
+}
+
+/** A day count as a rough span: "12 days", "5 months", "3.2 years". */
+export function formatDays(days: number): string {
+	if (days < 60) return `${Math.round(days)} days`;
+	if (days < 365) return `${Math.round(days / 30)} months`;
+	return `${(days / 365).toFixed(1)} years`;
+}
+
+/*
+ * TMDB vote count stands in for how widely a film has been seen. Its scale is far smaller than
+ * IMDb's — even the most-rated films sit in the low tens of thousands — so the top band starts
+ * at 15k rather than the six figures an IMDb-shaped guess would suggest.
+ */
+const AUDIENCE_BANDS: Band[] = [
+	{ label: '< 100', below: 100 },
+	{ label: '100–999', below: 1_000 },
+	{ label: '1k–4.9k', below: 5_000 },
+	{ label: '5k–14.9k', below: 15_000 },
+	{ label: '15k+', below: Infinity }
+];
+
+/** Films per TMDB vote-count band, least-seen band first. */
+export function audienceBands(films: EnrichedFilm[]): BarDatum[] {
+	return banded(films, AUDIENCE_BANDS, (film) => film.tmdb?.voteCount ?? null);
+}
+
+/** Share (0–1) of films with a vote count that fall under `below`, or null if none have one. */
+export function obscurityShare(films: EnrichedFilm[], below = 1_000): number | null {
+	const counts = films
+		.map((film) => film.tmdb?.voteCount)
+		.filter((count): count is number => count !== null && count !== undefined);
+	return counts.length === 0
+		? null
+		: counts.filter((count) => count < below).length / counts.length;
 }
 
 function grouped(films: EnrichedFilm[], keysOf: (f: EnrichedFilm) => string[]): BarDatum[] {

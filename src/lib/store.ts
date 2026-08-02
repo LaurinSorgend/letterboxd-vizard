@@ -2,7 +2,8 @@ import { browser } from '$app/environment';
 import type { EnrichedFilm, Profile } from '$lib/types';
 
 /** Bump when the snapshot shape changes so stale data is ignored, not misread. */
-const KEY = 'letterboxd-vizard:snapshot:v1';
+const KEY = 'letterboxd-vizard:snapshot:v2';
+const PREFIX = 'letterboxd-vizard:snapshot:';
 
 /** The analysed result kept on the user's device so repeat visits skip re-uploading. */
 export interface Snapshot {
@@ -11,9 +12,16 @@ export interface Snapshot {
 	profile: Profile | null;
 }
 
+/** Drops snapshots left by superseded KEY generations; they are dead weight against the quota. */
+function sweepOldGenerations(): void {
+	const stale = Object.keys(localStorage).filter((key) => key.startsWith(PREFIX) && key !== KEY);
+	for (const key of stale) localStorage.removeItem(key);
+}
+
 export function loadSnapshot(): Snapshot | null {
 	if (!browser) return null;
 	try {
+		sweepOldGenerations();
 		const raw = localStorage.getItem(KEY);
 		return raw ? (JSON.parse(raw) as Snapshot) : null;
 	} catch {

@@ -1,7 +1,7 @@
 @import './typography.css';
 
 :root {
-	/* Catppuccin Latte (light, default) — see DESIGN.md */
+	/* Catppuccin Latte (light, default); see DESIGN.md */
 	--ctp-base: #eff1f5;
 	--ctp-mantle: #e6e9ef;
 	--ctp-crust: #dce0e8;
@@ -29,7 +29,7 @@
 	--ctp-blue: #1e66f5;
 	--ctp-lavender: #7287fd;
 
-	/* Semantic aliases — components use these only */
+	/* Semantic aliases: components use these only */
 	--bg: var(--ctp-base);
 	--bg-secondary: var(--ctp-mantle);
 	--bg-tertiary: var(--ctp-crust);
@@ -46,6 +46,8 @@
 	--success: var(--ctp-green);
 	--warning: var(--ctp-yellow);
 	--error: var(--ctp-red);
+	/* Letterboxd's heart, and the second series wherever a chart splits a bar by it. */
+	--liked: var(--ctp-pink);
 
 	/*
 	 * World-map bins: sequential 5-step Viridis samples per theme (DESIGN.md
@@ -66,7 +68,7 @@
 /* Mocha applies when the OS is dark and no flavor is forced. */
 @media (prefers-color-scheme: dark) {
 	:root:not([data-flavor]) {
-		/* Catppuccin Mocha — keep in sync with :root[data-flavor='mocha'] */
+		/* Catppuccin Mocha, keep in sync with :root[data-flavor='mocha'] */
 		--ctp-base: #1e1e2e;
 		--ctp-mantle: #181825;
 		--ctp-crust: #11111b;
@@ -175,7 +177,7 @@
 }
 
 :root[data-flavor='mocha'] {
-	/* Catppuccin Mocha (forced) — keep in sync with the media block above */
+	/* Catppuccin Mocha (forced), keep in sync with the media block above */
 	--ctp-base: #1e1e2e;
 	--ctp-mantle: #181825;
 	--ctp-crust: #11111b;
@@ -210,7 +212,7 @@
 	--map-bin-4: #dfe318;
 }
 
-/* Accent picker — default stays Blue; --focus and --on-accent are unaffected. */
+/* Accent picker: default stays Blue; --focus and --on-accent are unaffected. */
 :root[data-accent='rosewater'] {
 	--accent: var(--ctp-rosewater);
 }
