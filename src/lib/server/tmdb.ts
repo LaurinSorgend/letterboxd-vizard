@@ -17,7 +17,7 @@ interface SearchResult {
 
 function apiKey(): string {
 	const key = env.TMDB_API_KEY;
-	if (!key) throw new Error('TMDB_API_KEY is not set — add it to .env');
+	if (!key) throw new Error('TMDB_API_KEY is not set, add it to .env');
 	return key;
 }
 
@@ -40,7 +40,7 @@ export async function tmdbGet(
 		if (response.ok) return response.json();
 		const detail = await response.text();
 		const retryable = response.status === 429 || response.status >= 500;
-		// A budget spent during the backoff means "deferred", not a real TMDB failure — keep it typed.
+		// A budget spent during the backoff means "deferred", not a real TMDB failure; keep it typed.
 		if (budget.exhausted) throw new BudgetExhausted();
 		if (!retryable || attempt > 0) {
 			throw new Error(`TMDB ${path} failed: ${response.status} ${detail}`);
@@ -61,6 +61,24 @@ function releaseYear(result: SearchResult): number | null {
 	return Number.isFinite(year) ? year : null;
 }
 
+const COMBINING_MARKS = /[̀-ͯ]/g;
+
+/** Case/accent/punctuation-insensitive, so "Amélie" and "amelie" line up. */
+function normalizeTitle(name: string): string {
+	return name
+		.normalize('NFD')
+		.replace(COMBINING_MARKS, '')
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
+		.trim();
+}
+
+/** TMDB ranks search results by relevance and popularity, not title equality. */
+function exactTitleMatch(results: SearchResult[], name: string): SearchResult | undefined {
+	const target = normalizeTitle(name);
+	return results.find((r) => normalizeTitle(r.title ?? r.name ?? '') === target);
+}
+
 async function searchWithYear(
 	budget: FetchBudget,
 	kind: 'movie' | 'tv',
@@ -72,7 +90,7 @@ async function searchWithYear(
 		query: name,
 		[yearParam]: String(year)
 	})) as { results: SearchResult[] };
-	return results[0] ?? null;
+	return exactTitleMatch(results, name) ?? null;
 }
 
 async function searchLoose(
@@ -85,6 +103,12 @@ async function searchLoose(
 		results: SearchResult[];
 	};
 	if (results.length === 0) return null;
+	const exact = exactTitleMatch(results, name);
+	if (exact) {
+		const ry = releaseYear(exact);
+		const yearMatch = year === null || (ry !== null && Math.abs(ry - year) <= 1);
+		return { result: exact, yearMatch };
+	}
 	if (year !== null) {
 		const near = results.find((r) => {
 			const ry = releaseYear(r);
@@ -150,7 +174,7 @@ function dedupe(people: Person[]): Person[] {
 /**
  * Whole-run length of a series in minutes, or null if TMDB gives nothing to go on.
  * TMDB leaves `episode_run_time` empty or zeroed for many shows, so the last episode's
- * length stands in for a typical one — an estimate that overshoots when a finale runs long.
+ * length stands in for a typical one, an estimate that overshoots when a finale runs long.
  */
 function seriesRuntime(d: Details): number | null {
 	const perEpisode = d.episode_run_time?.find((m) => m > 0) ?? d.last_episode_to_air?.runtime;

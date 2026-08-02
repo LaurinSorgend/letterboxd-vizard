@@ -19,10 +19,10 @@ function chunks<T>(list: T[], size: number): T[][] {
 
 /**
  * Bump SCHEMA when the shape or meaning of a cached TmdbMovie changes. Keys are built before
- * the media type is known, so a bump invalidates every record — when only one kind of record
+ * the media type is known, so a bump invalidates every record, when only one kind of record
  * changed, a targeted delete costs a great deal less than the re-warm a bump forces.
  */
-const SCHEMA = 'v4';
+const SCHEMA = 'v5';
 
 export function cacheKey(name: string, year: number | null): string {
 	return `${SCHEMA}::${name.trim().toLowerCase()}::${year ?? ''}`;
