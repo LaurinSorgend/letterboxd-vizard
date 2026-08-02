@@ -5,6 +5,10 @@ world maps of how many films you watched per country and how you rate them, rati
 habits vs TMDB, what you heart, how long after release you get to a film, how widely
 seen it is, watches over time, genres, languages, directors and actors.
 
+![Example Image 1](/docs/assets/1.jpg)
+![Example Image 2](/docs/assets/2.jpg)
+![Example Image 3](/docs/assets/3.jpg)
+
 Your export is parsed entirely in the browser - only film titles and years are sent
 to the server to look up metadata on TMDB. Lookups are cached in SQLite so each film
 is fetched from TMDB at most once, no matter how many users analyze it. The cache is a
