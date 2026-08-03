@@ -7,7 +7,8 @@
 	let { films }: { films: EnrichedFilm[] } = $props();
 
 	const years = $derived(eligibleYears(films, new Date()));
-	let chosen: number | null = $state(null);
+	// svelte-ignore state_referenced_locally
+	let chosen: number | null = $state(Math.max(...years));
 	const year = $derived(chosen !== null && years.includes(chosen) ? chosen : (years[0] ?? null));
 	const recap = $derived(year === null ? null : buildRecap(films, year));
 
@@ -164,6 +165,9 @@
 {/if}
 
 <style>
+	section {
+		margin: 32px 0;
+	}
 	.picker {
 		display: flex;
 		flex-wrap: wrap;

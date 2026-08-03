@@ -132,6 +132,9 @@
 {/if}
 
 <style>
+	section {
+		margin: 32px 0;
+	}
 	.note {
 		font-size: var(--text-sm);
 		color: var(--fg-muted);

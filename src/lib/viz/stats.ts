@@ -1,5 +1,6 @@
 import { imageUrl } from './images';
 import { getOrCreate } from '$lib/collections';
+import { stripDiacritics } from '$lib/text';
 import type { Collection, EnrichedFilm } from '$lib/types';
 
 export interface BarDatum {
@@ -263,9 +264,7 @@ export function byLanguage(films: EnrichedFilm[]): BarDatum[] {
 
 /** Letterboxd person-page slug: lowercase, diacritics stripped, hyphens. */
 function letterboxdSlug(name: string): string {
-	return name
-		.normalize('NFD')
-		.replace(/\p{Diacritic}/gu, '')
+	return stripDiacritics(name)
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
 		.replace(/^-+|-+$/g, '');

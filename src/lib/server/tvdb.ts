@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import worldCountries from 'world-countries';
 import type { TmdbMovie } from '$lib/types';
+import { normalizeTitle } from '$lib/text';
 import type { FetchBudget } from './budget';
 
 const BASE = 'https://api4.thetvdb.com/v4';
@@ -56,6 +57,31 @@ function seriesRuntime(details: TvdbSeries): number | null {
 	return details.averageRuntime * episodes;
 }
 
+function tvdbYear(result: TvdbSearchResult): number | null {
+	const year = Number.parseInt(result.year ?? '', 10);
+	return Number.isFinite(year) ? year : null;
+}
+
+/** TheTVDB ranks search results by relevance, not title equality. */
+function exactTitleMatches(results: TvdbSearchResult[], name: string): TvdbSearchResult[] {
+	const target = normalizeTitle(name);
+	return results.filter((r) => normalizeTitle(r.name) === target);
+}
+
+/** Among same-titled results, the one closest to `year` wins. */
+function closestToYear(
+	results: TvdbSearchResult[],
+	year: number | null
+): TvdbSearchResult | undefined {
+	if (year === null) return results[0];
+	return (
+		results.find((r) => {
+			const ry = tvdbYear(r);
+			return ry !== null && Math.abs(ry - year) <= 1;
+		}) ?? results[0]
+	);
+}
+
 /**
  * Last-resort series lookup on TheTVDB; returns null when no TVDB_API_KEY is set.
  * Records get negative ids so they never collide with TMDB ids.
@@ -71,11 +97,7 @@ export async function lookupSeriesOnTvdb(
 	const { data: results } = (await tvdbGet(budget, `/search?query=${query}&type=series`)) as {
 		data: TvdbSearchResult[];
 	};
-	const match =
-		year === null
-			? results[0]
-			: (results.find((r) => Math.abs(Number.parseInt(r.year ?? '', 10) - year) <= 1) ??
-				results[0]);
+	const match = closestToYear(exactTitleMatches(results, name), year);
 	if (!match) return null;
 
 	// A non-numeric tvdb_id would poison the negative id and break the INTEGER cache write.

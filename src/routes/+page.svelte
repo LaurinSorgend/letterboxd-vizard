@@ -535,7 +535,7 @@
 		accent-color: var(--accent);
 	}
 	section {
-		margin-bottom: 32px;
+		margin: 32px 0;
 	}
 	section:first-of-type {
 		margin-top: 24px;

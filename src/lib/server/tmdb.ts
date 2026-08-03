@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import type { Collection, Person, TmdbMovie } from '$lib/types';
+import { normalizeTitle } from '$lib/text';
 import { BudgetExhausted, type FetchBudget } from './budget';
 import { lookupSeriesOnTvdb } from './tvdb';
 
@@ -39,12 +40,9 @@ export async function tmdbGet(
 		const response = await fetch(url, { headers });
 		if (response.ok) return response.json();
 		const detail = await response.text();
-		const retryable = response.status === 429 || response.status >= 500;
-		// A budget spent during the backoff means "deferred", not a real TMDB failure; keep it typed.
+		const canRetry = (response.status === 429 || response.status >= 500) && attempt === 0;
+		if (!canRetry) throw new Error(`TMDB ${path} failed: ${response.status} ${detail}`);
 		if (budget.exhausted) throw new BudgetExhausted();
-		if (!retryable || attempt > 0) {
-			throw new Error(`TMDB ${path} failed: ${response.status} ${detail}`);
-		}
 		const after = Number(response.headers.get('Retry-After')) * 1000;
 		const wait = after > 0 ? Math.min(after, MAX_RETRY_WAIT_MS) : RETRY_WAIT_MS;
 		await new Promise((resolve) => setTimeout(resolve, wait));
@@ -61,22 +59,21 @@ function releaseYear(result: SearchResult): number | null {
 	return Number.isFinite(year) ? year : null;
 }
 
-const COMBINING_MARKS = /[̀-ͯ]/g;
-
-/** Case/accent/punctuation-insensitive, so "Amélie" and "amelie" line up. */
-function normalizeTitle(name: string): string {
-	return name
-		.normalize('NFD')
-		.replace(COMBINING_MARKS, '')
-		.toLowerCase()
-		.replace(/[^\p{L}\p{N}]+/gu, ' ')
-		.trim();
+/** TMDB ranks search results by relevance and popularity, not title equality. */
+function exactTitleMatches(results: SearchResult[], name: string): SearchResult[] {
+	const target = normalizeTitle(name);
+	return results.filter((r) => normalizeTitle(r.title ?? r.name ?? '') === target);
 }
 
-/** TMDB ranks search results by relevance and popularity, not title equality. */
-function exactTitleMatch(results: SearchResult[], name: string): SearchResult | undefined {
-	const target = normalizeTitle(name);
-	return results.find((r) => normalizeTitle(r.title ?? r.name ?? '') === target);
+/** Among same-titled results (e.g. a remake sharing its original's name), the one closest to `year` wins. */
+function closestToYear(results: SearchResult[], year: number | null): SearchResult | undefined {
+	if (year === null) return results[0];
+	return (
+		results.find((r) => {
+			const ry = releaseYear(r);
+			return ry !== null && Math.abs(ry - year) <= 1;
+		}) ?? results[0]
+	);
 }
 
 async function searchWithYear(
@@ -90,7 +87,7 @@ async function searchWithYear(
 		query: name,
 		[yearParam]: String(year)
 	})) as { results: SearchResult[] };
-	return exactTitleMatch(results, name) ?? null;
+	return closestToYear(exactTitleMatches(results, name), year) ?? null;
 }
 
 async function searchLoose(
@@ -103,7 +100,7 @@ async function searchLoose(
 		results: SearchResult[];
 	};
 	if (results.length === 0) return null;
-	const exact = exactTitleMatch(results, name);
+	const exact = closestToYear(exactTitleMatches(results, name), year);
 	if (exact) {
 		const ry = releaseYear(exact);
 		const yearMatch = year === null || (ry !== null && Math.abs(ry - year) <= 1);
@@ -215,11 +212,13 @@ export async function fetchRecord(
 	};
 }
 
-/**
- * Resolves a Letterboxd (title, year) pair to a compact metadata record, or null.
- * Year-respecting matches win before wrong-year fallbacks:
- * movie@year → tv@year → movie±1 → tv±1 → any movie → any tv → TheTVDB.
- */
+/** Runs `factory` at most once, on first access, and reuses its result after that. */
+function lazy<T>(factory: () => Promise<T>): () => Promise<T> {
+	let cached: Promise<T> | undefined;
+	return () => (cached ??= factory());
+}
+
+/** Resolves a Letterboxd (title, year) pair to a compact metadata record, or null. */
 export async function lookupMovie(
 	budget: FetchBudget,
 	name: string,
@@ -232,13 +231,35 @@ export async function lookupMovie(
 		if (tv) return fetchRecord(budget, 'tv', tv.id);
 	}
 
-	const movieLoose = await searchLoose(budget, 'movie', name, year);
-	if (movieLoose?.yearMatch) return fetchRecord(budget, 'movie', movieLoose.result.id);
-	const tvLoose = await searchLoose(budget, 'tv', name, year);
-	if (tvLoose?.yearMatch) return fetchRecord(budget, 'tv', tvLoose.result.id);
+	const tvdb = await lookupSeriesOnTvdb(budget, name, year);
+	if (tvdb) return tvdb;
 
-	if (movieLoose) return fetchRecord(budget, 'movie', movieLoose.result.id);
-	if (tvLoose) return fetchRecord(budget, 'tv', tvLoose.result.id);
+	const movieLoose = lazy(() => searchLoose(budget, 'movie', name, year));
+	const tvLoose = lazy(() => searchLoose(budget, 'tv', name, year));
 
-	return lookupSeriesOnTvdb(budget, name, year);
+	const looseTiers: { kind: 'movie' | 'tv'; find: () => Promise<SearchResult | null> }[] = [
+		{
+			kind: 'movie',
+			find: async () => {
+				const loose = await movieLoose();
+				return loose?.yearMatch ? loose.result : null;
+			}
+		},
+		{
+			kind: 'tv',
+			find: async () => {
+				const loose = await tvLoose();
+				return loose?.yearMatch ? loose.result : null;
+			}
+		},
+		{ kind: 'movie', find: async () => (await movieLoose())?.result ?? null },
+		{ kind: 'tv', find: async () => (await tvLoose())?.result ?? null }
+	];
+
+	for (const tier of looseTiers) {
+		const match = await tier.find();
+		if (match) return fetchRecord(budget, tier.kind, match.id);
+	}
+
+	return null;
 }
