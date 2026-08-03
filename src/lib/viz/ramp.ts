@@ -1,14 +1,31 @@
 /* Bin colors live in app.css (--map-bin-0…4); this module owns thresholds and labels. */
 
-export const RATING_THRESHOLDS = [3, 3.5, 4, 4.5];
-export const RATING_BIN_LABELS = ['< 3', '3–3.4', '3.5–3.9', '4–4.4', '4.5+'];
+/** One bin per half-star, matching Letterboxd's own rating granularity exactly. */
+export const HALF_STAR_THRESHOLDS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
 
-/** Four geometric thresholds between 2 and max, giving 5 count bins. */
+/** For a single film's exact rating (always a half-star value itself). */
+export const HALF_STAR_LABELS = ['0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '4.5', '5'];
+
+/**
+ * For a continuous average (world map, heatmaps): each bin is a range, since an average can land
+ * anywhere between half-stars, not just on one. 0.5 is the floor (no film rates below it) and 5
+ * the ceiling, so unlike `countBinLabels` neither end is left open.
+ */
+export const HALF_STAR_RANGE_LABELS = (() => {
+	const bounds = [0.5, ...HALF_STAR_THRESHOLDS];
+	return bounds.map((lo, i) => {
+		if (i === HALF_STAR_THRESHOLDS.length) return `${lo}`;
+		const hi = bounds[i + 1] - 0.1;
+		return `${lo}–${hi.toFixed(1)}`;
+	});
+})();
+
+/** Nine geometric thresholds between 2 and max, giving 10 count bins. */
 export function countThresholds(max: number): number[] {
-	if (max <= 5) return [2, 3, 4, 5];
+	if (max <= 10) return Array.from({ length: 9 }, (_, i) => i + 2);
 	const thresholds: number[] = [];
-	for (let i = 1; i <= 4; i++) {
-		let t = Math.round(max ** (i / 5));
+	for (let i = 1; i <= 9; i++) {
+		let t = Math.round(max ** (i / 10));
 		while (thresholds.includes(t) || t < 2) t += 1;
 		thresholds.push(t);
 	}

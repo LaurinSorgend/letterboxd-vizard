@@ -12,8 +12,8 @@
 		countThresholds,
 		countBinLabels,
 		binIndex,
-		RATING_BIN_LABELS,
-		RATING_THRESHOLDS
+		HALF_STAR_RANGE_LABELS,
+		HALF_STAR_THRESHOLDS
 	} from './ramp';
 	import type { EnrichedFilm } from '$lib/types';
 
@@ -160,8 +160,16 @@
 	}
 
 	const maxCount = $derived(Math.max(1, ...[...stats.values()].map((s) => s.count)));
-	const thresholds = $derived(metric === 'count' ? countThresholds(maxCount) : RATING_THRESHOLDS);
-	const binLabels = $derived(metric === 'count' ? countBinLabels(thresholds) : RATING_BIN_LABELS);
+	const thresholds = $derived(
+		metric === 'count' ? countThresholds(maxCount) : HALF_STAR_THRESHOLDS
+	);
+	const binLabels = $derived(
+		metric === 'count' ? countBinLabels(thresholds) : HALF_STAR_RANGE_LABELS
+	);
+	/** The scale's real endpoints, shown next to Less/More. */
+	const legendRange = $derived(
+		metric === 'count' ? { min: '1', max: String(maxCount) } : { min: '0.5', max: '5' }
+	);
 
 	onMount(async () => {
 		const topo = (await import('world-atlas/countries-50m.json')).default as unknown as Topology<{
@@ -327,9 +335,13 @@
 	</div>
 
 	<div class="legend" aria-hidden="true">
-		{#each binLabels as label, i (i)}
-			<span data-numeric><i class="swatch bin-{i}"></i>{label}</span>
-		{/each}
+		<span class="less">Less <span data-numeric>({legendRange.min})</span></span>
+		<span class="scale">
+			{#each binLabels as label, i (i)}
+				<i class="swatch bin-{i}" title={label}></i>
+			{/each}
+		</span>
+		<span class="more">More <span data-numeric>({legendRange.max})</span></span>
 		{#if metric === 'rating'}
 			<span><i class="swatch few"></i>no ratings</span>
 		{/if}
@@ -386,6 +398,26 @@
 	.bin-4 {
 		fill: var(--map-bin-4);
 		background: var(--map-bin-4);
+	}
+	.bin-5 {
+		fill: var(--map-bin-5);
+		background: var(--map-bin-5);
+	}
+	.bin-6 {
+		fill: var(--map-bin-6);
+		background: var(--map-bin-6);
+	}
+	.bin-7 {
+		fill: var(--map-bin-7);
+		background: var(--map-bin-7);
+	}
+	.bin-8 {
+		fill: var(--map-bin-8);
+		background: var(--map-bin-8);
+	}
+	.bin-9 {
+		fill: var(--map-bin-9);
+		background: var(--map-bin-9);
 	}
 
 	.nodata {
@@ -498,6 +530,14 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
+	}
+	.less,
+	.more {
+		color: var(--fg-muted);
+	}
+	.scale {
+		display: inline-flex;
+		gap: 2px;
 	}
 	.swatch {
 		width: 14px;

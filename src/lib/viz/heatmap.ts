@@ -1,4 +1,4 @@
-import { binIndex, RATING_BIN_LABELS, RATING_THRESHOLDS } from './ramp';
+import { binIndex, HALF_STAR_RANGE_LABELS, HALF_STAR_THRESHOLDS } from './ramp';
 import { avgRating } from './stats';
 import { getOrCreate } from '$lib/collections';
 import type { EnrichedFilm } from '$lib/types';
@@ -33,7 +33,8 @@ export function heatScale(
 	grid: HeatmapGrid,
 	metric: HeatMetric
 ): { thresholds: number[]; legend: string[] } {
-	if (metric === 'rating') return { thresholds: RATING_THRESHOLDS, legend: RATING_BIN_LABELS };
+	if (metric === 'rating')
+		return { thresholds: HALF_STAR_THRESHOLDS, legend: HALF_STAR_RANGE_LABELS };
 	return { thresholds: grid.watchtimeThresholds, legend: grid.watchtimeLegend };
 }
 
@@ -48,11 +49,26 @@ export function cellBin(
 	return cell.rating === null ? 'few' : binIndex(cell.rating, thresholds);
 }
 
+/** Compact minutes/hours label, e.g. `45m`, `2h`, `2.5h`; used for cell tooltips and legend ends. */
+export function minuteLabel(minutes: number): string {
+	if (minutes < 60) return `${minutes}m`;
+	return minutes % 60 === 0 ? `${minutes / 60}h` : `${(minutes / 60).toFixed(1)}h`;
+}
+
+/** Range labels for fixed (non-quantile) watchtime thresholds, one bin per gap plus an open top. */
+function fixedWatchtimeLegend(thresholds: number[]): string[] {
+	const legend = thresholds.map((t, i) =>
+		i === 0 ? `< ${minuteLabel(t)}` : `${minuteLabel(thresholds[i - 1])}–${minuteLabel(t)}`
+	);
+	legend.push(`${minuteLabel(thresholds[thresholds.length - 1])}+`);
+	return legend;
+}
+
 /* Watchtime bins in minutes; index i = value >= threshold[i-1]. Map colors reused. */
-const DAILY_THRESHOLDS = [60, 120, 240, 360];
-const DAILY_LEGEND = ['< 1h', '1–2h', '2–4h', '4–6h', '6h+'];
-const WEEKLY_THRESHOLDS = [180, 360, 720, 1200];
-const WEEKLY_LEGEND = ['< 3h', '3–6h', '6–12h', '12–20h', '20h+'];
+const DAILY_THRESHOLDS = [30, 60, 90, 120, 150, 180, 240, 300, 360];
+const DAILY_LEGEND = fixedWatchtimeLegend(DAILY_THRESHOLDS);
+const WEEKLY_THRESHOLDS = [90, 180, 300, 420, 570, 720, 900, 1080, 1290];
+const WEEKLY_LEGEND = fixedWatchtimeLegend(WEEKLY_THRESHOLDS);
 
 const DAY_MS = 86_400_000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -163,10 +179,10 @@ function dailyLabel(day: Date): string {
 	return `${WEEKDAYS[day.getUTCDay()]}, ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()}`;
 }
 
-/* Four cuts give the five bins the map colors provide (--map-bin-0…4). */
-const QUANTILES = [0.2, 0.4, 0.6, 0.8];
+/* Nine cuts give the ten bins the map colors provide (--map-bin-0…9). */
+const QUANTILES = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
 
-/** The four quantile cuts of `minutes`, ignoring periods with nothing to measure. */
+/** The nine quantile cuts of `minutes`, ignoring periods with nothing to measure. */
 function quantileCuts(minutes: number[]): number[] {
 	const sorted = minutes.filter((m) => m > 0).sort((a, b) => a - b);
 	if (sorted.length === 0) return [];
@@ -174,7 +190,7 @@ function quantileCuts(minutes: number[]): number[] {
 }
 
 /**
- * Five roughly even watchtime bins drawn from the non-empty cells, rounded to whole hours.
+ * Ten roughly even watchtime bins drawn from the non-empty cells, rounded to whole hours.
  * Genre totals scale with library size, so fixed cuts would saturate or starve the ramp.
  */
 function watchtimeBins(minutes: number[]): { thresholds: number[]; legend: string[] } {
@@ -214,7 +230,7 @@ function scaleRowsIndependently(rows: HeatCell[][]): GridScale {
 		const thresholds = quantileCuts(row.map((cell) => cell.minutes));
 		for (const cell of row) cell.watchtimeBin = binIndex(cell.minutes, thresholds);
 	}
-	return { watchtimeThresholds: [], watchtimeLegend: ['', '', '', '', 'More'] };
+	return { watchtimeThresholds: [], watchtimeLegend: ['', '', '', '', '', '', '', '', '', 'More'] };
 }
 
 /** Bins every row against one scale drawn from the whole grid. */

@@ -4,6 +4,7 @@
 		cellBin,
 		formatWatchtime,
 		heatScale,
+		minuteLabel,
 		type HeatMetric,
 		type HeatmapGrid,
 		type HeatCell
@@ -25,6 +26,16 @@
 		fitWidth ? `min(${cellSize}px, (100vw - 180px) / ${cols})` : `${cellSize}px`
 	);
 	const scale = $derived(heatScale(grid, metric));
+	/** The scale's real endpoints, shown next to Less/More: fixed for rating, the grid's actual
+	 *  busiest cell for watchtime (bins are quantile cuts, not a round number). */
+	const legendRange = $derived.by(() => {
+		if (metric === 'rating') return { min: '0.5', max: '5' };
+		let max = 0;
+		for (const row of grid.rows) {
+			for (const cell of row) if (cell && cell.minutes > max) max = cell.minutes;
+		}
+		return { min: '0', max: minuteLabel(max) };
+	});
 	const description = $derived(
 		`${metric === 'rating' ? 'Average rating' : 'Watchtime'} ${grid.period}`
 	);
@@ -110,10 +121,13 @@
 		</div>
 
 		<div class="legend" aria-hidden="true">
-			<span class="less">Less</span>
-			{#each scale.legend as label, i (i)}
-				<span class="key" data-numeric={numeric(label)}><i class="swatch bin-{i}"></i>{label}</span>
-			{/each}
+			<span class="less">Less <span data-numeric>({legendRange.min})</span></span>
+			<span class="scale">
+				{#each scale.legend as label, i (i)}
+					<i class="swatch bin-{i}" title={label}></i>
+				{/each}
+			</span>
+			<span class="more">More <span data-numeric>({legendRange.max})</span></span>
 			{#if metric === 'rating'}
 				<span class="key"><i class="swatch few"></i>no ratings</span>
 			{/if}
@@ -198,6 +212,21 @@
 	.bin-4 {
 		background: var(--map-bin-4);
 	}
+	.bin-5 {
+		background: var(--map-bin-5);
+	}
+	.bin-6 {
+		background: var(--map-bin-6);
+	}
+	.bin-7 {
+		background: var(--map-bin-7);
+	}
+	.bin-8 {
+		background: var(--map-bin-8);
+	}
+	.bin-9 {
+		background: var(--map-bin-9);
+	}
 
 	.legend {
 		display: flex;
@@ -213,8 +242,13 @@
 		align-items: center;
 		gap: 4px;
 	}
-	.less {
+	.less,
+	.more {
 		color: var(--fg-muted);
+	}
+	.scale {
+		display: inline-flex;
+		gap: 2px;
 	}
 	.swatch {
 		width: 13px;

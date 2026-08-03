@@ -77,7 +77,7 @@
 	const dayBuckets = $derived(bucketsByDay(films));
 	const dailyHeatmap = $derived(buildDailyHeatmap(dayBuckets, currentYear));
 	const weeklyHeatmap = $derived(buildWeeklyHeatmap(dayBuckets));
-	let heatMetric: HeatMetric = $state('watchtime');
+	let heatMetric: HeatMetric = $state('rating');
 	let seasonScale: SeasonScale = $state('genre');
 	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
 

@@ -50,19 +50,43 @@
 	--liked: var(--ctp-pink);
 
 	/*
-	 * World-map bins: sequential 5-step Viridis samples per theme (DESIGN.md
-	 * data-scale exception; most CVD-friendly of the perceptually-uniform maps).
-	 * Light: t 0.65→0.05 (more = darker); dark: t 0.37→0.95 (more = lighter,
-	 * start shifted so bin 0 clears the 2:1 contrast floor on Frappé). Monotone
-	 * lightness, step gaps, and surface contrast validated against all four
-	 * flavor bases with the dataviz palette checker (--ordinal).
-	 * Index 0 = lowest bin.
+	 * Shared sequential bin ramp: the full 10-step Viridis scale (DESIGN.md's fixed
+	 * endpoints, darkest #440154 to lightest #fde725), same in every theme so the
+	 * min/max colors are always the same two colors, not a range clipped per theme.
+	 * One scale for every binned metric — map film counts, map/heatmap average
+	 * rating (one bin per half-star), and heatmap watchtime — so they read as the
+	 * same kind of value everywhere. Index 0 = lowest bin.
 	 */
-	--map-bin-0: #2fb47c;
-	--map-bin-1: #21918c;
-	--map-bin-2: #2f6c8e;
-	--map-bin-3: #414487;
-	--map-bin-4: #471365;
+	--map-bin-0: #440154;
+	--map-bin-1: #472776;
+	--map-bin-2: #3e4987;
+	--map-bin-3: #31668d;
+	--map-bin-4: #26828d;
+	--map-bin-5: #249d88;
+	--map-bin-6: #39b677;
+	--map-bin-7: #6dcc58;
+	--map-bin-8: #b3dd31;
+	--map-bin-9: #fde725;
+
+	/*
+	 * Network-graph degree ramp: 10-step Plasma resample (DESIGN.md's other approved
+	 * data-scale), kept distinct from --map-bin's Viridis so a rating fill and a
+	 * degree fill are never mistaken for the same scale. Interpolated from DESIGN.md's
+	 * 9-stop Plasma reference. Light theme runs t 0→1 (darkest first) for contrast
+	 * against a light base; dark themes run t 1→0 (brightest first) for contrast
+	 * against a dark base. Index 0 = 1st degree (closest), 9 = 10th (furthest); the
+	 * tail end deliberately nears each theme's background as the ripple fades out.
+	 */
+	--degree-bin-0: #0c0887;
+	--degree-bin-1: #44049e;
+	--degree-bin-2: #7203a6;
+	--degree-bin-3: #9a189c;
+	--degree-bin-4: #bb3686;
+	--degree-bin-5: #d7566d;
+	--degree-bin-6: #eb7954;
+	--degree-bin-7: #f99e3b;
+	--degree-bin-8: #fcc927;
+	--degree-bin-9: #f0f921;
 }
 
 /* Mocha applies when the OS is dark and no flavor is forced. */
@@ -96,11 +120,16 @@
 		--ctp-blue: #89b4fa;
 		--ctp-lavender: #b4befe;
 
-		--map-bin-0: #2d718e;
-		--map-bin-1: #20938c;
-		--map-bin-2: #32b67a;
-		--map-bin-3: #7fd34e;
-		--map-bin-4: #dfe318;
+		--degree-bin-0: #f0f921;
+		--degree-bin-1: #fcc927;
+		--degree-bin-2: #f99e3b;
+		--degree-bin-3: #eb7954;
+		--degree-bin-4: #d7566d;
+		--degree-bin-5: #bb3686;
+		--degree-bin-6: #9a189c;
+		--degree-bin-7: #7203a6;
+		--degree-bin-8: #44049e;
+		--degree-bin-9: #0c0887;
 	}
 }
 
@@ -133,11 +162,16 @@
 	--ctp-blue: #8caaee;
 	--ctp-lavender: #babbf1;
 
-	--map-bin-0: #2d718e;
-	--map-bin-1: #20938c;
-	--map-bin-2: #32b67a;
-	--map-bin-3: #7fd34e;
-	--map-bin-4: #dfe318;
+	--degree-bin-0: #f0f921;
+	--degree-bin-1: #fcc927;
+	--degree-bin-2: #f99e3b;
+	--degree-bin-3: #eb7954;
+	--degree-bin-4: #d7566d;
+	--degree-bin-5: #bb3686;
+	--degree-bin-6: #9a189c;
+	--degree-bin-7: #7203a6;
+	--degree-bin-8: #44049e;
+	--degree-bin-9: #0c0887;
 }
 
 :root[data-flavor='macchiato'] {
@@ -169,11 +203,16 @@
 	--ctp-blue: #8aadf4;
 	--ctp-lavender: #b7bdf8;
 
-	--map-bin-0: #2d718e;
-	--map-bin-1: #20938c;
-	--map-bin-2: #32b67a;
-	--map-bin-3: #7fd34e;
-	--map-bin-4: #dfe318;
+	--degree-bin-0: #f0f921;
+	--degree-bin-1: #fcc927;
+	--degree-bin-2: #f99e3b;
+	--degree-bin-3: #eb7954;
+	--degree-bin-4: #d7566d;
+	--degree-bin-5: #bb3686;
+	--degree-bin-6: #9a189c;
+	--degree-bin-7: #7203a6;
+	--degree-bin-8: #44049e;
+	--degree-bin-9: #0c0887;
 }
 
 :root[data-flavor='mocha'] {
@@ -205,11 +244,16 @@
 	--ctp-blue: #89b4fa;
 	--ctp-lavender: #b4befe;
 
-	--map-bin-0: #2d718e;
-	--map-bin-1: #20938c;
-	--map-bin-2: #32b67a;
-	--map-bin-3: #7fd34e;
-	--map-bin-4: #dfe318;
+	--degree-bin-0: #f0f921;
+	--degree-bin-1: #fcc927;
+	--degree-bin-2: #f99e3b;
+	--degree-bin-3: #eb7954;
+	--degree-bin-4: #d7566d;
+	--degree-bin-5: #bb3686;
+	--degree-bin-6: #9a189c;
+	--degree-bin-7: #7203a6;
+	--degree-bin-8: #44049e;
+	--degree-bin-9: #0c0887;
 }
 
 /* Accent picker: default stays Blue; --focus and --on-accent are unaffected. */

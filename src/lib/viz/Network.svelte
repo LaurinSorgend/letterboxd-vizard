@@ -1,7 +1,7 @@
 <script lang="ts">
 	import MetricToggle from './MetricToggle.svelte';
 	import { webHref } from './href';
-	import { RATING_BIN_LABELS } from './ramp';
+	import { HALF_STAR_LABELS } from './ramp';
 	import { buildNetwork, NET_HEIGHT, NET_WIDTH, type NetworkNode } from './network';
 	import type { EnrichedFilm } from '$lib/types';
 
@@ -30,16 +30,44 @@
 		})
 	);
 
-	/** Every node one edge away from `index`, plus the node itself. */
-	const focus = $derived.by(() => {
-		if (selected === null) return null;
-		const near = new Set<number>([selected]);
+	/** Neighbor lookup shared by every BFS, so re-selecting a node doesn't re-scan all edges. */
+	const adjacency = $derived.by(() => {
+		const map = new Map<number, number[]>();
 		for (const edge of graph.edges) {
-			if (edge.source === selected) near.add(edge.target);
-			if (edge.target === selected) near.add(edge.source);
+			(map.get(edge.source) ?? map.set(edge.source, []).get(edge.source)!).push(edge.target);
+			(map.get(edge.target) ?? map.set(edge.target, []).get(edge.target)!).push(edge.source);
 		}
-		return near;
+		return map;
 	});
+
+	const MAX_DEGREE = 10;
+	const DEGREE_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
+
+	/** Hop distance from the selected node, out to `MAX_DEGREE`; the selected node itself is 0. */
+	const focusDist = $derived.by(() => {
+		if (selected === null) return null;
+		const dist = new Map<number, number>([[selected, 0]]);
+		let frontier = [selected];
+		for (let d = 1; d <= MAX_DEGREE && frontier.length > 0; d++) {
+			const next: number[] = [];
+			for (const index of frontier) {
+				for (const neighbor of adjacency.get(index) ?? []) {
+					if (!dist.has(neighbor)) {
+						dist.set(neighbor, d);
+						next.push(neighbor);
+					}
+				}
+			}
+			frontier = next;
+		}
+		return dist;
+	});
+
+	/** Whether an edge sits between two nodes both still within `MAX_DEGREE` of the selection. */
+	function edgeInFocus(edge: { source: number; target: number }): boolean {
+		if (focusDist === null) return true;
+		return focusDist.has(edge.source) && focusDist.has(edge.target);
+	}
 
 	/** For the selected film, who it connects to and which billed people the two share. */
 	const connections = $derived.by(() => {
@@ -59,7 +87,12 @@
 		return `${node.film.name}${year}${rating}, connected to ${node.degree} films`;
 	}
 
-	function fillClass(node: NetworkNode): string {
+	/** Rating colour normally; while a node is selected, its neighbors switch to a degree colour
+	 *  instead, so the ripple outward from the click reads at a glance. The selected node itself
+	 *  keeps its rating colour, as the anchor the ripple is measured from. */
+	function fillClass(node: NetworkNode, index: number): string {
+		const degree = focusDist?.get(index);
+		if (focusDist !== null && degree !== undefined && degree > 0) return `degree-${degree - 1}`;
 		return node.bin === null ? 'unrated' : `bin-${node.bin}`;
 	}
 
@@ -117,7 +150,7 @@
 				{#each graph.edges as edge (`${edge.source}-${edge.target}`)}
 					<line
 						class="edge shared-{Math.min(3, edge.shared.length)}"
-						class:dim={focus !== null && !(focus.has(edge.source) && focus.has(edge.target))}
+						class:dim={!edgeInFocus(edge)}
 						x1={graph.nodes[edge.source].x}
 						y1={graph.nodes[edge.source].y}
 						x2={graph.nodes[edge.target].x}
@@ -128,7 +161,7 @@
 			{#each graph.nodes as node, index (node.film.uri)}
 				<g
 					class="node"
-					class:dim={focus !== null && !focus.has(index)}
+					class:dim={focusDist !== null && !focusDist.has(index)}
 					class:selected={selected === index}
 					role="button"
 					tabindex="0"
@@ -146,7 +179,7 @@
 					}}
 				>
 					<circle class="hit" cx={node.x} cy={node.y} r={Math.max(node.r, HIT_RADIUS)} />
-					<circle class="dot {fillClass(node)}" cx={node.x} cy={node.y} r={node.r} />
+					<circle class="dot {fillClass(node, index)}" cx={node.x} cy={node.y} r={node.r} />
 				</g>
 			{/each}
 		</svg>
@@ -163,23 +196,44 @@
 					{#if hover.film.rating !== null}
 						<span data-numeric>★ {hover.film.rating}</span> ·
 					{/if}
-					<span data-numeric>{hover.degree}</span> connections
+					{hover.degree} connections
 				</div>
 			</div>
 		{/if}
 	</div>
 
 	<div class="legend" aria-hidden="true">
-		{#each RATING_BIN_LABELS as label, i (label)}
-			<span data-numeric><i class="swatch bin-{i}"></i>{label}</span>
-		{/each}
-		<span><i class="swatch unrated"></i>unrated</span>
+		{#if selected !== null}
+			<span class="less">Less <span data-numeric>({DEGREE_LABELS[0]})</span></span>
+			<span class="scale">
+				{#each DEGREE_LABELS as label, i (label)}
+					<i class="swatch degree-{i}" title="{label} degree"></i>
+				{/each}
+			</span>
+			<span class="more"
+				>More <span data-numeric>({DEGREE_LABELS[DEGREE_LABELS.length - 1]})</span></span
+			>
+		{:else}
+			<span class="less">Less <span data-numeric>(0.5)</span></span>
+			<span class="scale">
+				{#each HALF_STAR_LABELS as label, i (label)}
+					<i class="swatch bin-{i}" title="★ {label}"></i>
+				{/each}
+			</span>
+			<span class="more">More <span data-numeric>(5)</span></span>
+			<span><i class="swatch unrated"></i>unrated</span>
+		{/if}
 	</div>
 
 	<p class="note">
-		Line strength: how many billed people two films share. Dot size: connections; dot colour: your
-		rating. People in more than 40 of your films are skipped; they would link nearly everything to
-		everything.
+		{#if selected !== null}
+			Dot colour: how many hops from the film you picked, up to the {DEGREE_LABELS.length}th degree;
+			anything further fades out. Line strength: how many billed people two films share.
+		{:else}
+			Line strength: how many billed people two films share. Dot size: connections; dot colour: your
+			rating. People in more than 40 of your films are skipped; they would link nearly everything to
+			everything.
+		{/if}
 		{#if graph.omitted > 0}
 			Showing the {graph.nodes.length} most connected of
 			{graph.nodes.length + graph.omitted} linked films.
@@ -295,9 +349,11 @@
 		stroke-width: 3;
 	}
 	.dim {
-		opacity: 0.15;
+		opacity: 0.1;
 	}
 
+	/* Rating ramp: one bin per half-star, the same 10-step --map-bin Viridis scale the world map
+	   and heatmaps use. */
 	.bin-0 {
 		fill: var(--map-bin-0);
 		background: var(--map-bin-0);
@@ -318,9 +374,72 @@
 		fill: var(--map-bin-4);
 		background: var(--map-bin-4);
 	}
+	.bin-5 {
+		fill: var(--map-bin-5);
+		background: var(--map-bin-5);
+	}
+	.bin-6 {
+		fill: var(--map-bin-6);
+		background: var(--map-bin-6);
+	}
+	.bin-7 {
+		fill: var(--map-bin-7);
+		background: var(--map-bin-7);
+	}
+	.bin-8 {
+		fill: var(--map-bin-8);
+		background: var(--map-bin-8);
+	}
+	.bin-9 {
+		fill: var(--map-bin-9);
+		background: var(--map-bin-9);
+	}
 	.unrated {
 		fill: var(--surface);
 		background: var(--surface);
+	}
+
+	/* Degree ramp: a separate Plasma scale from the rating bins' Viridis, so a selected film's
+	   ripple is never mistaken for a rating. */
+	.degree-0 {
+		fill: var(--degree-bin-0);
+		background: var(--degree-bin-0);
+	}
+	.degree-1 {
+		fill: var(--degree-bin-1);
+		background: var(--degree-bin-1);
+	}
+	.degree-2 {
+		fill: var(--degree-bin-2);
+		background: var(--degree-bin-2);
+	}
+	.degree-3 {
+		fill: var(--degree-bin-3);
+		background: var(--degree-bin-3);
+	}
+	.degree-4 {
+		fill: var(--degree-bin-4);
+		background: var(--degree-bin-4);
+	}
+	.degree-5 {
+		fill: var(--degree-bin-5);
+		background: var(--degree-bin-5);
+	}
+	.degree-6 {
+		fill: var(--degree-bin-6);
+		background: var(--degree-bin-6);
+	}
+	.degree-7 {
+		fill: var(--degree-bin-7);
+		background: var(--degree-bin-7);
+	}
+	.degree-8 {
+		fill: var(--degree-bin-8);
+		background: var(--degree-bin-8);
+	}
+	.degree-9 {
+		fill: var(--degree-bin-9);
+		background: var(--degree-bin-9);
 	}
 
 	.tooltip {
@@ -352,6 +471,14 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
+	}
+	.less,
+	.more {
+		color: var(--fg-muted);
+	}
+	.scale {
+		display: inline-flex;
+		gap: 2px;
 	}
 	.swatch {
 		width: 14px;

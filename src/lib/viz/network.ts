@@ -1,6 +1,6 @@
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import { getOrCreate } from '$lib/collections';
-import { binIndex, RATING_THRESHOLDS } from './ramp';
+import { binIndex, HALF_STAR_THRESHOLDS } from './ramp';
 import { clamp, seeded } from './seeded';
 import type { EnrichedFilm } from '$lib/types';
 
@@ -13,7 +13,7 @@ export interface NetworkNode {
 	x: number;
 	y: number;
 	r: number;
-	/** Rating bin 0–4, or null when you never rated the film. */
+	/** Half-star rating bin 0–9, or null when you never rated the film. */
 	bin: number | null;
 }
 
@@ -141,7 +141,7 @@ function toNode(film: EnrichedFilm, degree: number): NetworkNode {
 	return {
 		film,
 		degree,
-		bin: film.rating === null ? null : binIndex(film.rating, RATING_THRESHOLDS),
+		bin: film.rating === null ? null : binIndex(film.rating, HALF_STAR_THRESHOLDS),
 		r: Math.min(20, 6 + Math.sqrt(degree) * 2.5),
 		x: 0,
 		y: 0
