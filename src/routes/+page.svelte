@@ -477,6 +477,8 @@
 		<a href="https://codeberg.org/LaurinS/letterboxd-vizard">Source code</a>
 		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/issues">Report an issue</a>
 		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/pulls">Contribute</a>
+		<span aria-hidden="true">|</span>
+		<a style="margin-left: 0em;" href="https://letterboxd.com/laurins0/">Built by Laurin</a>
 	</nav>
 	<p>
 		An independent project, not affiliated with or endorsed by
