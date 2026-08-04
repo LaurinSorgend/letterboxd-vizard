@@ -11,6 +11,8 @@ export interface Milestone {
 	eyebrow: string;
 	film: EnrichedFilm;
 	detail: string;
+	/** Replaces the usual formatted `date` in the UI, for milestones that span a range. */
+	dateLabel?: string;
 }
 
 /** Every diary entry across every film, oldest first; ties break on name for stable order. */
@@ -84,6 +86,10 @@ function firstEventWhere(
 	return event ? { date: event.date, eyebrow, film: event.film, detail: describeFilm(event.film) } : null;
 }
 
+function formatShort(iso: string): string {
+	return new Date(iso).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 function describeFilm(film: EnrichedFilm): string {
 	const parts = [film.year ? String(film.year) : null, film.rating !== null ? `★ ${film.rating}` : null];
 	return parts.filter((p): p is string => p !== null).join(' · ');
@@ -110,7 +116,8 @@ export function buildMilestones(films: EnrichedFilm[]): Milestone[] {
 			date: streak.end,
 			eyebrow: `Longest streak: ${streak.days} days`,
 			film: endEvent.film,
-			detail: `${streak.start} to ${streak.end}`
+			detail: '',
+			dateLabel: `${formatShort(streak.start)} to ${formatShort(streak.end)}`
 		});
 	}
 

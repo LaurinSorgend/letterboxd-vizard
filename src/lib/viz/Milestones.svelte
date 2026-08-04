@@ -22,7 +22,7 @@
 			<div class="card">
 				<span class="pic">
 					{#if src}
-						<img {src} alt="" loading="lazy" width="40" height="40" />
+						<img {src} alt="" loading="lazy" width="40" height="60" />
 					{/if}
 				</span>
 				<div class="text">
@@ -32,7 +32,7 @@
 					{:else}
 						<span class="film">{m.film.name}</span>
 					{/if}
-					<span class="detail" data-numeric>{longDate(m.date)}{m.detail ? ` · ${m.detail}` : ''}</span>
+					<span class="detail" data-numeric>{m.dateLabel ?? longDate(m.date)}{m.detail ? ` · ${m.detail}` : ''}</span>
 				</div>
 			</div>
 		</li>
@@ -70,7 +70,7 @@
 		padding: 10px 0;
 	}
 	.entry:not(:first-child) {
-		margin-top: -32px;
+		margin-top: -40px;
 	}
 	.entry:not(.right) {
 		margin-right: auto;
@@ -104,12 +104,13 @@
 	.pic {
 		flex-shrink: 0;
 		width: 40px;
-		height: 40px;
+		aspect-ratio: 2 / 3;
 	}
 	.pic img {
 		display: block;
 		width: 40px;
-		height: 40px;
+		height: auto;
+		aspect-ratio: 2 / 3;
 		object-fit: cover;
 		background: var(--bg-secondary);
 	}
@@ -188,7 +189,6 @@
 		.pic,
 		.pic img {
 			width: 32px;
-			height: 32px;
 		}
 	}
 </style>
