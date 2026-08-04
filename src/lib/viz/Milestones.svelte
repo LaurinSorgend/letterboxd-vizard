@@ -1,16 +1,12 @@
 <script lang="ts">
 	import { imageUrl } from './images';
 	import { webHref } from './href';
-	import type { Milestone } from './milestones';
+	import { formatShort, type Milestone } from './milestones';
 
 	let { milestones, limit = 12 }: { milestones: Milestone[]; limit?: number } = $props();
 
 	let expanded = $state(false);
 	const rows = $derived(expanded ? milestones : milestones.slice(0, limit));
-
-	function longDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
-	}
 </script>
 
 <ol class="timeline">
@@ -32,7 +28,7 @@
 					{:else}
 						<span class="film">{m.film.name}</span>
 					{/if}
-					<span class="detail" data-numeric>{m.dateLabel ?? longDate(m.date)}{m.detail ? ` · ${m.detail}` : ''}</span>
+					<span class="detail" data-numeric>{m.dateLabel ?? formatShort(m.date)}{m.detail ? ` · ${m.detail}` : ''}</span>
 				</div>
 			</div>
 		</li>

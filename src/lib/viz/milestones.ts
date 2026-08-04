@@ -86,8 +86,14 @@ function firstEventWhere(
 	return event ? { date: event.date, eyebrow, film: event.film, detail: describeFilm(event.film) } : null;
 }
 
-function formatShort(iso: string): string {
-	return new Date(iso).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
+/** Diary dates are calendar days with no time zone of their own, so format them as UTC. */
+export function formatShort(iso: string): string {
+	return new Date(iso).toLocaleDateString('en', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		timeZone: 'UTC'
+	});
 }
 
 function describeFilm(film: EnrichedFilm): string {
