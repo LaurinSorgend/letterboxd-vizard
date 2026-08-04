@@ -118,6 +118,27 @@ export function totalRuntimeMinutes(films: EnrichedFilm[]): number {
 	return films.reduce((sum, f) => sum + (f.tmdb?.runtime ?? 0), 0);
 }
 
+export interface Streak {
+	days: number;
+	start: string;
+	end: string;
+}
+
+const DAY_MS_STREAK = 24 * 60 * 60 * 1000;
+
+/** The longest run of consecutive calendar days in a set of ISO dates, or null if empty. */
+export function longestRun(dates: string[]): Streak | null {
+	const days = [...new Set(dates)].sort();
+	if (days.length === 0) return null;
+	let best: Streak = { days: 1, start: days[0], end: days[0] };
+	let run = 1;
+	for (let i = 1; i < days.length; i++) {
+		run = (Date.parse(days[i]) - Date.parse(days[i - 1])) / DAY_MS_STREAK === 1 ? run + 1 : 1;
+		if (run > best.days) best = { days: run, start: days[i - run + 1], end: days[i] };
+	}
+	return best;
+}
+
 /** An ordered bucket holding everything below `below` that no earlier band took. */
 interface Band {
 	label: string;

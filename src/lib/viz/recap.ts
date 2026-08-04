@@ -4,23 +4,18 @@ import {
 	avgRating,
 	byGenre,
 	byPerson,
+	longestRun,
 	obscurityShare,
 	ratingGaps,
 	totalRuntimeMinutes,
 	type BarDatum,
-	type RatingGap
+	type RatingGap,
+	type Streak
 } from './stats';
 import type { EnrichedFilm } from '$lib/types';
 
 /** Letterboxd's own bar for a Year in Review. Under it the numbers describe noise, not a year. */
 const MIN_FILMS = 10;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-export interface Streak {
-	days: number;
-	start: string;
-	end: string;
-}
 
 export interface Personality {
 	title: string;
@@ -76,17 +71,7 @@ export function eligibleYears(films: EnrichedFilm[], now: Date): number[] {
 
 /** The longest run of consecutive days you logged something. */
 function longestStreak(films: EnrichedFilm[], year: number): Streak | null {
-	const days = [
-		...new Set(films.flatMap((film) => film.watchedDates).filter((date) => inYear(date, year)))
-	].sort();
-	if (days.length === 0) return null;
-	let best: Streak = { days: 1, start: days[0], end: days[0] };
-	let run = 1;
-	for (let i = 1; i < days.length; i++) {
-		run = (Date.parse(days[i]) - Date.parse(days[i - 1])) / DAY_MS === 1 ? run + 1 : 1;
-		if (run > best.days) best = { days: run, start: days[i - run + 1], end: days[i] };
-	}
-	return best;
+	return longestRun(films.flatMap((film) => film.watchedDates).filter((date) => inYear(date, year)));
 }
 
 function extremeByVotes(films: EnrichedFilm[], want: 'low' | 'high'): EnrichedFilm | null {

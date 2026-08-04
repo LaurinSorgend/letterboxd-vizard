@@ -17,6 +17,7 @@
 	import KeywordCloud from '$lib/viz/KeywordCloud.svelte';
 	import Network from '$lib/viz/Network.svelte';
 	import Mosaic from '$lib/viz/Mosaic.svelte';
+	import Milestones from '$lib/viz/Milestones.svelte';
 	import YearRecap from '$lib/viz/YearRecap.svelte';
 	import { byKeyword, keywordCoverage } from '$lib/viz/keywords';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
@@ -29,6 +30,7 @@
 		type SeasonScale
 	} from '$lib/viz/heatmap';
 	import { effectiveCountries } from '$lib/viz/countries';
+	import { buildMilestones } from '$lib/viz/milestones';
 	import {
 		audienceBands,
 		avgRating,
@@ -82,6 +84,7 @@
 	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
 
 	const rewatched = $derived(mostRewatched(films));
+	const milestones = $derived(buildMilestones(films));
 	const franchises = $derived(byCollection(films));
 	const franchiseShare = $derived(collectionShare(films));
 	const themes = $derived(byKeyword(films));
@@ -454,6 +457,13 @@
 			</p>
 			<Mosaic {films} />
 		</section>
+
+		{#if milestones.length > 0}
+			<section id="milestones">
+				<h2>Milestones</h2>
+				<Milestones {milestones} />
+			</section>
+		{/if}
 
 		<YearRecap {films} />
 
