@@ -18,6 +18,7 @@
 	import Network from '$lib/viz/Network.svelte';
 	import Mosaic from '$lib/viz/Mosaic.svelte';
 	import Milestones from '$lib/viz/Milestones.svelte';
+	import PeopleTimeline from '$lib/viz/PeopleTimeline.svelte';
 	import YearRecap from '$lib/viz/YearRecap.svelte';
 	import { byKeyword, keywordCoverage } from '$lib/viz/keywords';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
@@ -438,6 +439,15 @@
 					/>
 				</div>
 			</div>
+		</section>
+
+		<section id="people-timeline">
+			<h2>Watching them over time</h2>
+			<p class="sub chart-note">
+				Cumulative hours watched of each selected person's films, across every diary date. Defaults
+				to your top 2 directors and top 2 actors; search to add anyone else.
+			</p>
+			<PeopleTimeline {films} />
 		</section>
 
 		<section id="network">
