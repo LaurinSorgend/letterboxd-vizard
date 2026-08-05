@@ -14,6 +14,7 @@
 	import SectionNav from '$lib/viz/SectionNav.svelte';
 	import Heatmap from '$lib/viz/Heatmap.svelte';
 	import Scatter from '$lib/viz/Scatter.svelte';
+	import Quadrants from '$lib/viz/Quadrants.svelte';
 	import KeywordCloud from '$lib/viz/KeywordCloud.svelte';
 	import Network from '$lib/viz/Network.svelte';
 	import Mosaic from '$lib/viz/Mosaic.svelte';
@@ -417,6 +418,15 @@
 				showAvg
 				description="Films and average rating per TMDB vote-count band"
 			/>
+		</section>
+
+		<section id="quadrants">
+			<h2>Popularity vs. your rating</h2>
+			<p class="sub chart-note">
+				Every rated film split into four quadrants by whether it sits above or below your library's
+				own median for TMDB vote count and for your rating.
+			</p>
+			<Quadrants {films} />
 		</section>
 
 		<section id="people">
