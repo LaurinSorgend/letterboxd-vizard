@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import type { TmdbMovie } from '$lib/types';
+import type { OmdbRatings, TmdbMovie } from '$lib/types';
 import type { FetchBudget } from './budget';
 
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -22,7 +22,7 @@ function chunks<T>(list: T[], size: number): T[][] {
  * the media type is known, so a bump invalidates every record, when only one kind of record
  * changed, a targeted delete costs a great deal less than the re-warm a bump forces.
  */
-const SCHEMA = 'v5';
+const SCHEMA = 'v6';
 
 export function cacheKey(name: string, year: number | null): string {
 	return `${SCHEMA}::${name.trim().toLowerCase()}::${year ?? ''}`;
@@ -189,6 +189,61 @@ export async function putRelatedCachedMany(
 		await db
 			.prepare(`INSERT OR REPLACE INTO related (tmdb_id, data, fetched_at) VALUES ${marks}`)
 			.bind(...chunk.flatMap(([tmdbId, related]) => [tmdbId, JSON.stringify(related), now]))
+			.run();
+	}
+}
+
+/**
+ * OMDb ratings, keyed by IMDb id rather than the (name, year) cache key: the id is stable and
+ * needs no SCHEMA generation, same shape as `movies`/`misses` otherwise.
+ */
+export async function getOmdbCachedMany(
+	db: D1Database,
+	imdbIds: string[]
+): Promise<Map<string, OmdbRatings | null>> {
+	const known = new Map<string, OmdbRatings | null>();
+	for (const chunk of chunks(imdbIds, MAX_PARAMS)) {
+		const marks = chunk.map(() => '?').join(',');
+		const { results } = await db
+			.prepare(`SELECT imdb_id, data FROM omdb WHERE imdb_id IN (${marks})`)
+			.bind(...chunk)
+			.all<{ imdb_id: string; data: string }>();
+		for (const row of results) known.set(row.imdb_id, JSON.parse(row.data) as OmdbRatings);
+	}
+
+	const unknown = imdbIds.filter((id) => !known.has(id));
+	const cutoff = Date.now() - MISS_TTL_MS;
+	for (const chunk of chunks(unknown, MAX_PARAMS - 1)) {
+		const marks = chunk.map(() => '?').join(',');
+		const { results } = await db
+			.prepare(`SELECT imdb_id FROM omdb_misses WHERE imdb_id IN (${marks}) AND fetched_at > ?`)
+			.bind(...chunk, cutoff)
+			.all<{ imdb_id: string }>();
+		for (const row of results) known.set(row.imdb_id, null);
+	}
+	return known;
+}
+
+export async function putOmdbCachedMany(
+	db: D1Database,
+	entries: [string, OmdbRatings | null][]
+): Promise<void> {
+	const now = Date.now();
+	const hits = entries.filter((entry): entry is [string, OmdbRatings] => entry[1] !== null);
+	const misses = entries.filter(([, ratings]) => ratings === null).map(([id]) => id);
+
+	for (const chunk of chunks(hits, Math.floor(MAX_PARAMS / 3))) {
+		const marks = chunk.map(() => '(?, ?, ?)').join(',');
+		await db
+			.prepare(`INSERT OR REPLACE INTO omdb (imdb_id, data, fetched_at) VALUES ${marks}`)
+			.bind(...chunk.flatMap(([id, ratings]) => [id, JSON.stringify(ratings), now]))
+			.run();
+	}
+	for (const chunk of chunks(misses, Math.floor(MAX_PARAMS / 2))) {
+		const marks = chunk.map(() => '(?, ?)').join(',');
+		await db
+			.prepare(`INSERT OR REPLACE INTO omdb_misses (imdb_id, fetched_at) VALUES ${marks}`)
+			.bind(...chunk.flatMap((id) => [id, now]))
 			.run();
 	}
 }

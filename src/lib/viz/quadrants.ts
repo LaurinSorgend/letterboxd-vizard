@@ -1,4 +1,5 @@
 import { jitterFor } from './scatter';
+import { combinedVoteCount } from './stats';
 import type { EnrichedFilm } from '$lib/types';
 
 export type Quadrant = 'popular-loved' | 'popular-disliked' | 'obscure-loved' | 'obscure-disliked';
@@ -18,19 +19,22 @@ export interface QuadrantPoint {
 	jitter: number;
 }
 
+/** Rated 3.5★ or higher counts as loved, same border Letterboxd's own heart nudges people toward. */
+export const LIKE_THRESHOLD = 3.5;
+
 export interface QuadrantAxes {
 	popularityMedian: number;
-	ratingMedian: number;
+	ratingThreshold: number;
 }
 
-/** Rated films with a known TMDB vote count; everything else has no place on either axis. */
+/** Rated films with a vote count from TMDB or IMDb; everything else has no place on either axis. */
 function eligible(
 	films: EnrichedFilm[]
 ): { film: EnrichedFilm; popularity: number; rating: number }[] {
 	const rows: { film: EnrichedFilm; popularity: number; rating: number }[] = [];
 	for (const film of films) {
-		const popularity = film.tmdb?.voteCount;
-		if (film.rating === null || !popularity) continue;
+		const popularity = combinedVoteCount(film);
+		if (film.rating === null || popularity <= 0) continue;
 		rows.push({ film, popularity, rating: film.rating });
 	}
 	return rows;
@@ -49,15 +53,15 @@ function median(values: number[]): number {
 
 function classify(popularity: number, rating: number, axes: QuadrantAxes): Quadrant {
 	const popular = popularity >= axes.popularityMedian;
-	const loved = rating >= axes.ratingMedian;
+	const loved = rating >= axes.ratingThreshold;
 	if (popular) return loved ? 'popular-loved' : 'popular-disliked';
 	return loved ? 'obscure-loved' : 'obscure-disliked';
 }
 
 /**
- * Every rated, TMDB-matched film sorted into a quadrant by whether its vote count and your rating
- * sit above or below the library's own median — so "popular" and "loved" are relative to this
- * library, not to some fixed global threshold.
+ * Every rated, matched film sorted into a quadrant by whether its combined vote count sits above
+ * or below the library's own median — so "popular" is relative to this library — and by whether
+ * your rating clears a fixed 3.5★ "loved it" bar rather than another library-relative split.
  */
 export function quadrantPoints(films: EnrichedFilm[]): {
 	points: QuadrantPoint[];
@@ -65,11 +69,11 @@ export function quadrantPoints(films: EnrichedFilm[]): {
 } {
 	const rows = eligible(films);
 	if (rows.length === 0) {
-		return { points: [], axes: { popularityMedian: 0, ratingMedian: 0 } };
+		return { points: [], axes: { popularityMedian: 0, ratingThreshold: LIKE_THRESHOLD } };
 	}
 	const axes: QuadrantAxes = {
 		popularityMedian: median(rows.map((r) => r.popularity)),
-		ratingMedian: median(rows.map((r) => r.rating))
+		ratingThreshold: LIKE_THRESHOLD
 	};
 	const points = rows.map((r) => ({
 		film: r.film,

@@ -31,6 +31,9 @@ Optional extras in `.env`:
 
 - `TVDB_API_KEY` (thetvdb.com/api-information) adds a last-resort series lookup
   for titles TMDB doesn't know; without it, TMDB's own TV search is still used.
+- `OMDB_API_KEY` (omdbapi.com/apikey.aspx, free tier) adds IMDb, Rotten Tomatoes
+  and Metacritic ratings, powering the rating-comparison charts; without it,
+  those charts are hidden.
 
 Get your Letterboxd export at letterboxd.com → Settings → Data → Export your data.
 
@@ -90,7 +93,7 @@ npx wrangler d1 create letterboxed-vizard-db --jurisdiction eu
 npx wrangler d1 execute letterboxed-vizard-db --remote --file=schema.sql
 npx wrangler secret put TMDB_API_KEY
 npx wrangler secret put SESSION_SECRET
-# optional: repeat for TVDB_API_KEY
+# optional: repeat for TVDB_API_KEY and OMDB_API_KEY
 ```
 
 Then deploy (and redeploy) with:

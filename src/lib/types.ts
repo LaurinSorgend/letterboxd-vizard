@@ -66,6 +66,19 @@ export interface TmdbMovie {
 	collection: Collection | null;
 	/** TMDB theme tags, lowercase; empty when TMDB has none, which is common. */
 	keywords: string[];
+	/** tt-prefixed IMDb id, the key OMDb ratings are looked up by; null for TheTVDB-only records. */
+	imdbId: string | null;
+}
+
+/** Ratings pulled from OMDb by IMDb id: IMDb's own score, Rotten Tomatoes, and Metacritic. */
+export interface OmdbRatings {
+	/** 0-10 scale, IMDb users. */
+	imdbRating: number | null;
+	imdbVotes: number | null;
+	/** 0-100 scale (Tomatometer, critics). */
+	rottenTomatoes: number | null;
+	/** 0-100 scale, Metacritic critics. */
+	metascore: number | null;
 }
 
 export interface EnrichRequestItem {
@@ -82,4 +95,6 @@ export interface Seed {
 /** A film joined with its TMDB metadata (null if TMDB had no match). */
 export interface EnrichedFilm extends Film {
 	tmdb: TmdbMovie | null;
+	/** OMDb ratings keyed by tmdb.imdbId; null when unmatched, unconfigured, or OMDb had nothing. */
+	omdb: OmdbRatings | null;
 }

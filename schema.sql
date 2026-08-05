@@ -13,4 +13,13 @@ CREATE TABLE IF NOT EXISTS related (
 	data TEXT NOT NULL,
 	fetched_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS omdb (
+	imdb_id TEXT PRIMARY KEY,
+	data TEXT NOT NULL,
+	fetched_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS omdb_misses (
+	imdb_id TEXT PRIMARY KEY,
+	fetched_at INTEGER NOT NULL
+);
 DROP TABLE IF EXISTS trakt_related;

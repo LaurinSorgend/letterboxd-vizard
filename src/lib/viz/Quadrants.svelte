@@ -70,7 +70,7 @@
 	const yTicks = [1, 2, 3, 4, 5];
 
 	const medianX = $derived(px(axes.popularityMedian));
-	const medianY = $derived(py(axes.ratingMedian));
+	const thresholdY = $derived(py(axes.ratingThreshold));
 
 	function onMove(event: PointerEvent) {
 		if (!wrapper) return;
@@ -102,10 +102,10 @@
 
 	const summary = $derived(
 		points.length > 0
-			? `${points.length} rated, TMDB-matched films split at a popularity median of ` +
-					`${axes.popularityMedian.toLocaleString('en')} TMDB votes and a rating median of ` +
-					`${axes.ratingMedian}★.`
-			: 'Not enough rated, TMDB-matched films to plot.'
+			? `${points.length} rated films split at a popularity median of ` +
+					`${axes.popularityMedian.toLocaleString('en')} combined TMDB + IMDb votes, and at ` +
+					`${axes.ratingThreshold}★ for loved vs. not.`
+			: 'Not enough rated, vote-matched films to plot.'
 	);
 </script>
 
@@ -158,11 +158,17 @@
 				y={height - 4}
 				text-anchor="middle"
 			>
-				TMDB vote count (log scale)
+				TMDB + IMDb vote count (log scale)
 			</text>
 
 			<line class="median" x1={medianX} x2={medianX} y1={MARGIN.top} y2={py(Y_MIN)} />
-			<line class="median" x1={MARGIN.left} x2={width - MARGIN.right} y1={medianY} y2={medianY} />
+			<line
+				class="median"
+				x1={MARGIN.left}
+				x2={width - MARGIN.right}
+				y1={thresholdY}
+				y2={thresholdY}
+			/>
 
 			<text class="quadrant-label" x={MARGIN.left + 6} y={MARGIN.top + 14}>Hidden gems</text>
 			<text
@@ -211,8 +217,8 @@
 
 <p class="readout">{summary}</p>
 <p class="note">
-	Popularity is TMDB's vote count, a stand-in for how widely a film has been seen; rated films
-	without one are left out.
+	Popularity is TMDB's vote count plus IMDb's, a stand-in for how widely a film has been seen; rated
+	films without either are left out.
 	{#if dropped > 0}
 		{dropped} rated films left out for that reason.
 	{/if}
@@ -222,7 +228,9 @@
 {#if gems.length > 0}
 	<div class="gems">
 		<h3>Your hidden gems</h3>
-		<p class="sub">Rated above your median, seen by fewer people than most of your library.</p>
+		<p class="sub">
+			Rated {axes.ratingThreshold}★ or higher, seen by fewer people than most of your library.
+		</p>
 		<ul>
 			{#each gems as gem (gem.film.uri)}
 				<li>

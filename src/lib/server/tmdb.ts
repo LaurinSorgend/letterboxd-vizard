@@ -145,6 +145,7 @@ interface Details {
 	belongs_to_collection?: { id: number; name: string; poster_path?: string | null } | null;
 	/** Movies put the list under `keywords`, series under `results`. */
 	keywords?: { keywords?: { name: string }[]; results?: { name: string }[] };
+	external_ids?: { imdb_id?: string | null };
 }
 
 /** Enough tags to characterise a film without bloating every cached record. */
@@ -184,9 +185,9 @@ export async function fetchRecord(
 	kind: 'movie' | 'tv',
 	id: number
 ): Promise<TmdbMovie> {
-	// Both extras ride along on this one request, so neither costs a subrequest against the budget.
+	// All three ride along on this one request, so none costs a subrequest against the budget.
 	const d = (await tmdbGet(budget, `/${kind}/${id}`, {
-		append_to_response: 'credits,keywords'
+		append_to_response: 'credits,keywords,external_ids'
 	})) as Details;
 	const crewDirectors = d.credits?.crew?.filter((p) => p.job === 'Director') ?? [];
 	const directors =
@@ -208,7 +209,8 @@ export async function fetchRecord(
 		directors: dedupe(directors.map(toPerson)),
 		cast: d.credits?.cast?.slice(0, 10).map(toPerson) ?? [],
 		collection: toCollection(d),
-		keywords: toKeywords(d)
+		keywords: toKeywords(d),
+		imdbId: d.external_ids?.imdb_id || null
 	};
 }
 

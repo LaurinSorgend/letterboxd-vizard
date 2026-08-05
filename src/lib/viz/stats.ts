@@ -227,10 +227,16 @@ export function formatDays(days: number): string {
 	return `${(days / 365).toFixed(1)} years`;
 }
 
+/** TMDB's vote count plus IMDb's: two audiences pooled, so a film big on only one still counts. */
+export function combinedVoteCount(film: EnrichedFilm): number {
+	return (film.tmdb?.voteCount ?? 0) + (film.omdb?.imdbVotes ?? 0);
+}
+
 /*
- * TMDB vote count stands in for how widely a film has been seen. Its scale is far smaller than
- * IMDb's (even the most-rated films sit in the low tens of thousands), so the top band starts
- * at 15k rather than the six figures an IMDb-shaped guess would suggest.
+ * A combined TMDB + IMDb vote count stands in for how widely a film has been seen. Without an
+ * OMDb key this is just TMDB's own count, so the bands still read sensibly on TMDB alone; with
+ * one, IMDb's much larger audience dominates the sum for anything mainstream, which is why the
+ * top band stays a wide-open "15k+" rather than gaining more resolution above it.
  */
 const AUDIENCE_BANDS: Band[] = [
 	{ label: '< 100', below: 100 },
@@ -240,16 +246,14 @@ const AUDIENCE_BANDS: Band[] = [
 	{ label: '15k+', below: Infinity }
 ];
 
-/** Films per TMDB vote-count band, least-seen band first. */
+/** Films per combined TMDB + IMDb vote-count band, least-seen band first. */
 export function audienceBands(films: EnrichedFilm[]): BarDatum[] {
-	return banded(films, AUDIENCE_BANDS, (film) => film.tmdb?.voteCount ?? null);
+	return banded(films, AUDIENCE_BANDS, (film) => combinedVoteCount(film) || null);
 }
 
 /** Share (0–1) of films with a vote count that fall under `below`, or null if none have one. */
 export function obscurityShare(films: EnrichedFilm[], below = 1_000): number | null {
-	const counts = films
-		.map((film) => film.tmdb?.voteCount)
-		.filter((count): count is number => count !== null && count !== undefined);
+	const counts = films.map(combinedVoteCount).filter((count) => count > 0);
 	return counts.length === 0
 		? null
 		: counts.filter((count) => count < below).length / counts.length;
@@ -396,6 +400,38 @@ export function ratingGaps(films: EnrichedFilm[]): { over: RatingGap[]; under: R
 		over: gaps.slice(0, 5).filter((g) => g.gap > 0),
 		under: gaps
 			.slice(-5)
+			.filter((g) => g.gap < 0)
+			.reverse()
+	};
+}
+
+export interface MetacriticGap {
+	film: EnrichedFilm;
+	/** Both 0-100: your stars ×20 against Metacritic's own scale. */
+	yours: number;
+	metascore: number;
+	gap: number;
+}
+
+const METACRITIC_TOP_N = 10;
+
+/** Films rated most differently from Metacritic's critic score, both put on a 0-100 scale. */
+export function metacriticGaps(films: EnrichedFilm[]): {
+	over: MetacriticGap[];
+	under: MetacriticGap[];
+} {
+	const gaps: MetacriticGap[] = [];
+	for (const film of films) {
+		if (film.rating === null || film.omdb?.metascore == null) continue;
+		const yours = film.rating * 20;
+		const metascore = film.omdb.metascore;
+		gaps.push({ film, yours, metascore, gap: yours - metascore });
+	}
+	gaps.sort((a, b) => b.gap - a.gap);
+	return {
+		over: gaps.slice(0, METACRITIC_TOP_N).filter((g) => g.gap > 0),
+		under: gaps
+			.slice(-METACRITIC_TOP_N)
 			.filter((g) => g.gap < 0)
 			.reverse()
 	};

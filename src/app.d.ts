@@ -13,6 +13,7 @@ declare global {
 				DB: D1Database;
 				ENRICH_LIMITER: RateLimit;
 				RECOMMEND_LIMITER: RateLimit;
+				OMDB_LIMITER: RateLimit;
 			};
 		}
 	}

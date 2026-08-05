@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 import type { EnrichedFilm, Profile } from '$lib/types';
 
 /** Bump when the snapshot shape changes so stale data is ignored, not misread. */
-const KEY = 'letterboxd-vizard:snapshot:v3';
+const KEY = 'letterboxd-vizard:snapshot:v4';
 const PREFIX = 'letterboxd-vizard:snapshot:';
 
 /** The analysed result kept on the user's device so repeat visits skip re-uploading. */

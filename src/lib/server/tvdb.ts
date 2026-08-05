@@ -135,6 +135,8 @@ export async function lookupSeriesOnTvdb(
 		directors: [],
 		cast: [],
 		collection: null,
-		keywords: []
+		keywords: [],
+		// TheTVDB carries no IMDb cross-reference in this lookup, so OMDb enrichment skips these.
+		imdbId: null
 	};
 }

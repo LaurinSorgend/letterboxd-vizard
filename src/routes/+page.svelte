@@ -9,6 +9,10 @@
 	import Columns from '$lib/viz/Columns.svelte';
 	import RankedBars from '$lib/viz/RankedBars.svelte';
 	import RatingGaps from '$lib/viz/RatingGaps.svelte';
+	import RatingRadar from '$lib/viz/RatingRadar.svelte';
+	import RatingContrarian from '$lib/viz/RatingContrarian.svelte';
+	import MetacriticDisagreement from '$lib/viz/MetacriticDisagreement.svelte';
+	import RatingCorrelation from '$lib/viz/RatingCorrelation.svelte';
 	import Recommendations from '$lib/viz/Recommendations.svelte';
 	import StatTiles from '$lib/viz/StatTiles.svelte';
 	import SectionNav from '$lib/viz/SectionNav.svelte';
@@ -54,13 +58,14 @@
 		watchesPerYear
 	} from '$lib/viz/stats';
 	import { parseExport } from '$lib/ingest/parse';
-	import { enrichFilms } from '$lib/ingest/enrich';
+	import { enrichFilms, enrichOmdb } from '$lib/ingest/enrich';
 	import { watchedTmdbIds } from '$lib/viz/seeds';
 	import { clearSnapshot, loadSnapshot, saveSnapshot } from '$lib/store';
-	import type { EnrichedFilm, LetterboxdData } from '$lib/types';
+	import type { EnrichedFilm, LetterboxdData, OmdbRatings } from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
 	let phase: Phase = $state('idle');
+	let stage: 'films' | 'ratings' = $state('films');
 	let data: LetterboxdData | null = $state(null);
 	let films: EnrichedFilm[] = $state([]);
 	let progress = $state({ done: 0, total: 0 });
@@ -72,6 +77,7 @@
 	let mainEl: HTMLElement | null = $state(null);
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
+	const hasOmdb = $derived(films.some((f) => f.omdb));
 	const watchlistExclude = $derived(includeWatchlist ? [] : watchlistIds);
 
 	const initialMetric = page.url.searchParams.get('metric') === 'rating' ? 'rating' : 'count';
@@ -151,6 +157,7 @@
 	async function handleFile(file: File) {
 		errorMessage = null;
 		phase = 'working';
+		stage = 'films';
 		try {
 			const parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
 			data = parsed;
@@ -162,8 +169,24 @@
 				enrichFilms(parsed.films, (n) => ((done.films = n), report())),
 				enrichFilms(parsed.watchlist, (n) => ((done.watchlist = n), report())).catch(() => [])
 			]);
-			films = watched;
 			watchlistIds = watchedTmdbIds(watchlist);
+
+			const imdbIds = [
+				...new Set(watched.map((f) => f.tmdb?.imdbId).filter((id): id is string => !!id))
+			];
+			stage = 'ratings';
+			progress = { done: 0, total: imdbIds.length };
+			const omdb =
+				imdbIds.length === 0
+					? new Map<string, OmdbRatings | null>()
+					: await enrichOmdb(imdbIds, (n, t) => (progress = { done: n, total: t })).catch(
+							() => new Map<string, OmdbRatings | null>()
+						);
+			films = watched.map((f) => ({
+				...f,
+				omdb: f.tmdb?.imdbId ? (omdb.get(f.tmdb.imdbId) ?? null) : null
+			}));
+
 			phase = 'ready';
 			if (remember) persist();
 		} catch (cause) {
@@ -204,6 +227,11 @@
 		<div class="progress" role="status">
 			{#if progress.total === 0}
 				<p>Reading your export…</p>
+			{:else if stage === 'ratings'}
+				<p>Looking up ratings… {progress.done} / {progress.total}</p>
+				<progress value={progress.done} max={progress.total} aria-label="Ratings lookup progress"
+				></progress>
+				<p class="sub">First run only; lookups are cached, so next time is instant.</p>
 			{:else}
 				<p>Looking up film data… {progress.done} / {progress.total}</p>
 				<progress value={progress.done} max={progress.total} aria-label="Film lookup progress"
@@ -244,6 +272,24 @@
 				<RatingGaps {films} />
 			</div>
 		</section>
+
+		{#if hasOmdb}
+			<section id="triangulation">
+				<h2>Critical consensus &amp; rating triangulation</h2>
+
+				<h3>Where you diverge, film by film</h3>
+				<RatingRadar {films} />
+
+				<h3 class="spaced">Critics vs. crowds</h3>
+				<RatingContrarian {films} />
+
+				<h3 class="spaced">Biggest disagreements with Metacritic</h3>
+				<MetacriticDisagreement {films} />
+
+				<h3 class="spaced">Which source best predicts your taste</h3>
+				<RatingCorrelation {films} />
+			</section>
+		{/if}
 
 		<section id="years">
 			<h2>Through the years</h2>
@@ -328,10 +374,6 @@
 		{#if rewatched.length > 0}
 			<section id="rewatches">
 				<h2>Films you return to</h2>
-				<p class="sub chart-note">
-					Bars count diary entries. Films first seen before you started logging show one, even where
-					Letterboxd marks the watch as a rewatch.
-				</p>
 				<RankedBars data={rewatched} showAvg description="Diary entries per rewatched film" />
 			</section>
 		{/if}
@@ -408,7 +450,7 @@
 		<section id="obscurity">
 			<h2>Crowds &amp; deep cuts</h2>
 			<p class="sub chart-note">
-				TMDB rating counts, as a stand-in for how widely seen each film is.
+				TMDB and IMDb rating counts combined, as a stand-in for how widely seen each film is.
 				{#if obscure !== null}
 					{Math.round(obscure * 100)}% of yours: fewer than 1,000 ratings.
 				{/if}
@@ -416,15 +458,15 @@
 			<RankedBars
 				data={audienceBands(films)}
 				showAvg
-				description="Films and average rating per TMDB vote-count band"
+				description="Films and average rating per combined TMDB + IMDb vote-count band"
 			/>
 		</section>
 
 		<section id="quadrants">
 			<h2>Popularity vs. your rating</h2>
 			<p class="sub chart-note">
-				Every rated film split into four quadrants by whether it sits above or below your library's
-				own median for TMDB vote count and for your rating.
+				Every rated film split into four quadrants: popularity above or below your library's own
+				median for combined TMDB + IMDb vote count.
 			</p>
 			<Quadrants {films} />
 		</section>
@@ -454,8 +496,7 @@
 		<section id="people-timeline">
 			<h2>Watching them over time</h2>
 			<p class="sub chart-note">
-				Cumulative hours watched of each selected person's films, across every diary date. Defaults
-				to your top 2 directors and top 2 actors; search to add anyone else.
+				Cumulative hours watched of each selected person's films, across every diary date.
 			</p>
 			<PeopleTimeline {films} />
 		</section>
@@ -472,8 +513,7 @@
 		<section id="mosaic">
 			<h2>Every film you have watched</h2>
 			<p class="sub chart-note">
-				Your whole library as a wall of posters. Sort by rating, watch date or release year, or by
-				the posters' own colours, laid out as a spectrum.
+				Your whole library as a wall of posters.
 			</p>
 			<Mosaic {films} />
 		</section>
