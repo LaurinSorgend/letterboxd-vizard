@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { webHref } from './href';
+	import { colorVar as paletteColorVar, filterOptions, toggleSelection } from './picker';
+	import PickerList from './PickerList.svelte';
 	import { RADAR_AXES, radarRows, type RadarRow } from './ratingRadar';
 	import type { EnrichedFilm } from '$lib/types';
 
@@ -38,23 +40,21 @@
 			.map((r) => ({ key: r.film.uri, name: r.film.name }))
 			.sort((a, b) => a.name.localeCompare(b.name))
 	);
-	const matches = $derived.by(() => {
-		const q = search.trim().toLowerCase();
-		return q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
-	});
-	const listRows = $derived(matches.slice(0, SEARCH_LIMIT));
-	const listOverflow = $derived(Math.max(0, matches.length - SEARCH_LIMIT));
+	const filtered = $derived(filterOptions(options, search, SEARCH_LIMIT));
+	const listRows = $derived(filtered.rows);
+	const listOverflow = $derived(filtered.overflow);
+	const chips = $derived(
+		selectedKeys
+			.map((key) => options.find((o) => o.key === key))
+			.filter((o): o is { key: string; name: string } => o !== undefined)
+	);
 
 	function toggle(key: string) {
-		if (selectedSet.has(key)) {
-			selectedKeys = selectedKeys.filter((k) => k !== key);
-		} else if (!atCap) {
-			selectedKeys = [...selectedKeys, key];
-		}
+		selectedKeys = toggleSelection(selectedKeys, key, atCap);
 	}
 
 	function colorVar(index: number): string {
-		return `var(${PALETTE[index % PALETTE.length]})`;
+		return paletteColorVar(PALETTE, index);
 	}
 
 	/** Selected films get a stable color by selection order; everyone else uses the plain accent. */
@@ -107,52 +107,22 @@
 	}
 </script>
 
-<div class="picker">
-	<label class="search-label" for="radar-search">Highlight specific films</label>
-	<input id="radar-search" type="text" placeholder="Type a title…" bind:value={search} />
-
-	{#if selectedKeys.length > 0}
-		<ul class="chips">
-			{#each selectedKeys as key, i (key)}
-				{@const option = options.find((o) => o.key === key)}
-				{#if option}
-					<li class="chip">
-						<span class="dot" style="background: {colorVar(i)}" aria-hidden="true"></span>
-						<span>{option.name}</span>
-						<button type="button" aria-label="Remove {option.name}" onclick={() => toggle(key)}>
-							×
-						</button>
-					</li>
-				{/if}
-			{/each}
-		</ul>
-	{/if}
-
-	{#if atCap}
-		<p class="note">Up to {MAX_SELECTED} films at a time — remove one to add another.</p>
-	{/if}
-
-	<ul class="options" role="group" aria-label="Films">
-		{#each listRows as option (option.key)}
-			<li>
-				<label class:disabled={!selectedSet.has(option.key) && atCap}>
-					<input
-						type="checkbox"
-						checked={selectedSet.has(option.key)}
-						disabled={!selectedSet.has(option.key) && atCap}
-						onchange={() => toggle(option.key)}
-					/>
-					<span class="name">{option.name}</span>
-				</label>
-			</li>
-		{:else}
-			<li class="empty">No match.</li>
-		{/each}
-	</ul>
-	{#if listOverflow > 0}
-		<p class="note">{listOverflow} more — refine your search.</p>
-	{/if}
-</div>
+<PickerList
+	searchId="radar-search"
+	searchLabel="Highlight specific films"
+	placeholder="Type a title…"
+	bind:search
+	{chips}
+	{listRows}
+	{listOverflow}
+	{atCap}
+	maxSelected={MAX_SELECTED}
+	capNoun="films"
+	optionsAriaLabel="Films"
+	isSelected={(key) => selectedSet.has(key)}
+	{toggle}
+	{colorVar}
+/>
 
 <div class="wrap" bind:clientWidth={width}>
 	{#if width > 0 && rows.length > 0}
@@ -261,106 +231,6 @@
 </details>
 
 <style>
-	.picker {
-		margin-bottom: 16px;
-	}
-	.search-label {
-		display: block;
-		margin-bottom: 4px;
-		font-size: var(--text-sm);
-		color: var(--fg-secondary);
-	}
-	input[type='text'] {
-		width: 100%;
-		max-width: 360px;
-		padding: 6px 10px;
-		font: inherit;
-		font-size: var(--text-base);
-		color: var(--fg);
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-	}
-	input[type='text']:focus-visible {
-		outline: 2px solid var(--focus);
-		outline-offset: 2px;
-	}
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		margin: 10px 0 0;
-		padding: 0;
-		list-style: none;
-	}
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 3px 6px 3px 8px;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		font-size: var(--text-sm);
-	}
-	.chip .dot {
-		width: 10px;
-		height: 10px;
-		flex-shrink: 0;
-	}
-	.chip button {
-		font: inherit;
-		padding: 0 2px;
-		margin: 0;
-		background: transparent;
-		border: none;
-		color: var(--fg-muted);
-		cursor: pointer;
-	}
-	.chip button:hover {
-		color: var(--error);
-	}
-	.options {
-		margin: 10px 0 0;
-		padding: 4px;
-		max-height: 180px;
-		overflow-y: auto;
-		list-style: none;
-		border: 1px solid var(--border);
-		background: var(--bg-secondary);
-	}
-	.options li {
-		display: block;
-	}
-	.options label {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-		padding: 4px 6px;
-		cursor: pointer;
-		font-size: var(--text-sm);
-	}
-	.options label:hover {
-		background: var(--surface);
-	}
-	.options label.disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-	.options input {
-		accent-color: var(--accent);
-		flex-shrink: 0;
-	}
-	.options .name {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.options .empty {
-		padding: 4px 6px;
-		color: var(--fg-muted);
-		font-size: var(--text-sm);
-	}
 	.wrap {
 		position: relative;
 	}

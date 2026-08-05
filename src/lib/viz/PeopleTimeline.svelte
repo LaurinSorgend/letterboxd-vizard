@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { formatShort } from './milestones';
+	import { colorVar as paletteColorVar, filterOptions, toggleSelection } from './picker';
+	import PickerList from './PickerList.svelte';
 	import {
 		buildSeries,
 		defaultSelectionKeys,
@@ -42,12 +44,9 @@
 		}
 	});
 
-	const matches = $derived.by(() => {
-		const q = search.trim().toLowerCase();
-		return q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
-	});
-	const listRows = $derived(matches.slice(0, SEARCH_LIMIT));
-	const listOverflow = $derived(Math.max(0, matches.length - SEARCH_LIMIT));
+	const filtered = $derived(filterOptions(options, search, SEARCH_LIMIT));
+	const listRows = $derived(filtered.rows);
+	const listOverflow = $derived(filtered.overflow);
 
 	const selected = $derived(
 		selectedKeys
@@ -59,11 +58,7 @@
 	const excludedTotal = $derived(series.reduce((sum, s) => sum + s.excluded, 0));
 
 	function toggle(key: string) {
-		if (selectedKeys.includes(key)) {
-			selectedKeys = selectedKeys.filter((k) => k !== key);
-		} else if (!atCap) {
-			selectedKeys = [...selectedKeys, key];
-		}
+		selectedKeys = toggleSelection(selectedKeys, key, atCap);
 	}
 
 	const allPoints = $derived(
@@ -207,6 +202,7 @@
 		return hours >= 10 ? `${Math.round(hours)}h` : `${hours.toFixed(1)}h`;
 	}
 
+	/** One per MAX_SELECTED slot; contrast-sorted so neighbours stay distinct against Latte and Mocha alike. */
 	const PALETTE = [
 		'--ctp-mauve',
 		'--ctp-teal',
@@ -215,74 +211,44 @@
 		'--ctp-peach',
 		'--ctp-flamingo',
 		'--ctp-sky',
-		'--ctp-rosewater',
-		'--ctp-pink',
-		'--ctp-teal',
-		'--ctp-sky',
-		'--ctp-blue',
-		'--ctp-lavender',
+		'--ctp-rosewater'
 	];
 
 	function colorVar(index: number): string {
-		return `var(${PALETTE[index % PALETTE.length]})`;
+		return paletteColorVar(PALETTE, index);
 	}
 </script>
 
-<div class="picker">
-	<label class="search-label" for="ptl-search">Search actors and directors</label>
-	<input id="ptl-search" type="text" placeholder="Type a name…" bind:value={search} />
-
-	{#if selected.length > 0}
-		<ul class="chips">
-			{#each series as s, i (s.option.key)}
-				<li class="chip">
-					<span class="dot" style="background: {colorVar(i)}" aria-hidden="true"></span>
-					{#if s.option.href}
-						<a href={s.option.href} target="_blank" rel="noopener">{s.option.name}</a>
-					{:else}
-						<span>{s.option.name}</span>
-					{/if}
-					<span class="role">{s.option.role}</span>
-					<button
-						type="button"
-						aria-label="Remove {s.option.name}"
-						onclick={() => toggle(s.option.key)}
-					>
-						×
-					</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
-
-	{#if atCap}
-		<p class="note">Up to {MAX_SELECTED} people at a time — remove one to add another.</p>
-	{/if}
-
-	<ul class="options" role="group" aria-label="Actors and directors">
-		{#each listRows as option (option.key)}
-			<li>
-				<label class:disabled={!selectedKeys.includes(option.key) && atCap}>
-					<input
-						type="checkbox"
-						checked={selectedKeys.includes(option.key)}
-						disabled={!selectedKeys.includes(option.key) && atCap}
-						onchange={() => toggle(option.key)}
-					/>
-					<span class="name">{option.name}</span>
-					<span class="meta" data-numeric
-						>{option.role} · {option.count} film{option.count === 1 ? '' : 's'}</span
-					>
-				</label>
-			</li>
+<PickerList
+	searchId="ptl-search"
+	searchLabel="Search actors and directors"
+	placeholder="Type a name…"
+	bind:search
+	chips={series.map((s) => s.option)}
+	{listRows}
+	{listOverflow}
+	{atCap}
+	maxSelected={MAX_SELECTED}
+	capNoun="people"
+	optionsAriaLabel="Actors and directors"
+	isSelected={(key) => selectedKeys.includes(key)}
+	{toggle}
+	{colorVar}
+>
+	{#snippet chipContent(option: PersonOption)}
+		{#if option.href}
+			<a href={option.href} target="_blank" rel="noopener">{option.name}</a>
 		{:else}
-			<li class="empty">No match.</li>
-		{/each}
-	</ul>
-	{#if listOverflow > 0}
-		<p class="note">{listOverflow} more — refine your search.</p>
-	{/if}
-</div>
+			<span>{option.name}</span>
+		{/if}
+		<span class="role">{option.role}</span>
+	{/snippet}
+	{#snippet optionMeta(option: PersonOption)}
+		<span class="meta" data-numeric
+			>{option.role} · {option.count} film{option.count === 1 ? '' : 's'}</span
+		>
+	{/snippet}
+</PickerList>
 
 {#if series.length === 0}
 	<p class="empty-chart">Select at least one actor or director above to plot their watch time.</p>
@@ -376,8 +342,7 @@
 	</div>
 
 	<p class="note">
-		Cumulative hours watched of each person's films, across every diary date — rewatches count
-		again.
+		Cumulative hours watched of each person's films, across every diary date. Rewatches count again.
 		{#if excludedTotal > 0}
 			{excludedTotal} diary entries left out for want of a known runtime.
 		{/if}
@@ -411,121 +376,21 @@
 {/if}
 
 <style>
-	.picker {
-		margin-bottom: 16px;
-	}
-	.search-label {
-		display: block;
-		margin-bottom: 4px;
-		font-size: var(--text-sm);
-		color: var(--fg-secondary);
-	}
-	input[type='text'] {
-		width: 100%;
-		max-width: 360px;
-		padding: 6px 10px;
-		font: inherit;
-		font-size: var(--text-base);
-		color: var(--fg);
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-	}
-	input[type='text']:focus-visible {
-		outline: 2px solid var(--focus);
-		outline-offset: 2px;
-	}
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		margin: 10px 0 0;
-		padding: 0;
-		list-style: none;
-	}
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 3px 6px 3px 8px;
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		font-size: var(--text-sm);
-	}
-	.chip .dot {
-		width: 10px;
-		height: 10px;
-		flex-shrink: 0;
-	}
-	.chip a {
+	:global(.chip) a {
 		color: var(--accent);
 		text-decoration: none;
 	}
-	.chip a:hover {
+	:global(.chip) a:hover {
 		text-decoration: underline;
 	}
-	.chip .role {
+	:global(.chip) .role {
 		color: var(--fg-muted);
 		font-size: var(--text-2xs);
 	}
-	.chip button {
-		font: inherit;
-		padding: 0 2px;
-		margin: 0;
-		background: transparent;
-		border: none;
-		color: var(--fg-muted);
-		cursor: pointer;
-	}
-	.chip button:hover {
-		color: var(--error);
-	}
-	.options {
-		margin: 10px 0 0;
-		padding: 4px;
-		max-height: 220px;
-		overflow-y: auto;
-		list-style: none;
-		border: 1px solid var(--border);
-		background: var(--bg-secondary);
-	}
-	.options li {
-		display: block;
-	}
-	.options label {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-		padding: 4px 6px;
-		cursor: pointer;
-		font-size: var(--text-sm);
-	}
-	.options label:hover {
-		background: var(--surface);
-	}
-	.options label.disabled {
-		cursor: not-allowed;
-		opacity: 0.5;
-	}
-	.options input {
-		accent-color: var(--accent);
-		flex-shrink: 0;
-	}
-	.options .name {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.options .meta {
+	:global(.options) .meta {
 		color: var(--fg-muted);
 		font-size: var(--text-2xs);
 		white-space: nowrap;
-	}
-	.options .empty {
-		padding: 4px 6px;
-		color: var(--fg-muted);
-		font-size: var(--text-sm);
 	}
 	.note {
 		margin: 6px 0 0;
