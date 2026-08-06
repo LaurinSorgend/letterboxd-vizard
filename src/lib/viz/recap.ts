@@ -71,7 +71,9 @@ export function eligibleYears(films: EnrichedFilm[], now: Date): number[] {
 
 /** The longest run of consecutive days you logged something. */
 function longestStreak(films: EnrichedFilm[], year: number): Streak | null {
-	return longestRun(films.flatMap((film) => film.watchedDates).filter((date) => inYear(date, year)));
+	return longestRun(
+		films.flatMap((film) => film.watchedDates).filter((date) => inYear(date, year))
+	);
 }
 
 function extremeByVotes(films: EnrichedFilm[], want: 'low' | 'high'): EnrichedFilm | null {

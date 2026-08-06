@@ -512,9 +512,7 @@
 
 		<section id="mosaic">
 			<h2>Every film you have watched</h2>
-			<p class="sub chart-note">
-				Your whole library as a wall of posters.
-			</p>
+			<p class="sub chart-note">Your whole library as a wall of posters.</p>
 			<Mosaic {films} />
 		</section>
 

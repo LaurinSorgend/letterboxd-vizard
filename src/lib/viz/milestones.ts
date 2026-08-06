@@ -83,7 +83,9 @@ function firstEventWhere(
 	predicate: (film: EnrichedFilm) => boolean
 ): Milestone | null {
 	const event = events.find((e) => predicate(e.film));
-	return event ? { date: event.date, eyebrow, film: event.film, detail: describeFilm(event.film) } : null;
+	return event
+		? { date: event.date, eyebrow, film: event.film, detail: describeFilm(event.film) }
+		: null;
 }
 
 /** Diary dates are calendar days with no time zone of their own, so format them as UTC. */
@@ -97,7 +99,10 @@ export function formatShort(iso: string): string {
 }
 
 function describeFilm(film: EnrichedFilm): string {
-	const parts = [film.year ? String(film.year) : null, film.rating !== null ? `★ ${film.rating}` : null];
+	const parts = [
+		film.year ? String(film.year) : null,
+		film.rating !== null ? `★ ${film.rating}` : null
+	];
 	return parts.filter((p): p is string => p !== null).join(' · ');
 }
 

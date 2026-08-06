@@ -28,7 +28,9 @@
 					{:else}
 						<span class="film">{m.film.name}</span>
 					{/if}
-					<span class="detail" data-numeric>{m.dateLabel ?? formatShort(m.date)}{m.detail ? ` · ${m.detail}` : ''}</span>
+					<span class="detail" data-numeric
+						>{m.dateLabel ?? formatShort(m.date)}{m.detail ? ` · ${m.detail}` : ''}</span
+					>
 				</div>
 			</div>
 		</li>
