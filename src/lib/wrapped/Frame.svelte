@@ -4,9 +4,6 @@
 
 	let { scene, poster }: { scene: Scene; poster?: import('svelte').Snippet } = $props();
 
-	/* Split for the reveal: each glyph wipes up from its own baseline, staggered, so a
-	 * number lands like a counter rolling to a stop rather than fading in as one block. */
-	const glyphs = $derived([...scene.value].map((char) => (char === ' ' ? ' ' : char)));
 	const dense = $derived(scene.body.kind === 'bars' && scene.body.bars.length > 6);
 </script>
 
@@ -33,16 +30,14 @@
 {/snippet}
 
 <article class="frame" aria-label={scene.label}>
-	<p class="value" data-kind={scene.valueKind}>
-		{#each glyphs as glyph, i (i)}<span style="--i: {i}">{glyph}</span>{/each}
-	</p>
+	<p class="value" data-kind={scene.valueKind}>{scene.value}</p>
 	<h2 class="label">{scene.label}</h2>
 	<p class="note">{scene.note}</p>
 
 	{#if scene.body.kind === 'bars'}
 		<ul class="bars" class:dense>
 			{#each scene.body.bars as bar, i (bar.label + i)}
-				<li style="--share: {bar.share}; --i: {i}">
+				<li style="--share: {bar.share}">
 					<span class="bar-track"><span class="bar-fill"></span></span>
 					<span class="bar-label">{bar.label}</span>
 					<span class="bar-value" data-numeric>{bar.value}</span>
@@ -62,7 +57,7 @@
 	{#if scene.stats.length > 0}
 		<dl class="stats">
 			{#each scene.stats as stat, i (stat.label + i)}
-				<div style="--i: {i}">
+				<div>
 					<dt>{stat.label}</dt>
 					<dd data-numeric>{stat.value}</dd>
 				</div>
@@ -72,89 +67,49 @@
 </article>
 
 <style>
+	/* Printed on the slide, not staged on a page: nothing here animates on its own.
+	 * The motion belongs to the carousel, which drops this whole frame into the gate. */
 	.frame {
 		position: absolute;
 		inset: 0;
 		display: flex;
 		flex-direction: column;
-		justify-content: center;
 		align-items: flex-start;
-		gap: 12px;
-		padding: 72px clamp(20px, 6vw, 72px) 96px;
+		gap: clamp(8px, 1.4cqh, 16px);
+		padding: clamp(16px, 5cqw, 60px);
 		overflow-y: auto;
 		overscroll-behavior: contain;
-		color: var(--w-type);
+		color: var(--w-ink);
 	}
-
-	/* Every child of the cascade shares one timing family: the frame settles once,
-	 * top to bottom, instead of each element staging its own entrance. */
-	.value,
-	.label,
-	.note,
-	.bars,
-	.posters,
-	.stats {
-		animation: settle 460ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-	}
-	.label {
-		animation-delay: 180ms;
-	}
-	.note {
-		animation-delay: 240ms;
-	}
-	.bars,
-	.posters {
-		animation-delay: 300ms;
-	}
-	.stats {
-		animation-delay: 360ms;
-	}
-
-	@keyframes settle {
-		from {
-			opacity: 0;
-			transform: translateY(10px);
-		}
+	/* Anchored low and left, the way a title sits on a slide. Pushing the first child
+	 * rather than justifying the box keeps long frames scrollable from their own top. */
+	.frame > :first-child {
+		margin-top: auto;
 	}
 
 	.value {
+		margin: 0;
+		/* Optical: Mazius is an extra-italic, so the first glyph leans off its own box. */
+		margin-left: -0.04em;
 		font-family: var(--font-accent);
 		font-weight: 400;
 		line-height: 0.92;
-		margin: 0;
 		color: var(--w-accent);
-		/* Optical: Mazius is an extra-italic, so the first glyph leans off its own box. */
-		margin-left: -0.04em;
 		text-wrap: balance;
 	}
 	.value[data-kind='number'] {
-		font-size: clamp(var(--text-4xl), 15vw, 8rem);
+		font-size: clamp(2.8rem, 13cqw, 8rem);
 	}
 	.value[data-kind='name'] {
-		font-size: clamp(var(--text-3xl), 8vw, 4.5rem);
+		font-size: clamp(1.6rem, 7cqw, 4.4rem);
 		line-height: 1.02;
-	}
-	.value span {
-		display: inline-block;
-		animation: roll 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-		animation-delay: calc(var(--i) * 34ms);
-	}
-	@keyframes roll {
-		from {
-			clip-path: inset(100% 0 -20% 0);
-			transform: translateY(0.28em);
-		}
-		to {
-			clip-path: inset(-25% 0 -20% 0);
-			transform: translateY(0);
-		}
 	}
 
 	.label {
-		margin: 6px 0 0;
-		padding-top: 14px;
+		margin: 0;
+		padding-top: clamp(8px, 1.4cqh, 14px);
 		font-family: var(--font-sans);
-		font-size: var(--text-lg);
+		font-size: clamp(0.95rem, 2cqw, 1.35rem);
 		font-weight: 700;
 		line-height: var(--leading-snug);
 		letter-spacing: 0.01em;
@@ -166,7 +121,7 @@
 	.note {
 		margin: 0;
 		max-width: 46ch;
-		font-size: var(--text-base);
+		font-size: clamp(0.85rem, 1.7cqw, 1.05rem);
 		line-height: var(--leading-normal);
 		color: var(--w-muted);
 		text-wrap: pretty;
@@ -176,7 +131,7 @@
 	.posters,
 	.stats {
 		list-style: none;
-		margin: 8px 0 0;
+		margin: clamp(2px, 0.8cqh, 8px) 0 0;
 		padding: 0;
 		width: 100%;
 	}
@@ -187,11 +142,11 @@
 		grid-template-columns: minmax(6ch, 12ch) minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 12px;
-		padding: 5px 0;
+		padding: clamp(2px, 0.5cqh, 5px) 0;
 	}
 	.bar-label {
 		grid-column: 1;
-		font-size: var(--text-sm);
+		font-size: clamp(0.75rem, 1.5cqw, 0.95rem);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -199,27 +154,19 @@
 	.bar-track {
 		grid-column: 2;
 		display: block;
-		height: 14px;
-		background: color-mix(in srgb, var(--w-line) 30%, transparent);
+		height: clamp(10px, 1.8cqh, 15px);
+		background: rgba(36, 31, 24, 0.12);
 	}
 	.bar-fill {
 		display: block;
 		height: 100%;
-		background: var(--w-accent);
-		transform-origin: left center;
-		animation: grow 620ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-		animation-delay: calc(340ms + var(--i) * 45ms);
 		width: calc(var(--share) * 100%);
+		background: var(--w-accent);
 	}
 	.bar-value {
 		grid-column: 3;
-		font-size: var(--text-sm);
+		font-size: clamp(0.75rem, 1.5cqw, 0.95rem);
 		color: var(--w-muted);
-	}
-	@keyframes grow {
-		from {
-			transform: scaleX(0);
-		}
 	}
 
 	/* Twelve months will not carry word labels, so the dense set stands the bars up. */
@@ -228,22 +175,22 @@
 		grid-template-columns: repeat(12, minmax(0, 1fr));
 		gap: 4px;
 		align-items: end;
-		height: 132px;
+		height: clamp(76px, 20cqh, 140px);
 	}
 	.bars.dense li {
 		display: grid;
 		grid-template-rows: minmax(0, 1fr) auto;
 		grid-template-columns: none;
 		height: 100%;
-		gap: 6px;
+		gap: 5px;
 		padding: 0;
 	}
 	.bars.dense .bar-track {
 		grid-row: 1;
 		grid-column: 1;
-		height: 100%;
 		display: flex;
 		align-items: flex-end;
+		height: 100%;
 		background: none;
 		border-bottom: 1px solid var(--w-line);
 	}
@@ -251,34 +198,27 @@
 		width: 100%;
 		height: calc(var(--share) * 100%);
 		min-height: 2px;
-		transform-origin: bottom center;
-		animation-name: grow-up;
 	}
 	.bars.dense .bar-label {
 		grid-row: 2;
 		grid-column: 1;
-		font-size: var(--text-2xs);
+		font-size: clamp(0.6rem, 1.1cqw, 0.75rem);
 		text-align: center;
 		color: var(--w-muted);
 	}
 	.bars.dense .bar-value {
 		display: none;
 	}
-	@keyframes grow-up {
-		from {
-			transform: scaleY(0);
-		}
-	}
 
 	.posters {
 		display: grid;
 		grid-auto-flow: column;
 		grid-auto-columns: minmax(0, 1fr);
-		gap: 10px;
-		max-width: 620px;
+		gap: clamp(6px, 1cqw, 12px);
+		max-width: min(100%, 58cqw);
 	}
 	.posters[data-count='1'] {
-		max-width: 200px;
+		max-width: min(100%, 18cqw);
 	}
 	.posters a,
 	.posters span:not(.noposter) {
@@ -292,21 +232,21 @@
 		width: 100%;
 		aspect-ratio: 2 / 3;
 		object-fit: cover;
-		background: var(--w-gate);
-		border: 1px solid var(--w-line);
+		background: rgba(36, 31, 24, 0.1);
+		border: 1px solid rgba(36, 31, 24, 0.45);
 	}
 	.noposter {
 		display: grid;
 		place-items: center;
 		padding: 6px;
-		font-size: var(--text-2xs);
+		font-size: clamp(0.6rem, 1.1cqw, 0.75rem);
 		text-align: center;
 		color: var(--w-muted);
 	}
 	.caption {
 		display: block;
-		margin-top: 6px;
-		font-size: var(--text-2xs);
+		margin-top: 5px;
+		font-size: clamp(0.6rem, 1.1cqw, 0.75rem);
 		line-height: var(--leading-snug);
 	}
 	.caption-name {
@@ -329,35 +269,20 @@
 	.stats {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 8px 28px;
-		padding-top: 14px;
+		gap: 6px clamp(16px, 3cqw, 34px);
+		padding-top: clamp(8px, 1.4cqh, 14px);
 		border-top: 1px solid var(--w-line);
 	}
 	.stats dt {
-		font-size: var(--text-2xs);
+		font-family: var(--font-mono);
+		font-size: clamp(0.58rem, 1.05cqw, 0.72rem);
 		text-transform: uppercase;
 		letter-spacing: 0.12em;
 		color: var(--w-muted);
 	}
 	.stats dd {
 		margin: 2px 0 0;
-		font-size: var(--text-lg);
-		color: var(--w-type);
-	}
-
-	@media (max-width: 560px) {
-		.frame {
-			padding: 64px 20px 104px;
-			gap: 10px;
-		}
-		.posters {
-			max-width: none;
-		}
-		.stats {
-			gap: 6px 20px;
-		}
-		.stats dd {
-			font-size: var(--text-base);
-		}
+		font-size: clamp(0.95rem, 1.9cqw, 1.3rem);
+		color: var(--w-ink);
 	}
 </style>

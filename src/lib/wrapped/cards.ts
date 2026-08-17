@@ -3,10 +3,11 @@ import {
 	ensureFonts,
 	fitFont,
 	font,
+	gateMarks,
 	grain,
 	loadImage,
 	posterBox,
-	sprockets,
+	rgba,
 	wrap,
 	type Block,
 	type Palette
@@ -14,8 +15,11 @@ import {
 import type { Scene } from './scenes';
 import type { Wrapped } from './wrapped';
 
-const STORY = { width: 1080, height: 1920, rail: 88, margin: 88 };
-const POSTER = { width: 1080, height: 1350, rail: 72, margin: 80 };
+/* A mounted transparency: dark mount all round, a deeper strip at the foot for the
+ * stamp, and the lit field between them. `margin` is mount plus the field's own inset,
+ * so every block below still measures from the card edge. */
+const STORY = { width: 1080, height: 1920, mount: 56, strip: 148, margin: 128 };
+const POSTER = { width: 1080, height: 1350, mount: 56, strip: 136, margin: 124 };
 
 function surface(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
 	const canvas = document.createElement('canvas');
@@ -27,29 +31,59 @@ function surface(width: number, height: number): [HTMLCanvasElement, CanvasRende
 	return [canvas, ctx];
 }
 
-function ground(
-	ctx: CanvasRenderingContext2D,
-	size: { width: number; height: number; rail: number },
-	palette: Palette
-): void {
-	ctx.fillStyle = palette.ground;
-	ctx.fillRect(0, 0, size.width, size.height);
-	sprockets(ctx, size.width, 0, size.rail, palette);
-	sprockets(ctx, size.width, size.height - size.rail, size.rail, palette);
+type Mount = { width: number; height: number; mount: number; strip: number };
+
+function fieldOf(size: Mount) {
+	return {
+		x: size.mount,
+		y: size.mount,
+		width: size.width - size.mount * 2,
+		height: size.height - size.mount - size.strip
+	};
 }
 
-function footer(
+function ground(ctx: CanvasRenderingContext2D, size: Mount, palette: Palette): void {
+	ctx.fillStyle = palette.room;
+	ctx.fillRect(0, 0, size.width, size.height);
+	const field = fieldOf(size);
+	ctx.fillStyle = palette.screen;
+	ctx.fillRect(field.x, field.y, field.width, field.height);
+	ctx.fillStyle = palette.cast;
+	ctx.fillRect(field.x, field.y, field.width, field.height);
+}
+
+/** Everything the projector adds after the picture: lens falloff, dust, emulsion, stamp. */
+function finish(
 	ctx: CanvasRenderingContext2D,
-	size: { width: number; height: number; rail: number; margin: number },
+	size: Mount & { margin: number },
 	palette: Palette,
 	right: string
 ): void {
+	const field = fieldOf(size);
+	gateMarks(ctx, field);
+	ctx.save();
+	ctx.beginPath();
+	ctx.rect(field.x, field.y, field.width, field.height);
+	ctx.clip();
+	grain(ctx, size.width, size.height);
+	ctx.restore();
+	stamp(ctx, size, palette, right);
+}
+
+/** The stamp on the mount, the way a slide carries its date and its place in the tray. */
+function stamp(
+	ctx: CanvasRenderingContext2D,
+	size: Mount & { margin: number },
+	palette: Palette,
+	right: string
+): void {
+	const field = fieldOf(size);
+	const y = field.y + field.height + (size.strip - 26) / 2;
 	ctx.font = font('mono', 26);
-	ctx.fillStyle = palette.muted;
-	const y = size.height - size.rail - 52;
-	ctx.fillText('LETTERBOXD VIZARD', size.margin, y);
+	ctx.fillStyle = palette.stamp;
+	ctx.fillText('LETTERBOXD VIZARD', size.mount, y);
 	ctx.textAlign = 'right';
-	ctx.fillText(right, size.width - size.margin, y);
+	ctx.fillText(right, size.width - size.mount, y);
 	ctx.textAlign = 'left';
 }
 
@@ -70,10 +104,11 @@ function labelBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palett
 	return {
 		height: 96,
 		draw: (y) => {
+			const width = Math.min(520, STORY.width - STORY.margin * 2);
 			ctx.fillStyle = palette.accent;
-			ctx.fillRect(STORY.margin, y, Math.min(520, STORY.width - STORY.margin * 2), 6);
+			ctx.fillRect(STORY.margin, y, width, 6);
 			ctx.font = font('label', 54);
-			ctx.fillStyle = palette.type;
+			ctx.fillStyle = palette.ink;
 			ctx.fillText(scene.label, STORY.margin, y + 24);
 		}
 	};
@@ -155,14 +190,15 @@ function barBlock(
 			bars.forEach((bar, i) => {
 				const top = y + i * row;
 				ctx.font = font('body', 32);
-				ctx.fillStyle = palette.type;
+				ctx.fillStyle = palette.ink;
 				ctx.fillText(bar.label, STORY.margin, top);
 				const trackX = STORY.margin + 300;
 				const trackWidth = measure - 300 - 90;
-				ctx.fillStyle = palette.gate;
+				ctx.fillStyle = rgba(palette.ink, 0.12);
 				ctx.fillRect(trackX, top + 8, trackWidth, 26);
+				const filled = Math.max(4, trackWidth * bar.share);
 				ctx.fillStyle = palette.accent;
-				ctx.fillRect(trackX, top + 8, Math.max(4, trackWidth * bar.share), 26);
+				ctx.fillRect(trackX, top + 8, filled, 26);
 				ctx.font = font('mono', 28);
 				ctx.fillStyle = palette.muted;
 				ctx.textAlign = 'right';
@@ -185,7 +221,7 @@ function statBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette
 				ctx.fillStyle = palette.muted;
 				ctx.fillText(stat.label.toUpperCase(), x, y + 24);
 				ctx.font = font('mono', 40);
-				ctx.fillStyle = palette.type;
+				ctx.fillStyle = palette.ink;
 				const value = stat.value.length > 18 ? `${stat.value.slice(0, 17)}…` : stat.value;
 				ctx.fillText(value, x, y + 58);
 				x += Math.max(ctx.measureText(value).width, 200) + 48;
@@ -233,16 +269,16 @@ export async function storyCard(
 	if (body) blocks.push(body);
 	if (scene.stats.length > 0) blocks.push(statBlock(ctx, scene, palette));
 
+	const field = fieldOf(STORY);
 	const gap = 40;
 	const total = blocks.reduce((sum, block) => sum + block.height, 0) + gap * (blocks.length - 1);
-	let y = Math.max(STORY.rail + 72, (STORY.height - total) / 2);
+	let y = Math.max(field.y + 72, field.y + (field.height - total) / 2);
 	for (const block of blocks) {
 		block.draw(y);
 		y += block.height + gap;
 	}
 
-	footer(ctx, STORY, palette, `${data.viewer ? `${data.viewer} · ` : ''}${data.year}`);
-	grain(ctx, STORY.width, STORY.height);
+	finish(ctx, STORY, palette, `${data.viewer ? `${data.viewer} · ` : ''}${data.year}`);
 	return canvas;
 }
 
@@ -274,7 +310,7 @@ function drawSummaryGrid(
 		ctx.fillStyle = palette.muted;
 		ctx.fillText(stat.label, x, y);
 		ctx.font = font('mono', 38);
-		ctx.fillStyle = palette.type;
+		ctx.fillStyle = palette.ink;
 		const value = stat.value.length > 20 ? `${stat.value.slice(0, 19)}…` : stat.value;
 		ctx.fillText(value, x, y + 30);
 	});
@@ -310,7 +346,7 @@ export async function summaryCard(data: Wrapped, palette: Palette): Promise<HTML
 	ground(ctx, POSTER, palette);
 	const measure = POSTER.width - POSTER.margin * 2;
 
-	let y = POSTER.rail + 56;
+	let y = POSTER.mount + 56;
 	ctx.font = font('mono', 26);
 	ctx.fillStyle = palette.muted;
 	ctx.fillText(
@@ -351,13 +387,12 @@ export async function summaryCard(data: Wrapped, palette: Palette): Promise<HTML
 
 	const stats = summaryStats(data);
 	const verdict = verdictBlock(ctx, data, palette);
-	const verdictTop = POSTER.height - POSTER.rail - 82 - verdict.height;
+	const verdictTop = POSTER.height - POSTER.strip - 48 - verdict.height;
 	const rows = Math.ceil(stats.length / 2);
 	const row = Math.min(96, Math.max(72, (verdictTop - 20 - y) / rows));
 	drawSummaryGrid(ctx, stats, y, row, palette);
 	verdict.draw(verdictTop);
 
-	footer(ctx, POSTER, palette, String(data.year));
-	grain(ctx, POSTER.width, POSTER.height);
+	finish(ctx, POSTER, palette, String(data.year));
 	return canvas;
 }

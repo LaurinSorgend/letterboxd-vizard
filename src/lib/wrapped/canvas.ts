@@ -1,13 +1,17 @@
 /** Low-level drawing helpers shared by the story card and the summary poster. */
 
 export interface Palette {
-	ground: string;
-	type: string;
+	/** The dark surround the slide is mounted in. */
+	room: string;
+	/** The lit field the picture is printed on. */
+	screen: string;
+	ink: string;
 	muted: string;
 	line: string;
-	gate: string;
+	stamp: string;
 	accent: string;
-	onAccent: string;
+	/** The dye shift the whole frame took, already carrying its own alpha. */
+	cast: string;
 }
 
 /** A measured piece of the card, so a stack can be centred before anything is painted. */
@@ -41,14 +45,28 @@ export function paletteFrom(element: Element): Palette {
 	const style = getComputedStyle(element);
 	const read = (name: string) => style.getPropertyValue(name).trim();
 	return {
-		ground: read('--w-ground'),
-		type: read('--w-type'),
+		room: read('--w-room'),
+		screen: read('--w-screen'),
+		ink: read('--w-ink'),
 		muted: read('--w-muted'),
 		line: read('--w-line'),
-		gate: read('--w-gate'),
-		accent: read('--w-accent') || read('--w-type'),
-		onAccent: read('--w-on-accent')
+		stamp: read('--w-stamp'),
+		accent: read('--w-accent') || read('--w-ink'),
+		cast: read('--w-cast') || 'transparent'
 	};
+}
+
+let probe: CanvasRenderingContext2D | null = null;
+
+/** Any CSS colour as rgba, since a canvas gradient cannot fade a colour to nothing on its own. */
+export function rgba(color: string, alpha: number): string {
+	probe ??= document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+	if (!probe) return color;
+	probe.clearRect(0, 0, 1, 1);
+	probe.fillStyle = color;
+	probe.fillRect(0, 0, 1, 1);
+	const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
+	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /** Film grain, tiled from a small noise patch so a 2-megapixel card stays cheap. */
@@ -73,24 +91,46 @@ export function grain(ctx: CanvasRenderingContext2D, width: number, height: numb
 	ctx.restore();
 }
 
-/** The perforated rail that frames every card, top and bottom. */
-export function sprockets(
+/** Lens falloff, dust and one hair: the gate's own marks, printed on every card. */
+export function gateMarks(
 	ctx: CanvasRenderingContext2D,
-	width: number,
-	top: number,
-	railHeight: number,
-	palette: Palette
+	box: { x: number; y: number; width: number; height: number }
 ): void {
-	ctx.fillStyle = palette.gate;
-	ctx.fillRect(0, top, width, railHeight);
-	const holeWidth = 44;
-	const holeHeight = railHeight * 0.42;
-	const pitch = 92;
-	const y = top + (railHeight - holeHeight) / 2;
-	ctx.fillStyle = palette.ground;
-	for (let x = pitch / 2 - holeWidth / 2; x < width; x += pitch) {
-		ctx.fillRect(x, y, holeWidth, holeHeight);
+	const { x, y, width, height } = box;
+	const centre = ctx.createRadialGradient(
+		x + width / 2,
+		y + height * 0.42,
+		0,
+		x + width / 2,
+		y + height / 2,
+		Math.max(width, height) * 0.78
+	);
+	centre.addColorStop(0, 'rgba(255, 250, 232, 0.13)');
+	centre.addColorStop(0.5, 'rgba(255, 250, 232, 0)');
+	centre.addColorStop(1, 'rgba(24, 16, 6, 0.22)');
+	ctx.fillStyle = centre;
+	ctx.fillRect(x, y, width, height);
+
+	const specks: [number, number, number, number][] = [
+		[0.18, 0.27, 3.2, 0.5],
+		[0.74, 0.16, 2.6, 0.36],
+		[0.61, 0.84, 3.8, 0.45],
+		[0.33, 0.69, 2.3, 0.3],
+		[0.88, 0.57, 2.9, 0.4]
+	];
+	for (const [fx, fy, radius, alpha] of specks) {
+		ctx.beginPath();
+		ctx.arc(x + width * fx, y + height * fy, radius, 0, Math.PI * 2);
+		ctx.fillStyle = `rgba(20, 14, 6, ${alpha})`;
+		ctx.fill();
 	}
+
+	ctx.save();
+	ctx.translate(x + width * 0.87, y + height * 0.07);
+	ctx.rotate(0.23);
+	ctx.fillStyle = 'rgba(20, 14, 6, 0.42)';
+	ctx.fillRect(0, 0, 2, height * 0.24);
+	ctx.restore();
 }
 
 export function wrap(
@@ -162,7 +202,7 @@ export function posterBox(
 	if (image) {
 		ctx.drawImage(image, x, y, width, height);
 	} else {
-		ctx.fillStyle = palette.gate;
+		ctx.fillStyle = rgba(palette.ink, 0.1);
 		ctx.fillRect(x, y, width, height);
 		ctx.fillStyle = palette.muted;
 		ctx.font = font('body', 20);
@@ -172,7 +212,7 @@ export function posterBox(
 		});
 		ctx.textAlign = 'left';
 	}
-	ctx.strokeStyle = palette.line;
+	ctx.strokeStyle = rgba(palette.ink, 0.45);
 	ctx.lineWidth = 2;
 	ctx.strokeRect(x + 1, y + 1, width - 2, height - 2);
 }

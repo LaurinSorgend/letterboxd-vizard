@@ -1,91 +1,64 @@
-/* Tokens for the year-in-review deck only. The deck runs its own world — a film
- * frame rather than a page — so it leaves the Catppuccin chrome behind and uses
- * a bone/ink ground with one saturated hue per frame. It still follows the
- * theme: the flavor picker and the OS preference flip ground and type together.
- * Every hue below clears WCAG AA (4.5:1) as text on its own ground and again
- * when the ground is knocked out of it as a fill.
+/* Tokens for the year-in-review deck only. The deck is a Kodak carousel running in a
+ * dark room: the viewport is the room, and the one bright thing in it is a mounted
+ * 35mm transparency thrown on a screen. So --w-room is the surround, --w-screen is
+ * the projected light, and --w-ink is what was printed on the slide.
+ * Each frame declares a stock: --w-accent is the dye that survived, --w-cast the
+ * pale shift the rest of the emulsion took with age. Every accent clears WCAG AA
+ * (4.5:1) as ink on --w-screen under its own cast.
  */
 
 :root {
-	--w-ground: #f2ece1;
-	--w-type: #12100e;
-	--w-muted: #56504a;
-	--w-line: #8d8377;
-	/* Sprockets and gate edges: decorative, never carrying meaning on their own. */
-	--w-gate: #dcd3c4;
-	--w-on-accent: #f2ece1;
+	--w-room: #14110c;
+	--w-screen: #f4eee0;
+	--w-ink: #241f18;
+	--w-muted: #5f5648;
+	--w-line: #a89c88;
+	/* The mount blocks the light; in the room it reads as the edge of the bright field. */
+	--w-mount: #0e0b07;
+	--w-stamp: #8c8172;
+	--w-on-accent: #f4eee0;
 
-	--w-amber: #a8500f;
-	--w-oxblood: #9a1526;
-	--w-cyan: #0a5f6b;
-	--w-indigo: #2a3796;
-	--w-forest: #2a6a3c;
-	--w-magenta: #97176a;
-	--w-gold: #75570a;
+	--w-kodachrome: #a8480d;
+	--w-oxblood: #96122a;
+	--w-ektachrome: #0d5f63;
+	--w-tungsten: #2a3b8f;
+	--w-aged-green: #2b6437;
+	--w-shift: #93135f;
+	--w-yellowed: #7a5606;
 
 	--w-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-@media (prefers-color-scheme: dark) {
-	:root:not([data-flavor]) {
-		--w-ground: #12100e;
-		--w-type: #f2ece1;
-		--w-muted: #a89f92;
-		--w-line: #6b6155;
-		--w-gate: #241f1a;
-		--w-on-accent: #12100e;
-
-		--w-amber: #f0a13c;
-		--w-oxblood: #ef7080;
-		--w-cyan: #4fd0dd;
-		--w-indigo: #96a3ff;
-		--w-forest: #79d492;
-		--w-magenta: #f286cb;
-		--w-gold: #e8c14a;
-	}
-}
-
-:root[data-flavor='frappe'],
-:root[data-flavor='macchiato'],
-:root[data-flavor='mocha'] {
-	--w-ground: #12100e;
-	--w-type: #f2ece1;
-	--w-muted: #a89f92;
-	--w-line: #6b6155;
-	--w-gate: #241f1a;
-	--w-on-accent: #12100e;
-
-	--w-amber: #f0a13c;
-	--w-oxblood: #ef7080;
-	--w-cyan: #4fd0dd;
-	--w-indigo: #96a3ff;
-	--w-forest: #79d492;
-	--w-magenta: #f286cb;
-	--w-gold: #e8c14a;
-}
-
-/* Each frame declares its hue; everything inside it reads --w-accent. */
+/* Each frame declares its stock; everything on the slide reads --w-accent and --w-cast. */
 [data-hue='neutral'] {
-	--w-accent: var(--w-type);
+	--w-accent: var(--w-ink);
+	--w-cast: rgba(168, 72, 13, 0.05);
 }
 [data-hue='amber'] {
-	--w-accent: var(--w-amber);
+	--w-accent: var(--w-kodachrome);
+	--w-cast: rgba(168, 72, 13, 0.1);
 }
 [data-hue='oxblood'] {
 	--w-accent: var(--w-oxblood);
+	--w-cast: rgba(150, 18, 42, 0.09);
 }
 [data-hue='cyan'] {
-	--w-accent: var(--w-cyan);
+	--w-accent: var(--w-ektachrome);
+	--w-cast: rgba(13, 95, 99, 0.09);
 }
 [data-hue='indigo'] {
-	--w-accent: var(--w-indigo);
+	--w-accent: var(--w-tungsten);
+	--w-cast: rgba(42, 59, 143, 0.08);
 }
 [data-hue='forest'] {
-	--w-accent: var(--w-forest);
+	--w-accent: var(--w-aged-green);
+	--w-cast: rgba(43, 100, 55, 0.08);
 }
 [data-hue='magenta'] {
-	--w-accent: var(--w-magenta);
+	--w-accent: var(--w-shift);
+	--w-cast: rgba(147, 19, 95, 0.1);
 }
 [data-hue='gold'] {
-	--w-accent: var(--w-gold);
+	--w-accent: var(--w-yellowed);
+	--w-cast: rgba(122, 86, 6, 0.11);
 }

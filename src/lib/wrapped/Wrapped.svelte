@@ -53,8 +53,8 @@
 		swipeFrom = 0;
 	}
 
-	/* The card renderer reads the live custom properties off the dialog, so a shared
-	 * picture always matches the theme and hue the viewer is actually looking at. */
+	/* The card renderer reads the live custom properties off the dialog, so a saved
+	 * picture always carries the stock the viewer is actually looking at. */
 	async function share(kind: 'scene' | 'poster') {
 		if (!dialog || busy) return;
 		busy = true;
@@ -91,11 +91,14 @@
 		};
 	});
 
-	function pull(_node: Element, { from }: { from: number }) {
+	/* The tray cycles: a slide falls out of the gate and the next one drops in, landing
+	 * a shade soft until the lamp house pulls it back into focus. */
+	function drop(_node: Element, { from }: { from: number }) {
 		return {
-			duration: reduced ? 0 : 440,
+			duration: reduced ? 0 : 380,
 			easing: cubicOut,
-			css: (_t: number, u: number) => `transform: translateY(${from * u * 100}%);`
+			css: (_t: number, u: number) =>
+				`transform: translateY(${-from * u * 115}%); filter: blur(${u * 7}px);`
 		};
 	}
 </script>
@@ -111,51 +114,73 @@
 	{onpointerdown}
 	{onpointerup}
 >
-	<div class="rail top" aria-hidden="true"></div>
-	<div class="rail bottom" aria-hidden="true"></div>
-	<div class="grain" aria-hidden="true"></div>
-
-	<div class="counter">
-		{#each scenes as item, i (item.id)}
-			<span class="segment" class:seen={i < index}>
-				{#if i === index && !last}
-					{#key index}
-						<span
-							class="tick"
-							style="animation-play-state: {playing ? 'running' : 'paused'}"
-							onanimationend={() => playing && go(1)}
-						></span>
-					{/key}
-				{:else if i === index}
-					<span class="tick held"></span>
-				{/if}
-			</span>
-		{/each}
-	</div>
-
+	<!--
+		THESIS: a year of films is a carousel tray, not a feed. Refuses the full-bleed
+		hero-metric slide: one mounted 35mm transparency, thrown on a screen in a dark room.
+		OWN-WORLD: dark room ground, one lit 3:2 gate, aged dye cast per frame, gate dust and
+		a hair that never move, stamped mount strip in Fira Code.
+		STORY: the viewer sits through their own year, one slide at a time, and takes one home.
+		FIRST VIEWPORT: the lit gate centred, the year set large in the upper left of the slide,
+		caption rule beneath it, mount strip and tray notches under the gate, controls in the room.
+		FORM: Kodak carousel, user-pinned.
+	-->
 	<button class="close" onclick={() => dialog?.close()} aria-label="Close the year in review">
 		<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
 			<path d="M5 5 19 19M19 5 5 19" fill="none" stroke="currentColor" stroke-width="2" />
 		</svg>
 	</button>
 
-	<div class="stage">
-		{#key index}
-			<div class="slide" in:pull={{ from: direction }} out:pull={{ from: -direction }}>
-				<Frame {scene}>
-					{#snippet poster()}
-						<div class="preview">
-							{#if posterPreview}
-								<img src={posterPreview} alt="Your {data.year} in cinema, as one poster" />
-							{:else}
-								<p class="rendering">Developing the picture…</p>
-							{/if}
+	<div class="projector">
+		<div class="carriage">
+			<div class="gate">
+				<div class="stage">
+					{#key index}
+						<div class="slide" in:drop={{ from: direction }} out:drop={{ from: -direction }}>
+							<Frame {scene}>
+								{#snippet poster()}
+									<div class="preview">
+										{#if posterPreview}
+											<img src={posterPreview} alt="Your {data.year} in cinema, as one poster" />
+										{:else}
+											<p class="rendering">Developing the picture…</p>
+										{/if}
+									</div>
+								{/snippet}
+							</Frame>
 						</div>
-					{/snippet}
-				</Frame>
+					{/key}
+				</div>
+				<div class="cast" aria-hidden="true"></div>
+				<div class="grain" aria-hidden="true"></div>
+				<div class="vignette" aria-hidden="true"></div>
+				<div class="dust" aria-hidden="true"></div>
+				<div class="flash" aria-hidden="true"></div>
 			</div>
-		{/key}
-		<div class="flash" aria-hidden="true"></div>
+
+			<div class="mount">
+				<span class="stamp">Letterboxd Vizard · {data.year}</span>
+				<div class="tray">
+					{#each scenes as item, i (item.id)}
+						<span class="notch" class:seen={i < index}>
+							{#if i === index && !last}
+								{#key index}
+									<span
+										class="tick"
+										style="animation-play-state: {playing ? 'running' : 'paused'}"
+										onanimationend={() => playing && go(1)}
+									></span>
+								{/key}
+							{:else if i === index}
+								<span class="tick held"></span>
+							{/if}
+						</span>
+					{/each}
+				</div>
+				<span class="count" data-numeric>
+					{String(index + 1).padStart(2, '0')} / {String(scenes.length).padStart(2, '0')}
+				</span>
+			</div>
+		</div>
 	</div>
 
 	<p class="live" role="status">Frame {index + 1} of {scenes.length}: {scene?.label}</p>
@@ -175,7 +200,7 @@
 			{playing ? 'Pause' : 'Play'}
 		</button>
 		<button class="share" onclick={() => share(last ? 'poster' : 'scene')} disabled={busy}>
-			{busy ? 'Rendering…' : last ? 'Save the poster' : 'Share this frame'}
+			{busy ? 'Rendering…' : last ? 'Save the slide' : 'Save this frame'}
 		</button>
 		<!-- svelte-ignore a11y_autofocus -->
 		<button autofocus onclick={() => go(1)} disabled={last} aria-label="Next frame">
@@ -192,6 +217,8 @@
 
 <style>
 	dialog {
+		display: grid;
+		grid-template-rows: minmax(0, 1fr) auto;
 		width: 100vw;
 		max-width: 100vw;
 		height: 100dvh;
@@ -200,52 +227,86 @@
 		padding: 0;
 		border: none;
 		overflow: hidden;
-		background: var(--w-ground);
-		color: var(--w-type);
+		background: var(--w-room);
+		color: var(--w-screen);
 		font-family: var(--font-sans);
 	}
 	dialog::backdrop {
 		background: #000;
 	}
+	dialog ::selection {
+		color: var(--w-screen);
+		background: var(--w-accent);
+	}
 
-	/* The gate: every frame sits between two perforated rails, the one shape the
-	 * whole deck is built from. */
-	.rail {
+	.projector {
+		display: grid;
+		place-items: center;
+		min-height: 0;
+		padding: clamp(16px, 3vh, 36px) clamp(16px, 4vw, 56px) 0;
+	}
+	/* The gate is sized off the room, not the other way round: the slide is as large as
+	 * the height allows and never taller than it. */
+	.carriage {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		width: min(100%, calc((100dvh - 190px) * 3 / 2));
+	}
+
+	/* The slide sizes its own contents: everything inside the gate measures against the
+	 * gate, not the window, so a phone gets a whole slide rather than a cropped one. */
+	.gate {
+		position: relative;
+		container-type: size;
+		aspect-ratio: 3 / 2;
+		overflow: hidden;
+		background: var(--w-screen);
+		box-shadow: 0 24px 64px -34px #000;
+		animation: lamp 5.4s ease-in-out infinite;
+	}
+	/* A lamp on a transformer is never quite steady. */
+	@keyframes lamp {
+		0%,
+		100% {
+			filter: brightness(1);
+		}
+		37% {
+			filter: brightness(1.018);
+		}
+		62% {
+			filter: brightness(0.99);
+		}
+	}
+
+	.stage {
 		position: absolute;
-		left: 0;
-		right: 0;
-		height: 26px;
-		background: var(--w-gate);
+		inset: 0;
+		overflow: hidden;
+		touch-action: pan-y;
+	}
+	.slide {
+		position: absolute;
+		inset: 0;
+	}
+
+	/* What the emulsion did with forty years in a shoebox. */
+	.cast {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		background: var(--w-cast);
 		pointer-events: none;
-	}
-	.rail::after {
-		content: '';
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 8px;
-		height: 10px;
-		background-image: repeating-linear-gradient(
-			to right,
-			var(--w-ground) 0 22px,
-			transparent 22px 52px
-		);
-	}
-	.rail.top {
-		top: 0;
-	}
-	.rail.bottom {
-		bottom: 0;
 	}
 
 	.grain {
 		position: absolute;
 		inset: 0;
 		z-index: 3;
-		opacity: 0.055;
+		opacity: 0.14;
 		background-image: var(--w-grain);
 		background-size: 160px 160px;
-		mix-blend-mode: overlay;
+		mix-blend-mode: multiply;
 		pointer-events: none;
 		animation: jitter 640ms steps(4, end) infinite;
 	}
@@ -264,30 +325,107 @@
 		}
 	}
 
-	.counter {
+	/* The lens: hot near the middle, falling away at the corners. */
+	.vignette {
 		position: absolute;
-		top: 34px;
-		left: clamp(20px, 6vw, 72px);
-		right: clamp(72px, 6vw, 124px);
-		z-index: 2;
+		inset: 0;
+		z-index: 4;
+		pointer-events: none;
+		background:
+			radial-gradient(70% 60% at 50% 42%, rgba(255, 250, 232, 0.14), transparent 72%),
+			radial-gradient(122% 112% at 50% 50%, transparent 44%, rgba(24, 16, 6, 0.22) 100%);
+	}
+
+	/* Dust and one hair sit on the gate, not on the slide, so they never move between frames. */
+	.dust {
+		position: absolute;
+		inset: 0;
+		z-index: 5;
+		opacity: 0.45;
+		pointer-events: none;
+		background-image:
+			radial-gradient(circle at 18% 27%, rgba(20, 14, 6, 0.55) 0 1.1px, transparent 1.7px),
+			radial-gradient(circle at 74% 16%, rgba(20, 14, 6, 0.4) 0 0.9px, transparent 1.4px),
+			radial-gradient(circle at 61% 84%, rgba(20, 14, 6, 0.5) 0 1.3px, transparent 1.9px),
+			radial-gradient(circle at 33% 69%, rgba(20, 14, 6, 0.34) 0 0.8px, transparent 1.3px),
+			radial-gradient(circle at 88% 57%, rgba(20, 14, 6, 0.45) 0 1px, transparent 1.5px);
+	}
+	.dust::after {
+		content: '';
+		position: absolute;
+		top: 7%;
+		right: 13%;
+		width: 1px;
+		height: 24%;
+		background: linear-gradient(
+			to bottom,
+			transparent,
+			rgba(20, 14, 6, 0.5) 28%,
+			rgba(20, 14, 6, 0.32) 74%,
+			transparent
+		);
+		transform: rotate(13deg) skewX(-9deg);
+	}
+
+	/* The one authored moment: the tray turns, and for a beat the lamp burns through an
+	 * empty gate before the next slide lands. */
+	.flash {
+		position: absolute;
+		inset: 0;
+		z-index: 6;
+		opacity: 0;
+		background: #fffaf0;
+		pointer-events: none;
+	}
+	dialog.pulling .flash {
+		animation: blank 380ms ease-out;
+	}
+	@keyframes blank {
+		0% {
+			opacity: 0;
+		}
+		22% {
+			opacity: 0.92;
+		}
+		48% {
+			opacity: 0.86;
+		}
+		100% {
+			opacity: 0;
+		}
+	}
+
+	.mount {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: clamp(12px, 2vw, 24px);
+		font-family: var(--font-mono);
+		font-size: var(--text-2xs);
+		letter-spacing: 0.09em;
+		text-transform: uppercase;
+		color: var(--w-stamp);
+	}
+	.tray {
 		display: flex;
-		gap: 4px;
+		gap: 3px;
 	}
-	.segment {
+	.notch {
 		flex: 1;
-		height: 3px;
-		min-width: 4px;
-		background: color-mix(in srgb, var(--w-line) 45%, transparent);
+		min-width: 3px;
+		height: 8px;
 		overflow: hidden;
+		box-shadow: inset 0 0 0 1px rgba(140, 129, 114, 0.5);
 	}
-	.segment.seen {
-		background: var(--w-accent);
+	.notch.seen {
+		background: var(--w-stamp);
+		box-shadow: none;
 	}
 	.tick {
 		display: block;
-		height: 100%;
 		width: 100%;
-		background: var(--w-accent);
+		height: 100%;
+		background: var(--w-screen);
 		transform-origin: left center;
 		animation: tick 6800ms linear forwards;
 	}
@@ -298,66 +436,14 @@
 		from {
 			transform: scaleX(0);
 		}
-		to {
-			transform: scaleX(1);
-		}
 	}
-
-	.stage {
-		position: absolute;
-		inset: 26px 0 76px;
-		overflow: hidden;
-		touch-action: pan-y;
-	}
-	.slide {
-		position: absolute;
-		inset: 0;
-	}
-
-	/* The projector: a frame advances with one gate flash, not a fade. */
-	.flash {
-		position: absolute;
-		inset: 0;
-		z-index: 4;
-		background: var(--w-type);
-		opacity: 0;
-		pointer-events: none;
-	}
-	dialog.pulling .flash {
-		animation: gate 260ms steps(2, end);
-	}
-	@keyframes gate {
-		0% {
-			opacity: 0.16;
-		}
-		50% {
-			opacity: 0.05;
-		}
-		100% {
-			opacity: 0;
-		}
-	}
-	dialog.pulling .stage {
-		animation: weave 420ms cubic-bezier(0.3, 0, 0.2, 1);
-	}
-	@keyframes weave {
-		0% {
-			transform: translateY(0);
-		}
-		40% {
-			transform: translateY(2px);
-		}
-		70% {
-			transform: translateY(-1px);
-		}
-		100% {
-			transform: translateY(0);
-		}
+	.count {
+		color: var(--w-screen);
 	}
 
 	.preview {
-		margin-top: 8px;
-		max-width: 300px;
+		margin-top: 6px;
+		max-width: clamp(150px, 26cqw, 300px);
 		border: 1px solid var(--w-line);
 	}
 	.preview img {
@@ -367,7 +453,7 @@
 	}
 	.rendering {
 		margin: 0;
-		padding: 40px 16px;
+		padding: 28px 16px;
 		text-align: center;
 		font-size: var(--text-sm);
 		color: var(--w-muted);
@@ -385,15 +471,10 @@
 	}
 
 	.controls {
-		position: absolute;
-		left: 0;
-		right: 0;
-		bottom: 26px;
-		z-index: 2;
 		display: flex;
 		align-items: stretch;
 		gap: 8px;
-		padding: 0 clamp(20px, 6vw, 72px) 12px;
+		padding: clamp(12px, 2vh, 20px) clamp(16px, 4vw, 56px) clamp(16px, 3vh, 28px);
 	}
 	button {
 		display: inline-flex;
@@ -405,66 +486,78 @@
 		padding: 0 14px;
 		font: inherit;
 		font-size: var(--text-sm);
-		color: var(--w-type);
+		color: var(--w-screen);
 		background: transparent;
-		border: 1px solid var(--w-line);
+		border: 1px solid rgba(140, 129, 114, 0.5);
 		cursor: pointer;
 	}
 	button:hover:not(:disabled) {
-		color: var(--w-on-accent);
-		background: var(--w-accent);
-		border-color: var(--w-accent);
+		color: var(--w-room);
+		background: var(--w-screen);
+		border-color: var(--w-screen);
 	}
 	button:disabled {
-		color: var(--w-muted);
-		border-color: color-mix(in srgb, var(--w-line) 50%, transparent);
+		color: #6f6656;
+		border-color: rgba(140, 129, 114, 0.24);
 		cursor: not-allowed;
 	}
 	button:focus-visible {
-		outline: 2px solid var(--w-accent);
+		outline: 2px solid var(--w-screen);
 		outline-offset: 2px;
 	}
 	.share {
 		flex: 1;
 		font-weight: 700;
-		color: var(--w-on-accent);
-		background: var(--w-accent);
-		border-color: var(--w-accent);
+		color: var(--w-room);
+		background: var(--w-screen);
+		border-color: var(--w-screen);
 	}
 	.share:hover:not(:disabled) {
-		filter: brightness(1.12);
+		filter: brightness(0.93);
 	}
 	.play {
 		min-width: 76px;
 	}
 	.close {
 		position: absolute;
-		top: 40px;
-		right: clamp(20px, 6vw, 72px);
+		top: 14px;
+		right: 14px;
 		z-index: 2;
 		min-height: 40px;
 		min-width: 40px;
 		padding: 0;
+		color: var(--w-stamp);
 		border-color: transparent;
-		color: var(--w-muted);
 	}
 
 	.message {
 		position: absolute;
-		bottom: 84px;
-		left: clamp(20px, 6vw, 72px);
-		z-index: 2;
+		left: clamp(16px, 4vw, 56px);
+		bottom: 100px;
 		margin: 0;
 		font-size: var(--text-sm);
-		color: var(--w-muted);
+		color: var(--w-stamp);
 	}
 
-	/* The pause control stays on every width: auto-advance without one fails WCAG 2.2.2.
-	 * The share button drops to its own row instead. */
-	@media (max-width: 560px) {
+	/* Portrait mounts are as real as landscape ones, and a phone has no room for 3:2.
+	 * The pause control stays at every width: auto-advance without one fails WCAG 2.2.2. */
+	@media (max-width: 640px) {
+		.carriage {
+			width: min(100%, calc((100dvh - 250px) * 2 / 3));
+		}
+		.gate {
+			aspect-ratio: 2 / 3;
+		}
+		/* No room on the mount for the full stamp; the tray and the count carry it. */
+		.stamp {
+			display: none;
+		}
+		.mount {
+			grid-template-columns: minmax(0, 1fr) auto;
+		}
 		.controls {
 			flex-wrap: wrap;
-			padding: 0 16px 10px;
+			padding: 12px 16px 16px;
 		}
 		.play {
 			flex: 1;
@@ -473,11 +566,8 @@
 			order: 5;
 			flex-basis: 100%;
 		}
-		.stage {
-			inset: 26px 0 140px;
-		}
 		.message {
-			bottom: 146px;
+			bottom: 152px;
 		}
 	}
 </style>
