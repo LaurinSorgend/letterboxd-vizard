@@ -12,8 +12,13 @@
 	const year = $derived(chosen !== null && years.includes(chosen) ? chosen : (years[0] ?? null));
 	const recap = $derived(year === null ? null : buildRecap(films, year));
 
+	/* Diary dates are calendar days with no time zone of their own, so format them as UTC. */
 	function shortDate(iso: string): string {
-		return new Date(iso).toLocaleDateString('en', { day: 'numeric', month: 'short' });
+		return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en', {
+			day: 'numeric',
+			month: 'short',
+			timeZone: 'UTC'
+		});
 	}
 </script>
 

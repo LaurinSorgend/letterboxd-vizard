@@ -1,0 +1,91 @@
+/* Tokens for the year-in-review deck only. The deck runs its own world — a film
+ * frame rather than a page — so it leaves the Catppuccin chrome behind and uses
+ * a bone/ink ground with one saturated hue per frame. It still follows the
+ * theme: the flavor picker and the OS preference flip ground and type together.
+ * Every hue below clears WCAG AA (4.5:1) as text on its own ground and again
+ * when the ground is knocked out of it as a fill.
+ */
+
+:root {
+	--w-ground: #f2ece1;
+	--w-type: #12100e;
+	--w-muted: #56504a;
+	--w-line: #8d8377;
+	/* Sprockets and gate edges: decorative, never carrying meaning on their own. */
+	--w-gate: #dcd3c4;
+	--w-on-accent: #f2ece1;
+
+	--w-amber: #a8500f;
+	--w-oxblood: #9a1526;
+	--w-cyan: #0a5f6b;
+	--w-indigo: #2a3796;
+	--w-forest: #2a6a3c;
+	--w-magenta: #97176a;
+	--w-gold: #75570a;
+
+	--w-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-flavor]) {
+		--w-ground: #12100e;
+		--w-type: #f2ece1;
+		--w-muted: #a89f92;
+		--w-line: #6b6155;
+		--w-gate: #241f1a;
+		--w-on-accent: #12100e;
+
+		--w-amber: #f0a13c;
+		--w-oxblood: #ef7080;
+		--w-cyan: #4fd0dd;
+		--w-indigo: #96a3ff;
+		--w-forest: #79d492;
+		--w-magenta: #f286cb;
+		--w-gold: #e8c14a;
+	}
+}
+
+:root[data-flavor='frappe'],
+:root[data-flavor='macchiato'],
+:root[data-flavor='mocha'] {
+	--w-ground: #12100e;
+	--w-type: #f2ece1;
+	--w-muted: #a89f92;
+	--w-line: #6b6155;
+	--w-gate: #241f1a;
+	--w-on-accent: #12100e;
+
+	--w-amber: #f0a13c;
+	--w-oxblood: #ef7080;
+	--w-cyan: #4fd0dd;
+	--w-indigo: #96a3ff;
+	--w-forest: #79d492;
+	--w-magenta: #f286cb;
+	--w-gold: #e8c14a;
+}
+
+/* Each frame declares its hue; everything inside it reads --w-accent. */
+[data-hue='neutral'] {
+	--w-accent: var(--w-type);
+}
+[data-hue='amber'] {
+	--w-accent: var(--w-amber);
+}
+[data-hue='oxblood'] {
+	--w-accent: var(--w-oxblood);
+}
+[data-hue='cyan'] {
+	--w-accent: var(--w-cyan);
+}
+[data-hue='indigo'] {
+	--w-accent: var(--w-indigo);
+}
+[data-hue='forest'] {
+	--w-accent: var(--w-forest);
+}
+[data-hue='magenta'] {
+	--w-accent: var(--w-magenta);
+}
+[data-hue='gold'] {
+	--w-accent: var(--w-gold);
+}

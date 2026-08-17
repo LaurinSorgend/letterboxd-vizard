@@ -25,6 +25,7 @@
 	import Milestones from '$lib/viz/Milestones.svelte';
 	import PeopleTimeline from '$lib/viz/PeopleTimeline.svelte';
 	import YearRecap from '$lib/viz/YearRecap.svelte';
+	import WrappedEntry from '$lib/wrapped/WrappedEntry.svelte';
 	import { byKeyword, keywordCoverage } from '$lib/viz/keywords';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
 	import {
@@ -240,6 +241,8 @@
 			{/if}
 		</div>
 	{:else}
+		<WrappedEntry {films} viewer={data?.profile?.givenName || data?.profile?.username || null} />
+
 		<RememberToggle checked={remember} error={saveError} onchange={toggleRemember} />
 
 		<SectionNav container={mainEl} />
