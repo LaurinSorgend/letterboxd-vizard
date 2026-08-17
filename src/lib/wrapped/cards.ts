@@ -21,6 +21,9 @@ import type { Wrapped } from './wrapped';
 const STORY = { width: 1080, height: 1920, mount: 56, strip: 148, margin: 128 };
 const POSTER = { width: 1080, height: 1350, mount: 56, strip: 136, margin: 124 };
 
+/** Printed on the mount of the card people actually hand around. */
+const SITE = 'letterboxd-vizard.sorgend.org';
+
 function surface(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
 	const canvas = document.createElement('canvas');
 	canvas.width = width;
@@ -57,7 +60,8 @@ function finish(
 	ctx: CanvasRenderingContext2D,
 	size: Mount & { margin: number },
 	palette: Palette,
-	right: string
+	right: string,
+	url?: string
 ): void {
 	const field = fieldOf(size);
 	gateMarks(ctx, field);
@@ -67,7 +71,7 @@ function finish(
 	ctx.clip();
 	grain(ctx, size.width, size.height);
 	ctx.restore();
-	stamp(ctx, size, palette, right);
+	stamp(ctx, size, palette, right, url);
 }
 
 /** The stamp on the mount, the way a slide carries its date and its place in the tray. */
@@ -75,15 +79,21 @@ function stamp(
 	ctx: CanvasRenderingContext2D,
 	size: Mount & { margin: number },
 	palette: Palette,
-	right: string
+	right: string,
+	url?: string
 ): void {
 	const field = fieldOf(size);
-	const y = field.y + field.height + (size.strip - 26) / 2;
+	const centre = field.y + field.height + size.strip / 2;
 	ctx.font = font('mono', 26);
 	ctx.fillStyle = palette.stamp;
-	ctx.fillText('LETTERBOXD VIZARD', size.mount, y);
+	ctx.fillText('LETTERBOXD VIZARD', size.mount, url ? centre - 30 : centre - 13);
+	if (url) {
+		ctx.fillStyle = palette.screen;
+		ctx.fillText(url, size.mount, centre + 4);
+	}
 	ctx.textAlign = 'right';
-	ctx.fillText(right, size.width - size.mount, y);
+	ctx.fillStyle = palette.stamp;
+	ctx.fillText(right, size.width - size.mount, centre - 13);
 	ctx.textAlign = 'left';
 }
 
@@ -393,6 +403,6 @@ export async function summaryCard(data: Wrapped, palette: Palette): Promise<HTML
 	drawSummaryGrid(ctx, stats, y, row, palette);
 	verdict.draw(verdictTop);
 
-	finish(ctx, POSTER, palette, String(data.year));
+	finish(ctx, POSTER, palette, String(data.year), SITE);
 	return canvas;
 }
