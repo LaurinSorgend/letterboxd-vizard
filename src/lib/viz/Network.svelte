@@ -15,7 +15,8 @@
 	const MIN_SHARED = 1;
 
 	let castDepth = $state('10');
-	let selected: number | null = $state(null);
+	/** Identity of the selected film, not a position — the graph reshuffles when castDepth changes. */
+	let selected: string | null = $state(null);
 	let hover: NetworkNode | null = $state(null);
 	let hoverPos = $state({ x: 0, y: 0, above: true });
 	let container: HTMLElement | undefined = $state();
@@ -29,6 +30,13 @@
 			maxNodes: MAX_NODES
 		})
 	);
+
+	/** Index of the selected film in the current graph, or null if unselected or dropped by a rebuild. */
+	const selectedIndex = $derived.by(() => {
+		if (selected === null) return null;
+		const index = graph.nodes.findIndex((n) => n.film.uri === selected);
+		return index === -1 ? null : index;
+	});
 
 	/** Neighbor lookup shared by every BFS, so re-selecting a node doesn't re-scan all edges. */
 	const adjacency = $derived.by(() => {
@@ -45,9 +53,9 @@
 
 	/** Hop distance from the selected node, out to `MAX_DEGREE`; the selected node itself is 0. */
 	const focusDist = $derived.by(() => {
-		if (selected === null) return null;
-		const dist = new Map<number, number>([[selected, 0]]);
-		let frontier = [selected];
+		if (selectedIndex === null) return null;
+		const dist = new Map<number, number>([[selectedIndex, 0]]);
+		let frontier = [selectedIndex];
 		for (let d = 1; d <= MAX_DEGREE && frontier.length > 0; d++) {
 			const next: number[] = [];
 			for (const index of frontier) {
@@ -71,11 +79,11 @@
 
 	/** For the selected film, who it connects to and which billed people the two share. */
 	const connections = $derived.by(() => {
-		if (selected === null) return [];
+		if (selectedIndex === null) return [];
 		return graph.edges
-			.filter((edge) => edge.source === selected || edge.target === selected)
+			.filter((edge) => edge.source === selectedIndex || edge.target === selectedIndex)
 			.map((edge) => ({
-				film: graph.nodes[edge.source === selected ? edge.target : edge.source].film,
+				film: graph.nodes[edge.source === selectedIndex ? edge.target : edge.source].film,
 				shared: edge.shared
 			}))
 			.sort((a, b) => a.film.name.localeCompare(b.film.name));
@@ -96,8 +104,8 @@
 		return node.bin === null ? 'unrated' : `bin-${node.bin}`;
 	}
 
-	function select(index: number) {
-		selected = selected === index ? null : index;
+	function select(uri: string) {
+		selected = selected === uri ? null : uri;
 	}
 
 	/** Anchored above the point by default, flipping below when there isn't room, so it never clips
@@ -162,7 +170,7 @@
 				<g
 					class="node"
 					class:dim={focusDist !== null && !focusDist.has(index)}
-					class:selected={selected === index}
+					class:selected={selected === node.film.uri}
 					role="button"
 					tabindex="0"
 					aria-label={describe(node)}
@@ -170,11 +178,11 @@
 					onpointerleave={() => (hover = null)}
 					onfocus={(e) => showHover(node, e)}
 					onblur={() => (hover = null)}
-					onclick={() => select(index)}
+					onclick={() => select(node.film.uri)}
 					onkeydown={(e) => {
 						if (e.key === 'Enter' || e.key === ' ') {
 							e.preventDefault();
-							select(index);
+							select(node.film.uri);
 						}
 					}}
 				>
@@ -203,7 +211,7 @@
 	</div>
 
 	<div class="legend" aria-hidden="true">
-		{#if selected !== null}
+		{#if selectedIndex !== null}
 			<span class="less">Less <span data-numeric>({DEGREE_LABELS[0]})</span></span>
 			<span class="scale">
 				{#each DEGREE_LABELS as label, i (label)}
@@ -226,7 +234,7 @@
 	</div>
 
 	<p class="note">
-		{#if selected !== null}
+		{#if selectedIndex !== null}
 			Dot colour: how many hops from the film you picked, up to the {DEGREE_LABELS.length}th degree;
 			anything further fades out. Line strength: how many billed people two films share.
 		{:else}
@@ -243,10 +251,10 @@
 		{/if}
 	</p>
 
-	{#if selected !== null}
+	{#if selectedIndex !== null}
 		<div class="connections">
 			<h3>
-				Films connected to {graph.nodes[selected].film.name}: {connections.length}
+				Films connected to {graph.nodes[selectedIndex].film.name}: {connections.length}
 			</h3>
 			<ul>
 				{#each connections as connection (connection.film.uri)}

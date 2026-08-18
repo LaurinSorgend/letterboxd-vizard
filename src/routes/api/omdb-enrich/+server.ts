@@ -1,4 +1,5 @@
 import { json, error } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import pLimit from 'p-limit';
 import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { getOmdbCachedMany, putOmdbCachedMany } from '$lib/server/cache';
@@ -24,6 +25,9 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	}
 	if (imdbIds.length > MAX_BATCH) {
 		error(400, `Batch too large, send at most ${MAX_BATCH} items`);
+	}
+	if (!env.OMDB_API_KEY) {
+		return json({ results: imdbIds.map(() => null), pending: [] });
 	}
 
 	const known = await getOmdbCachedMany(db, [...new Set(imdbIds)]);

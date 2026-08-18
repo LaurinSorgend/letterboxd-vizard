@@ -13,6 +13,8 @@ export interface ContrarianSource {
 	label: string;
 	/** Mean signed gap (yours − source) across films both rated; null with no overlap. */
 	avgGap: number | null;
+	/** Mean absolute gap across films both rated; null with no overlap. */
+	meanAbsGap: number | null;
 	count: number;
 	over: ContrarianGap[];
 	under: ContrarianGap[];
@@ -42,10 +44,13 @@ function summarize(
 ): ContrarianSource {
 	const sorted = [...gaps].sort((a, b) => b.gap - a.gap);
 	const avgGap = gaps.length === 0 ? null : gaps.reduce((sum, g) => sum + g.gap, 0) / gaps.length;
+	const meanAbsGap =
+		gaps.length === 0 ? null : gaps.reduce((sum, g) => sum + Math.abs(g.gap), 0) / gaps.length;
 	return {
 		key,
 		label,
 		avgGap,
+		meanAbsGap,
 		count: gaps.length,
 		over: sorted.slice(0, TOP_N).filter((g) => g.gap > 0),
 		under: sorted
@@ -74,8 +79,8 @@ export function contrarianSources(films: EnrichedFilm[]): ContrarianSource[] {
 /** A single magnitude of disagreement: the mean absolute gap across every source with overlap. */
 export function contrarianScore(sources: ContrarianSource[]): number | null {
 	const known = sources.filter(
-		(s): s is ContrarianSource & { avgGap: number } => s.avgGap !== null
+		(s): s is ContrarianSource & { meanAbsGap: number } => s.meanAbsGap !== null
 	);
 	if (known.length === 0) return null;
-	return known.reduce((sum, s) => sum + Math.abs(s.avgGap), 0) / known.length;
+	return known.reduce((sum, s) => sum + s.meanAbsGap, 0) / known.length;
 }
