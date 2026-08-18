@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
@@ -22,5 +23,9 @@ function stubLocalDb(): Plugin {
 }
 
 export default defineConfig({
-	plugins: [stubLocalDb(), sveltekit()]
+	plugins: [stubLocalDb(), sveltekit()],
+	test: {
+		environment: 'node',
+		include: ['src/**/*.test.ts']
+	}
 });

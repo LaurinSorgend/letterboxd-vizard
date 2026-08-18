@@ -1,3 +1,10 @@
+/** One diary row. Letterboxd records a rating per viewing, not just a current rating per film. */
+export interface DiaryEntry {
+	date: string;
+	rating: number | null;
+	rewatch: boolean;
+}
+
 /** A film from the Letterboxd export, merged across CSVs and keyed by Letterboxd URI. */
 export interface Film {
 	uri: string;
@@ -8,6 +15,8 @@ export interface Film {
 	review: string | null;
 	/** ISO dates from the diary; empty if the film was never diary-logged. */
 	watchedDates: string[];
+	/** The same diary rows as `watchedDates`, carrying the rating and rewatch flag of each. */
+	entries: DiaryEntry[];
 	rewatch: boolean;
 	tags: string[];
 }

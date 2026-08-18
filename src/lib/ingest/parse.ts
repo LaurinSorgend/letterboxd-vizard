@@ -43,6 +43,7 @@ export function parseExport(zipBytes: Uint8Array): LetterboxdData {
 			liked: false,
 			review: null,
 			watchedDates: [],
+			entries: [],
 			rewatch: false,
 			tags: []
 		}));
