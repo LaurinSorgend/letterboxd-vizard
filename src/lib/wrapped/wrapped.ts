@@ -8,7 +8,8 @@ import {
 	type BarDatum,
 	type RatingGap
 } from '$lib/viz/stats';
-import type { EnrichedFilm } from '$lib/types';
+import { buildLibrary, datesIn, type Library } from './library';
+import type { CollectionParts, EnrichedFilm, WatchlistEntry } from '$lib/types';
 
 const MONTHS = Array.from({ length: 12 }, (_, month) =>
 	new Date(Date.UTC(2000, month, 1)).toLocaleDateString('en', { month: 'long', timeZone: 'UTC' })
@@ -29,6 +30,8 @@ export interface BusiestDay {
 /** Everything the deck shows, on top of the card recap the page already builds. */
 export interface Wrapped extends Recap {
 	viewer: string | null;
+	/** The whole export plus the year's slice, the input every frame computes from. */
+	library: Library;
 	days: number;
 	/** Diary entries per calendar month, January first. */
 	perMonth: number[];
@@ -48,10 +51,6 @@ export interface Wrapped extends Recap {
 	rewatches: number;
 	over: RatingGap | null;
 	under: RatingGap | null;
-}
-
-function datesIn(film: EnrichedFilm, year: number): string[] {
-	return film.watchedDates.filter((date) => date.startsWith(`${year}-`));
 }
 
 function monthTally(films: EnrichedFilm[], year: number): number[] {
@@ -137,22 +136,33 @@ function leadingCountries(films: EnrichedFilm[]): CountryStat[] {
 		.slice(0, 3);
 }
 
+/** What the deck is allowed to know beyond the films themselves. */
+export interface DeckContext {
+	viewer?: string | null;
+	watchlist?: WatchlistEntry[];
+	collections?: CollectionParts[];
+	locale?: string;
+	now?: Date;
+}
+
 /** The full deck's data for one year, or null when that year is too thin to describe. */
 export function buildWrapped(
 	films: EnrichedFilm[],
 	year: number,
-	viewer: string | null = null
+	context: DeckContext = {}
 ): Wrapped | null {
-	const recap = buildRecap(films, year);
+	const recap = buildRecap(films, year, context.now);
 	if (!recap) return null;
 
+	const library = buildLibrary({ films, year, ...context });
 	const slice = recap.films;
 	const perMonth = monthTally(slice, year);
 	const gaps = ratingGaps(slice);
 
 	return {
 		...recap,
-		viewer,
+		viewer: context.viewer ?? null,
+		library,
 		days: Math.round(recap.hours / 24),
 		perMonth,
 		busiestMonth: peakMonth(perMonth),

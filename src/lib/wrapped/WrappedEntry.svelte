@@ -25,7 +25,15 @@
 		const years = eligibleYears(films, now);
 		return years.length > 0 ? Math.max(...years) : null;
 	});
-	const data = $derived(year === null ? null : buildWrapped(films, year, viewer));
+	const data = $derived(
+		year === null
+			? null
+			: buildWrapped(films, year, {
+					viewer,
+					watchlist,
+					locale: typeof navigator === 'undefined' ? 'en' : navigator.language
+				})
+	);
 	let open = $state(false);
 
 	/* The deck opens by itself once per year per browser, so a reader who has already seen
