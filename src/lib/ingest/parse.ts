@@ -1,7 +1,7 @@
 import { unzipSync } from 'fflate';
 import Papa from 'papaparse';
 import { getOrCreate } from '$lib/collections';
-import type { Film, LetterboxdData, Profile } from '$lib/types';
+import type { Film, LetterboxdData, Profile, WatchlistEntry } from '$lib/types';
 
 type Row = Record<string, string>;
 
@@ -70,10 +70,11 @@ export function parseExport(zipBytes: Uint8Array): LetterboxdData {
 		if (row['Review']) get(row).review = row['Review'];
 	}
 
-	const watchlist = csv('watchlist.csv').map((row) => ({
+	const watchlist: WatchlistEntry[] = csv('watchlist.csv').map((row) => ({
 		uri: row['Letterboxd URI'],
 		name: row['Name'],
-		year: toYear(row['Year'])
+		year: toYear(row['Year']),
+		added: row['Date'] || null
 	}));
 
 	const profileRow = csv('profile.csv')[0];

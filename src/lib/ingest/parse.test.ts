@@ -40,3 +40,23 @@ describe('parseExport diary', () => {
 		expect(films[0].entries).toEqual([]);
 	});
 });
+
+describe('parseExport watchlist', () => {
+	it('carries the date each film was added', () => {
+		const watchlist =
+			'Date,Name,Year,Letterboxd URI\n' +
+			'2021-06-02,Stalker,1979,https://boxd.it/w1\n' +
+			'2025-02-11,Nosferatu,2024,https://boxd.it/w2\n';
+		const data = parseExport(zip({ 'watched.csv': WATCHED, 'watchlist.csv': watchlist }));
+		expect(data.watchlist).toEqual([
+			{ uri: 'https://boxd.it/w1', name: 'Stalker', year: 1979, added: '2021-06-02' },
+			{ uri: 'https://boxd.it/w2', name: 'Nosferatu', year: 2024, added: '2025-02-11' }
+		]);
+	});
+
+	it('records a null date when the export omits the column', () => {
+		const watchlist = 'Name,Year,Letterboxd URI\nStalker,1979,https://boxd.it/w1\n';
+		const data = parseExport(zip({ 'watched.csv': WATCHED, 'watchlist.csv': watchlist }));
+		expect(data.watchlist[0].added).toBeNull();
+	});
+});

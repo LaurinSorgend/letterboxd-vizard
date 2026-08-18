@@ -62,7 +62,7 @@
 	import { enrichFilms, enrichOmdb } from '$lib/ingest/enrich';
 	import { watchedTmdbIds } from '$lib/viz/seeds';
 	import { clearSnapshot, loadSnapshot, saveSnapshot } from '$lib/store';
-	import type { EnrichedFilm, LetterboxdData, OmdbRatings } from '$lib/types';
+	import type { EnrichedFilm, LetterboxdData, OmdbRatings, WatchlistEntry } from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
 	let phase: Phase = $state('idle');
@@ -72,6 +72,7 @@
 	let progress = $state({ done: 0, total: 0 });
 	let errorMessage: string | null = $state(null);
 	let watchlistIds: number[] = $state([]);
+	let watchlist: WatchlistEntry[] = $state([]);
 	let includeWatchlist = $state(false);
 	let remember = $state(false);
 	let saveError: string | null = $state(null);
@@ -130,14 +131,15 @@
 		if (snapshot) {
 			films = snapshot.films;
 			watchlistIds = snapshot.watchlistIds;
-			data = { films: snapshot.films, watchlist: [], profile: snapshot.profile };
+			watchlist = snapshot.watchlist ?? [];
+			data = { films: snapshot.films, watchlist, profile: snapshot.profile };
 			remember = true;
 			phase = 'ready';
 		}
 	});
 
 	function persist() {
-		if (saveSnapshot({ films, watchlistIds, profile: data?.profile ?? null })) {
+		if (saveSnapshot({ films, watchlist, watchlistIds, profile: data?.profile ?? null })) {
 			saveError = null;
 		} else {
 			remember = false;
@@ -162,15 +164,16 @@
 		try {
 			const parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
 			data = parsed;
+			watchlist = parsed.watchlist;
 			const total = parsed.films.length + parsed.watchlist.length;
 			const done = { films: 0, watchlist: 0 };
 			const report = () => (progress = { done: done.films + done.watchlist, total });
 			report();
-			const [watched, watchlist] = await Promise.all([
+			const [watched, enrichedWatchlist] = await Promise.all([
 				enrichFilms(parsed.films, (n) => ((done.films = n), report())),
 				enrichFilms(parsed.watchlist, (n) => ((done.watchlist = n), report())).catch(() => [])
 			]);
-			watchlistIds = watchedTmdbIds(watchlist);
+			watchlistIds = watchedTmdbIds(enrichedWatchlist);
 
 			const imdbIds = [
 				...new Set(watched.map((f) => f.tmdb?.imdbId).filter((id): id is string => !!id))
@@ -241,7 +244,11 @@
 			{/if}
 		</div>
 	{:else}
-		<WrappedEntry {films} viewer={data?.profile?.givenName || data?.profile?.username || null} />
+		<WrappedEntry
+			{films}
+			{watchlist}
+			viewer={data?.profile?.givenName || data?.profile?.username || null}
+		/>
 
 		<RememberToggle checked={remember} error={saveError} onchange={toggleRemember} />
 

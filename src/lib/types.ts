@@ -28,9 +28,18 @@ export interface Profile {
 	location: string;
 }
 
+/** A watchlist row: a film you mean to watch, and when you said so. */
+export interface WatchlistEntry {
+	uri: string;
+	name: string;
+	year: number | null;
+	/** ISO date the film was added, or null on exports without the column. */
+	added: string | null;
+}
+
 export interface LetterboxdData {
 	films: Film[];
-	watchlist: { uri: string; name: string; year: number | null }[];
+	watchlist: WatchlistEntry[];
 	profile: Profile | null;
 }
 
