@@ -57,8 +57,13 @@ export function parseExport(zipBytes: Uint8Array): LetterboxdData {
 	for (const row of csv('likes/films.csv')) get(row).liked = true;
 	for (const row of csv('diary.csv')) {
 		const film = get(row);
-		if (row['Watched Date']) film.watchedDates.push(row['Watched Date']);
-		if (row['Rewatch'] === 'Yes') film.rewatch = true;
+		const date = row['Watched Date'];
+		if (!date) continue;
+		const rating = Number.parseFloat(row['Rating']);
+		const rewatch = row['Rewatch'] === 'Yes';
+		film.watchedDates.push(date);
+		film.entries.push({ date, rating: Number.isFinite(rating) ? rating : null, rewatch });
+		if (rewatch) film.rewatch = true;
 		if (row['Tags']) film.tags.push(...row['Tags'].split(',').map((t) => t.trim()));
 	}
 	for (const row of csv('reviews.csv')) {
