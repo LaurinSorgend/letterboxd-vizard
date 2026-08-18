@@ -57,6 +57,13 @@ export interface Collection {
 	posterPath: string | null;
 }
 
+/** A franchise's full size, from TMDB's collection endpoint, so "five of six" is sayable. */
+export interface CollectionParts {
+	id: number;
+	name: string;
+	total: number;
+}
+
 /** Compact metadata record stored in the server cache and returned by /api/enrich. */
 export interface TmdbMovie {
 	/** Negative ids are TheTVDB ids (mediaType 'tv' with no TMDB match). */
