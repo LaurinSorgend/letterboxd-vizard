@@ -15,6 +15,7 @@
 		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 	let dialog: HTMLDialogElement | null = $state(null);
+	let nextButton: HTMLButtonElement | null = $state(null);
 	let index = $state(0);
 	let direction = $state(1);
 	let playing = $state(!reduced);
@@ -155,6 +156,10 @@
 											onclick={() => {
 												expanded = true;
 												go(1);
+												/* The button that was just focused is destroyed with the keyed
+												 * slide it lived in, so focus is moved by hand to the control the
+												 * viewer would reach for next, rather than left to fall to <body>. */
+												nextButton?.focus();
 											}}
 										>
 											Show the other {deck.extras.length} frames
@@ -220,7 +225,13 @@
 			</button>
 		{/if}
 		<!-- svelte-ignore a11y_autofocus -->
-		<button autofocus onclick={() => go(1)} disabled={last} aria-label="Next frame">
+		<button
+			autofocus
+			bind:this={nextButton}
+			onclick={() => go(1)}
+			disabled={last}
+			aria-label="Next frame"
+		>
 			<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
 				<path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" />
 			</svg>

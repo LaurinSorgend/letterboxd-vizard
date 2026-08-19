@@ -136,7 +136,7 @@ function noteBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette
 			lines.forEach((line, i) => ctx.fillText(line, STORY.margin, y + i * 50));
 			if (!footnote) return;
 			ctx.font = font('mono', 26);
-			ctx.fillStyle = palette.stamp;
+			ctx.fillStyle = palette.muted;
 			ctx.fillText(footnote.toUpperCase(), STORY.margin, y + lines.length * 50 + 12);
 		}
 	};
