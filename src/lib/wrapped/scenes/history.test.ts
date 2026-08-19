@@ -160,6 +160,22 @@ describe('fiveStarScene', () => {
 		expect(scene?.stats.some((s) => s.label === 'In 2024')).toBe(false);
 		expect(scene?.note).toBe('20 five-star ratings out of 20 rated films.');
 	});
+
+	it('counts a film by its rated diary entry even when its current rating is null', () => {
+		// One film here is rated 5 on its diary entry but carries no current `rating` (Letterboxd
+		// tracks a rating per viewing, not only a current rating per film — `ratingInYear` exists to
+		// read the former). `watched()` sets the entry's rating without touching `film.rating`, so
+		// omitting `rating` from `film()` leaves it null while the entry is still rated.
+		const noCurrentRating = film({ ...watched(['2025-05-01'], 5) });
+		const films = [...yearOf(2025, 19, 5), noCurrentRating];
+		const scene = fiveStarScene(buildWrapped(films, 2025)!);
+		// Hand-derived: ratingInYear counts all 20 entries (19 with a current rating + this one
+		// without), so `top.count` = 20, `top.rated` = 20, share = 20/20 = 100%. A denominator built
+		// from `film.rating !== null` instead would give 19, reading "20 out of 19" against a 100%
+		// share it cannot support.
+		expect(scene?.stats.find((s) => s.label === 'Share')?.value).toBe('100%');
+		expect(scene?.note).toBe('20 five-star ratings out of 20 rated films.');
+	});
 });
 
 describe('driftScene', () => {

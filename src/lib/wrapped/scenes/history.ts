@@ -78,14 +78,15 @@ export function fiveStarScene(data: Wrapped): Scene | null {
 	// A count of zero would still clear the MIN_RATED gate below, but the frame exists to show off
 	// five-star films: with none to show, it drops out rather than headlining a zero.
 	if (!top || top.count === 0) return null;
-	const rated = data.films.filter((film) => film.rating !== null).length;
 	return {
 		id: 'five-stars',
 		accent: 'gold',
 		label: 'Five stars',
 		value: String(top.count),
 		valueKind: 'number',
-		note: `${plural(top.count, 'five-star rating')} out of ${plural(rated, 'rated film')}.${top.lastYear === null ? '' : ` Last year you gave ${plural(top.lastYear, 'five-star rating')}.`}`,
+		// `top.rated` is the same population `top.share` is a fraction of, so the two always agree —
+		// a locally recomputed count (e.g. films with a non-null current rating) can diverge from it.
+		note: `${plural(top.count, 'five-star rating')} out of ${plural(top.rated, 'rated film')}.${top.lastYear === null ? '' : ` Last year you gave ${plural(top.lastYear, 'five-star rating')}.`}`,
 		stats: [
 			{ label: 'Share', value: `${Math.round(top.share * 100)}%` },
 			{ label: 'Most-used rating', value: stars(top.modal) },

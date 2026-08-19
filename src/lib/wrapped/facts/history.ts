@@ -66,6 +66,8 @@ export function ratingInYear(film: EnrichedFilm, year: number): number | null {
 export interface FiveStars {
 	count: number;
 	share: number;
+	/** Films with a rated diary entry this year — the population `share` is a fraction of. */
+	rated: number;
 	lastYear: number | null;
 	/** The half-star step used most often, so the top rating has something to sit against. */
 	modal: number | null;
@@ -89,6 +91,7 @@ export function fiveStars(library: Library): FiveStars | null {
 	return {
 		count: top.length,
 		share: top.length / ratings.length,
+		rated: ratings.length,
 		lastYear: previous.length > 0 ? previous.filter((rating) => rating === 5).length : null,
 		modal,
 		films: top.slice(0, 6)
