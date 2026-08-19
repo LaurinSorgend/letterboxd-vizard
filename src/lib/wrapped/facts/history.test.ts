@@ -119,6 +119,21 @@ describe('firstTimeDirectors', () => {
 		});
 		expect(firstTimeDirectors(library)).toBeNull();
 	});
+
+	it('keeps a genuine first-timer co-credited with a director who has an earlier entry', () => {
+		const library = buildLibrary({
+			films: [
+				film({ ...watched(['2019-01-01']), tmdb: tmdb({ directors: [tarkovsky] }) }),
+				film({ ...watched(['2025-03-01']), tmdb: tmdb({ directors: [tarkovsky, sciamma] }) })
+			],
+			year: 2025
+		});
+		expect(firstTimeDirectors(library)).toMatchObject({
+			directors: 1,
+			top: { name: 'Céline Sciamma', count: 1 },
+			byFirstTimers: 1
+		});
+	});
 });
 
 describe('ratingDrift', () => {

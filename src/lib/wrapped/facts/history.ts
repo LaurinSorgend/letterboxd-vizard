@@ -1,5 +1,5 @@
 import { getOrCreate } from '$lib/collections';
-import { byPerson } from '$lib/viz/stats';
+import { byPerson, type BarDatum } from '$lib/viz/stats';
 import { datesIn, entriesIn, type Library } from '../library';
 import type { EnrichedFilm } from '$lib/types';
 
@@ -109,17 +109,24 @@ export interface FirstTimers {
 export function firstTimeDirectors(library: Library): FirstTimers | null {
 	const startsBefore = (film: EnrichedFilm) =>
 		film.watchedDates.some((date) => date < `${library.year}-01-01`);
+	const priorFilms = library.all.filter(startsBefore);
+	if (priorFilms.length === 0) return null;
 	const seenBefore = new Set(
-		library.all
-			.filter(startsBefore)
+		priorFilms
 			.flatMap((film) => film.tmdb?.directors ?? [])
 			.map((person) => person.tmdbId ?? person.name)
 	);
-	if (library.all.filter(startsBefore).length === 0) return null;
 
+	// A BarDatum only carries the group's label, not its person key, so recover it from one of the
+	// group's own films rather than asking whether any co-director on those films was seen before.
+	const keyOf = (datum: BarDatum) => {
+		const person = datum.films
+			.flatMap((film) => film.tmdb?.directors ?? [])
+			.find((p) => p.name === datum.label);
+		return person ? (person.tmdbId ?? person.name) : datum.label;
+	};
 	const fresh = byPerson(library.slice, 'directors').filter(
-		(datum) =>
-			!datum.films.some((f) => f.tmdb?.directors.some((p) => seenBefore.has(p.tmdbId ?? p.name)))
+		(datum) => !seenBefore.has(keyOf(datum))
 	);
 	if (fresh.length === 0) return null;
 	const films = [...new Set(fresh.flatMap((datum) => datum.films))];
