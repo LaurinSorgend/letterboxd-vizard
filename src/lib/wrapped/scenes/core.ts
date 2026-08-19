@@ -166,6 +166,27 @@ export function personScene(
 	};
 }
 
+export function directorScene(data: Wrapped): Scene | null {
+	return personScene(
+		'director',
+		'indigo',
+		'Director of the year',
+		(person) =>
+			`${plural(person.count, 'of their films')} this year${person.avg !== null ? `, averaging ${stars(person.avg)}` : ''}.`,
+		data.topDirectors
+	);
+}
+
+export function actorScene(data: Wrapped): Scene | null {
+	return personScene(
+		'actor',
+		'indigo',
+		'On screen most',
+		(person) => `Billed in ${plural(person.count, 'of your films')}.`,
+		data.topActors
+	);
+}
+
 export function reachScene(data: Wrapped): Scene | null {
 	if (data.countries === 0) return null;
 	return {

@@ -29,7 +29,8 @@ export type SceneBody =
 	| { kind: 'none' }
 	| { kind: 'bars'; bars: Bar[] }
 	| { kind: 'posters'; posters: Poster[] }
-	| { kind: 'summary' };
+	| { kind: 'summary' }
+	| { kind: 'gate'; count: number; expanded: boolean };
 
 export interface Scene {
 	id: string;
@@ -41,6 +42,8 @@ export interface Scene {
 	valueKind: 'number' | 'name';
 	note: string;
 	stats: Stat[];
+	/** A quiet line under the note: the also-true labels, or anything else that is not a stat. */
+	footnote?: string;
 	body: SceneBody;
 }
 
