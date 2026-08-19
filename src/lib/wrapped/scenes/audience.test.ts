@@ -10,10 +10,18 @@ const many = (over: (i: number) => Parameters<typeof film>[0], count = 26) =>
 
 describe('obscurityScene', () => {
 	it('reports the median vote count across the year', () => {
+		// 26 films, voteCount 500..13000 in steps of 500, already ascending and untied.
+		// Convention: sort ascending, index Math.floor(n / 2). Median: floor(26/2)=13 -> the
+		// 14th value, 7000. Lower quartile: floor(26/4)=6 -> the 7th value, 3500. A wrong
+		// convention (Math.ceil, or a descending sort) would land on a different index and
+		// so a different number here, which is what makes this fixture discriminating.
 		const films = many((i) => ({ tmdb: tmdb({ voteCount: (i + 1) * 500 }) }));
 		const scene = obscurityScene(buildWrapped(films, 2025)!);
 		expect(scene?.id).toBe('obscurity');
 		expect(scene?.note).toContain('Half');
+		expect(scene?.value).toBe('7,000');
+		expect(scene?.stats).toContainEqual({ label: 'Median votes', value: '7,000' });
+		expect(scene?.stats).toContainEqual({ label: 'Lower quartile', value: '3,500' });
 	});
 
 	it('drops out under twenty-five films with a vote count', () => {
@@ -52,6 +60,19 @@ describe('languageScene', () => {
 		const films = many((i) => ({ tmdb: tmdb({ originalLanguage: i < 15 ? 'iw' : 'he' }) }), 20);
 		const scene = languageScene(buildWrapped(films, 2025, { locale: 'iw' })!);
 		expect(scene?.note).toBe('5 of 20 films were in a language other than Hebrew.');
+		// The only path in this file that can render a literal '0' — pin it.
+		expect(scene?.stats).toContainEqual({ label: 'Other', value: '0' });
+	});
+
+	it('counts languages correctly even when none were the viewer’s own', () => {
+		// own === 0: every film is in a foreign language, so the "own" bucket the old
+		// `bars.length + 1` formula assumed always existed is not there. Only one distinct
+		// language plays here (French), so the correct count is 1. The old formula would
+		// have added 1 regardless, inventing an English entry that was never watched and
+		// reporting 2 — this fixture disagrees with that answer, which is what pins the fix.
+		const films = many(() => ({ tmdb: tmdb({ originalLanguage: 'fr' }) }), 20);
+		const scene = languageScene(buildWrapped(films, 2025)!);
+		expect(scene?.stats).toContainEqual({ label: 'Languages', value: '1' });
 	});
 
 	it('counts every distinct language, not just the five shown in the bar chart', () => {

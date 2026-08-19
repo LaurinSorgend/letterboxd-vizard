@@ -42,7 +42,7 @@ export interface Languages {
 	count: number;
 	own: number;
 	largest: BarDatum | null;
-	/** Distinct languages across the year, the viewer's own plus every other one spoken. */
+	/** Every distinct language among the year's films, the viewer's own included if present. */
 	languages: number;
 	/** Capped at five for the bar chart; count with `languages`. */
 	shownBars: BarDatum[];
@@ -58,7 +58,8 @@ export function languageShare(library: Library): Languages | null {
 	if (share < MIN_SHARE) return null;
 
 	const label = languageNames.of(language) ?? language;
-	const bars = byLanguage(spoken).filter((datum) => datum.label !== label);
+	const all = byLanguage(spoken);
+	const bars = all.filter((datum) => datum.label !== label);
 	return {
 		language,
 		label,
@@ -66,7 +67,7 @@ export function languageShare(library: Library): Languages | null {
 		count,
 		own,
 		largest: bars[0] ?? null,
-		languages: bars.length + 1,
+		languages: all.length,
 		shownBars: bars.slice(0, 5)
 	};
 }
