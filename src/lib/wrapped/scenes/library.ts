@@ -119,7 +119,7 @@ export function likedScene(data: Wrapped): Scene | null {
 export function collectionScene(data: Wrapped): Scene | null {
 	const worked = biggestCollection(data.library);
 	if (!worked) return null;
-	const seen = worked.films.length;
+	const seen = worked.seen;
 	const covered = worked.total
 		? `${spell(seen)} of the ${spell(worked.total)} films in the ${worked.name} collection`
 		: `${spell(seen)} films from the ${worked.name} collection`;

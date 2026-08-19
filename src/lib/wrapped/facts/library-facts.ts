@@ -129,6 +129,8 @@ export function likedNotLoved(library: Library): LikedNotLoved | null {
 export interface Worked {
 	id: number;
 	name: string;
+	/** How many of the franchise's films the year actually covered, before the poster cap. */
+	seen: number;
 	films: EnrichedFilm[];
 	first: string;
 	last: string;
@@ -152,6 +154,7 @@ export function biggestCollection(library: Library): Worked | null {
 		id,
 		// TMDB names every franchise "<name> Collection", which reads as noise on a slide.
 		name: library.collections.get(id)?.name ?? raw.replace(/ Collection$/, ''),
+		seen: films.length,
 		films: [...films].sort((a, b) => (a.tmdb?.year ?? 0) - (b.tmdb?.year ?? 0)).slice(0, 6),
 		first: dates[0],
 		last: dates[dates.length - 1],

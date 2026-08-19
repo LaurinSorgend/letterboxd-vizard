@@ -150,6 +150,32 @@ describe('watchlistScene', () => {
 		}));
 		expect(watchlistScene(buildWrapped(base({}, 11), 2025, { watchlist: thin })!)).toBeNull();
 	});
+
+	it('renders the maths on the full queue even when too few entries carry a date', () => {
+		// 30 entries clears watchlistScene's size gate (>=25); only 10 of them are dated, which
+		// fails watchlistAge's own gate (>=25 dated) on its own denominator. The two facts gate on
+		// different populations of the same watchlist, so one dropping out must not silence the
+		// other.
+		const mixedWatchlist = [
+			...Array.from({ length: 10 }, (_, i) => ({
+				uri: `d${i}`,
+				name: `Dated ${i}`,
+				year: 2000,
+				added: '2024-01-01'
+			})),
+			...Array.from({ length: 20 }, (_, i) => ({
+				uri: `u${i}`,
+				name: `Undated ${i}`,
+				year: 2000,
+				added: null
+			}))
+		];
+		const scene = watchlistScene(buildWrapped(base({}, 20), 2025, { watchlist: mixedWatchlist })!);
+		expect(scene?.value).toBe('1.5');
+		expect(
+			watchlistAgeScene(buildWrapped(base({}, 20), 2025, { watchlist: mixedWatchlist, now })!)
+		).toBeNull();
+	});
 });
 
 describe('breadthScene', () => {
@@ -241,6 +267,26 @@ describe('collectionScene', () => {
 			{ label: 'First', value: '8 February' },
 			{ label: 'Last', value: '8 June' }
 		]);
+	});
+
+	it('counts every film the year covered even past the six-poster cap', () => {
+		// 9 films in the franchise: the poster row caps at 6, but the count in the note and the
+		// "Films" stat must reflect all 9 watched, not just the 6 that get a poster.
+		const films = [
+			...Array.from({ length: 9 }, (_, i) =>
+				film({ ...watched([`2025-0${i + 1}-08`]), tmdb: tmdb({ collection: alien }) })
+			),
+			...base({}, 3)
+		];
+		const scene = collectionScene(
+			buildWrapped(films, 2025, { collections: [{ id: 8091, name: 'Alien', total: 20 }] })!
+		);
+		expect(scene?.note).toBe(
+			'Nine of the 20 films in the Alien collection, between 8 January and 8 September.'
+		);
+		expect(scene?.stats.find((stat) => stat.label === 'Films')?.value).toBe('9 of 20');
+		if (scene?.body.kind !== 'posters') throw new Error('expected a posters body');
+		expect(scene.body.posters).toHaveLength(6);
 	});
 
 	it('describes the set without a total when the franchise size is unknown', () => {
