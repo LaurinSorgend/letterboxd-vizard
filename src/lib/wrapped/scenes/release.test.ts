@@ -15,6 +15,11 @@ const brutalist = film({
 	...watched(['2025-01-27']),
 	tmdb: tmdb({ releaseDate: '2025-01-24', year: 2025 })
 });
+const openingDay = film({
+	name: 'Premiere Night',
+	...watched(['2025-05-05']),
+	tmdb: tmdb({ releaseDate: '2025-05-05', year: 2025 })
+});
 
 /** A ten-year wait, well clear of the five-year floor but nowhere near twenty. */
 const decadeWaiters = Array.from({ length: 10 }, (_, i) =>
@@ -89,5 +94,11 @@ describe('shelfScene', () => {
 
 	it('drops out when nothing arrived inside a month', () => {
 		expect(shelfScene(buildWrapped(archive.slice(5), 2025)!)).toBeNull();
+	});
+
+	it('treats a watch on release day as the fastest possible turnaround', () => {
+		const scene = shelfScene(buildWrapped([...archive.slice(5), openingDay], 2025)!);
+		expect(scene?.value).toBe('0');
+		expect(scene?.note).toBe('You watched Premiere Night on the day it opened.');
 	});
 });

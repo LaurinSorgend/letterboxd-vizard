@@ -19,6 +19,11 @@ const earlyBird = film({
 	...watched(['2025-01-10']),
 	tmdb: tmdb({ releaseDate: '2025-02-01', year: 2025 })
 });
+const openingDay = film({
+	name: 'Opening Day',
+	...watched(['2025-03-01']),
+	tmdb: tmdb({ releaseDate: '2025-03-01', year: 2025 })
+});
 
 const library = buildLibrary({ films: [stalker, brutalist, undated], year: 2025 });
 
@@ -61,6 +66,18 @@ describe('quickestWatch', () => {
 			year: 2025
 		});
 		expect(quickestWatch(withEarly)).toMatchObject({ film: brutalist, days: 3, insideThirty: 1 });
+	});
+
+	it('keeps a watch on the release date itself', () => {
+		const withOpeningDay = buildLibrary({
+			films: [stalker, brutalist, openingDay, undated],
+			year: 2025
+		});
+		expect(quickestWatch(withOpeningDay)).toMatchObject({
+			film: openingDay,
+			days: 0,
+			insideThirty: 2
+		});
 	});
 });
 

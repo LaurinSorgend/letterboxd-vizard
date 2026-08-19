@@ -62,8 +62,7 @@ export function shelfScene(data: Wrapped): Scene | null {
 		label: 'Straight off the shelf',
 		value: String(quick.days),
 		valueKind: 'number',
-		// quickestWatch only ever returns a positive lag, so this is always "N days after", never day zero.
-		note: `You watched ${quick.film.name} ${plural(quick.days, 'day')} after it opened.${extra}`,
+		note: `You watched ${quick.film.name} ${quick.days === 0 ? 'on the day it opened' : `${plural(quick.days, 'day')} after it opened`}.${extra}`,
 		stats: [
 			{ label: 'Released', value: longDate(quick.released) },
 			{ label: 'Inside 30 days', value: String(quick.insideThirty) }
