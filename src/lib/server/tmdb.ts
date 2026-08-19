@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import type { Collection, Person, TmdbMovie } from '$lib/types';
+import type { Collection, CollectionParts, Person, TmdbMovie } from '$lib/types';
 import { normalizeTitle } from '$lib/text';
 import { BudgetExhausted, type FetchBudget } from './budget';
 import { lookupSeriesOnTvdb } from './tvdb';
@@ -211,6 +211,30 @@ export async function fetchRecord(
 		collection: toCollection(d),
 		keywords: toKeywords(d),
 		imdbId: d.external_ids?.imdb_id || null
+	};
+}
+
+/**
+ * A franchise's full size. One subrequest, and the answer changes about once a decade.
+ * `tmdbGet` throws on a non-OK response (a missing collection is a 404), so that case is
+ * indistinguishable here from any other TMDB failure and both come back as null.
+ */
+export async function fetchCollection(
+	budget: FetchBudget,
+	id: number
+): Promise<CollectionParts | null> {
+	let data: { id?: number; name?: string; parts?: unknown[] } | null;
+	try {
+		data = (await tmdbGet(budget, `/collection/${id}`, {})) as typeof data;
+	} catch (cause) {
+		if (cause instanceof BudgetExhausted) throw cause;
+		return null;
+	}
+	if (!data?.id || !Array.isArray(data.parts)) return null;
+	return {
+		id: data.id,
+		name: (data.name ?? '').replace(/ Collection$/, ''),
+		total: data.parts.length
 	};
 }
 

@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import type { OmdbRatings, TmdbMovie } from '$lib/types';
+import type { CollectionParts, OmdbRatings, TmdbMovie } from '$lib/types';
 import type { FetchBudget } from './budget';
 
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -189,6 +189,45 @@ export async function putRelatedCachedMany(
 		await db
 			.prepare(`INSERT OR REPLACE INTO related (tmdb_id, data, fetched_at) VALUES ${marks}`)
 			.bind(...chunk.flatMap(([tmdbId, related]) => [tmdbId, JSON.stringify(related), now]))
+			.run();
+	}
+}
+
+/** Collection sizes for many ids in one query, off-budget like `getCachedMany`. */
+export async function getCollectionsCachedMany(
+	db: D1Database,
+	ids: number[]
+): Promise<Map<number, CollectionParts>> {
+	const known = new Map<number, CollectionParts>();
+	const cutoff = Date.now() - RELATED_TTL_MS;
+	for (const chunk of chunks(ids, MAX_PARAMS - 1)) {
+		const marks = chunk.map(() => '?').join(',');
+		const { results } = await db
+			.prepare(
+				`SELECT collection_id, data FROM collections WHERE collection_id IN (${marks}) AND fetched_at > ?`
+			)
+			.bind(...chunk, cutoff)
+			.all<{ collection_id: number; data: string }>();
+		for (const row of results)
+			known.set(row.collection_id, JSON.parse(row.data) as CollectionParts);
+	}
+	return known;
+}
+
+/** A miss is not cached: a collection id only comes from a TmdbMovie that already carries one. */
+export async function putCollectionsCachedMany(
+	db: D1Database,
+	entries: [number, CollectionParts | null][]
+): Promise<void> {
+	const now = Date.now();
+	const hits = entries.filter((entry): entry is [number, CollectionParts] => entry[1] !== null);
+	for (const chunk of chunks(hits, Math.floor(MAX_PARAMS / 3))) {
+		const marks = chunk.map(() => '(?, ?, ?)').join(',');
+		await db
+			.prepare(
+				`INSERT OR REPLACE INTO collections (collection_id, data, fetched_at) VALUES ${marks}`
+			)
+			.bind(...chunk.flatMap(([id, parts]) => [id, JSON.stringify(parts), now]))
 			.run();
 	}
 }
