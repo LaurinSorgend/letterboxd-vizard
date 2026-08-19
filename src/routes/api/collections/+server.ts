@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import pLimit from 'p-limit';
-import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
+import { FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { getCollectionsCachedMany, putCollectionsCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
 import { checkRateLimit } from '$lib/server/ratelimit';
@@ -31,17 +31,16 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	const limit = pLimit(CONCURRENCY);
 	const resolved = new Map<number, CollectionParts | null>();
 	const deferred = new Set<number>();
+	// fetchCollection only ever throws BudgetExhausted; every other TMDB failure is
+	// caught and logged there, resolving to null instead of reaching this catch.
 	await Promise.all(
 		unique
 			.filter((id) => !known.has(id))
 			.map(async (id) => {
 				try {
 					resolved.set(id, await limit(() => fetchCollection(budget, id)));
-				} catch (cause) {
+				} catch {
 					deferred.add(id);
-					if (!(cause instanceof BudgetExhausted)) {
-						console.error(`tmdb collection failed: ${id}`, cause);
-					}
 				}
 			})
 	);

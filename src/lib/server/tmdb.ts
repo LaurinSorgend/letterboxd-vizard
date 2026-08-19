@@ -228,6 +228,7 @@ export async function fetchCollection(
 		data = (await tmdbGet(budget, `/collection/${id}`, {})) as typeof data;
 	} catch (cause) {
 		if (cause instanceof BudgetExhausted) throw cause;
+		console.error(`tmdb collection failed: ${id}`, cause);
 		return null;
 	}
 	if (!data?.id || !Array.isArray(data.parts)) return null;
