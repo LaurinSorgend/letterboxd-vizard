@@ -1,85 +1,9 @@
-import { webHref } from '$lib/viz/href';
 import { combinedVoteCount, type BarDatum } from '$lib/viz/stats';
-import type { EnrichedFilm } from '$lib/types';
-import type { Wrapped } from './wrapped';
+import type { Wrapped } from '../wrapped';
+import { barsFrom, plural, posterOf, runtimeLabel, shortDate, stars } from './shared';
+import type { Accent, Scene } from './shared';
 
-/** Scene hues, defined as CSS custom properties in wrapped.css and flipped per theme. */
-export type Accent =
-	'neutral' | 'amber' | 'oxblood' | 'cyan' | 'indigo' | 'forest' | 'magenta' | 'gold';
-
-export interface Poster {
-	name: string;
-	path: string | null;
-	href: string | null;
-	meta: string;
-}
-
-export interface Bar {
-	label: string;
-	value: string;
-	/** 0–1 of the largest bar in the set, so the row is comparable at a glance. */
-	share: number;
-}
-
-export interface Stat {
-	label: string;
-	value: string;
-}
-
-export type SceneBody =
-	| { kind: 'none' }
-	| { kind: 'bars'; bars: Bar[] }
-	| { kind: 'posters'; posters: Poster[] }
-	| { kind: 'summary' };
-
-export interface Scene {
-	id: string;
-	accent: Accent;
-	/** The frame's heading. The showcase value below it is the datum, not a second heading. */
-	label: string;
-	value: string;
-	/** Drives the value's size: long names need a smaller cut than a three-digit count. */
-	valueKind: 'number' | 'name';
-	note: string;
-	stats: Stat[];
-	body: SceneBody;
-}
-
-const stars = (rating: number | null): string => (rating === null ? '—' : `★ ${rating.toFixed(2)}`);
-const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
-
-function shortDate(iso: string): string {
-	return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en', {
-		day: 'numeric',
-		month: 'long',
-		timeZone: 'UTC'
-	});
-}
-
-function posterOf(film: EnrichedFilm, meta: string): Poster {
-	return {
-		name: film.name,
-		path: film.tmdb?.posterPath ?? null,
-		href: webHref(film.uri),
-		meta
-	};
-}
-
-function barsFrom(data: BarDatum[]): Bar[] {
-	const top = data[0]?.count ?? 1;
-	return data.map((datum) => ({
-		label: datum.label,
-		value: String(datum.count),
-		share: datum.count / top
-	}));
-}
-
-function runtimeLabel(minutes: number): string {
-	const hours = Math.floor(minutes / 60);
-	return hours === 0 ? `${minutes}m` : `${hours}h ${minutes % 60}m`;
-}
-
-function titleScene(data: Wrapped): Scene {
+export function titleScene(data: Wrapped): Scene {
 	const who = data.viewer ? `${data.viewer}, ` : '';
 	return {
 		id: 'title',
@@ -99,7 +23,7 @@ function titleScene(data: Wrapped): Scene {
 	};
 }
 
-function countScene(data: Wrapped): Scene {
+export function countScene(data: Wrapped): Scene {
 	return {
 		id: 'count',
 		accent: 'amber',
@@ -119,7 +43,7 @@ function countScene(data: Wrapped): Scene {
 	};
 }
 
-function hoursScene(data: Wrapped): Scene {
+export function hoursScene(data: Wrapped): Scene {
 	const weeks = data.partial ? Math.max(1, new Date().getMonth() + 1) * 4.35 : 52;
 	return {
 		id: 'hours',
@@ -136,7 +60,7 @@ function hoursScene(data: Wrapped): Scene {
 	};
 }
 
-function monthScene(data: Wrapped): Scene | null {
+export function monthScene(data: Wrapped): Scene | null {
 	if (!data.busiestMonth) return null;
 	const active = data.perMonth.filter((count) => count > 0);
 	const quietest = Math.min(...active);
@@ -162,7 +86,7 @@ function monthScene(data: Wrapped): Scene | null {
 	};
 }
 
-function streakScene(data: Wrapped): Scene | null {
+export function streakScene(data: Wrapped): Scene | null {
 	if (!data.streak) return null;
 	const day = data.busiestDay;
 	return {
@@ -184,7 +108,7 @@ function streakScene(data: Wrapped): Scene | null {
 	};
 }
 
-function topFilmsScene(data: Wrapped): Scene | null {
+export function topFilmsScene(data: Wrapped): Scene | null {
 	if (data.top.length === 0) return null;
 	return {
 		id: 'top',
@@ -201,7 +125,7 @@ function topFilmsScene(data: Wrapped): Scene | null {
 	};
 }
 
-function genreScene(data: Wrapped): Scene | null {
+export function genreScene(data: Wrapped): Scene | null {
 	const top = data.topGenres[0];
 	if (!top) return null;
 	return {
@@ -216,7 +140,7 @@ function genreScene(data: Wrapped): Scene | null {
 	};
 }
 
-function personScene(
+export function personScene(
 	id: string,
 	accent: Accent,
 	label: string,
@@ -242,7 +166,7 @@ function personScene(
 	};
 }
 
-function reachScene(data: Wrapped): Scene | null {
+export function reachScene(data: Wrapped): Scene | null {
 	if (data.countries === 0) return null;
 	return {
 		id: 'reach',
@@ -266,7 +190,7 @@ function reachScene(data: Wrapped): Scene | null {
 	};
 }
 
-function eraScene(data: Wrapped): Scene | null {
+export function eraScene(data: Wrapped): Scene | null {
 	if (data.medianYear === null || !data.oldest) return null;
 	const oldestYear = data.oldest.tmdb?.year ?? data.oldest.year;
 	return {
@@ -281,7 +205,7 @@ function eraScene(data: Wrapped): Scene | null {
 	};
 }
 
-function longestScene(data: Wrapped): Scene | null {
+export function longestScene(data: Wrapped): Scene | null {
 	const runtime = data.longest?.tmdb?.runtime;
 	if (!data.longest || !runtime) return null;
 	return {
@@ -296,7 +220,7 @@ function longestScene(data: Wrapped): Scene | null {
 	};
 }
 
-function gapScene(data: Wrapped): Scene | null {
+export function gapScene(data: Wrapped): Scene | null {
 	if (!data.over) return null;
 	const { film, yours, tmdb, gap } = data.over;
 	return {
@@ -316,7 +240,7 @@ function gapScene(data: Wrapped): Scene | null {
 	};
 }
 
-function deepCutScene(data: Wrapped): Scene | null {
+export function deepCutScene(data: Wrapped): Scene | null {
 	if (!data.mostObscure) return null;
 	const votes = combinedVoteCount(data.mostObscure);
 	return {
@@ -336,7 +260,7 @@ function deepCutScene(data: Wrapped): Scene | null {
 	};
 }
 
-function verdictScene(data: Wrapped): Scene {
+export function verdictScene(data: Wrapped): Scene {
 	return {
 		id: 'verdict',
 		accent: 'oxblood',
@@ -349,7 +273,7 @@ function verdictScene(data: Wrapped): Scene {
 	};
 }
 
-function summaryScene(data: Wrapped): Scene {
+export function summaryScene(data: Wrapped): Scene {
 	return {
 		id: 'summary',
 		accent: 'neutral',
@@ -360,39 +284,4 @@ function summaryScene(data: Wrapped): Scene {
 		stats: [],
 		body: { kind: 'summary' }
 	};
-}
-
-/** The deck, in order. Frames whose data is missing drop out rather than render a dash. */
-export function buildScenes(data: Wrapped): Scene[] {
-	return [
-		titleScene(data),
-		countScene(data),
-		hoursScene(data),
-		monthScene(data),
-		streakScene(data),
-		topFilmsScene(data),
-		genreScene(data),
-		personScene(
-			'director',
-			'indigo',
-			'Director of the year',
-			(person) =>
-				`${plural(person.count, 'of their films')} this year${person.avg !== null ? `, averaging ${stars(person.avg)}` : ''}.`,
-			data.topDirectors
-		),
-		personScene(
-			'actor',
-			'indigo',
-			'On screen most',
-			(person) => `Billed in ${plural(person.count, 'of your films')}.`,
-			data.topActors
-		),
-		reachScene(data),
-		eraScene(data),
-		longestScene(data),
-		gapScene(data),
-		deepCutScene(data),
-		verdictScene(data),
-		summaryScene(data)
-	].filter((scene): scene is Scene => scene !== null);
 }
