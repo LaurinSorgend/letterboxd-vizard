@@ -50,7 +50,7 @@ export const plural = (n: number, one: string, many = `${one}s`): string =>
 	`${n} ${n === 1 ? one : many}`;
 
 export function shortDate(iso: string): string {
-	return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en', {
+	return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
 		day: 'numeric',
 		month: 'long',
 		timeZone: 'UTC'

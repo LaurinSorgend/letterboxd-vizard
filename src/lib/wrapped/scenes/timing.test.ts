@@ -40,6 +40,30 @@ describe('gapSilenceScene', () => {
 		const wrapped = buildWrapped(dense, 2025, { now: new Date('2025-02-01T00:00:00Z') })!;
 		expect(gapSilenceScene(wrapped)).toBeNull();
 	});
+
+	it('reports a late start when that is the largest gap', () => {
+		// Ten consecutive daily entries from 1 June: the 151-day run-up from New Year's Day
+		// dwarfs both the 1-day between-gaps and the 1-day early-stop to `now`.
+		const lateStart = spread(
+			Array.from({ length: 10 }, (_, i) => `2025-06-${String(i + 1).padStart(2, '0')}`)
+		);
+		const wrapped = buildWrapped(lateStart, 2025, { now: new Date('2025-06-11T00:00:00Z') })!;
+		expect(gapSilenceScene(wrapped)?.note).toBe(
+			'You did not start until 1 June. 151 days of 2025 went by first.'
+		);
+	});
+
+	it('reports an early stop when that is the largest gap', () => {
+		// Ten consecutive daily entries from 1 January: the 355-day silence to the end of the
+		// year dwarfs both the 0-day late-start and the 1-day between-gaps.
+		const earlyStop = spread(
+			Array.from({ length: 10 }, (_, i) => `2025-01-${String(i + 1).padStart(2, '0')}`)
+		);
+		const wrapped = buildWrapped(earlyStop, 2025, { now: new Date('2025-12-31T00:00:00Z') })!;
+		expect(gapSilenceScene(wrapped)?.note).toBe(
+			'Your last entry was 10 January, and nothing followed it. 355 days.'
+		);
+	});
 });
 
 describe('weekdayScene', () => {
@@ -64,6 +88,25 @@ describe('bestWeekScene', () => {
 		const scene = bestWeekScene(data());
 		expect(scene).toMatchObject({ id: 'week', value: '7' });
 		expect(scene?.body.kind).toBe('posters');
+	});
+
+	it('drops out when no week reaches five films', () => {
+		// Ten entries, each ten days apart: every 7-day window catches exactly one of them, so
+		// the best week's count (1) sits well under MIN_WEEK_FILMS (5).
+		const sparse = spread([
+			'2025-01-01',
+			'2025-01-11',
+			'2025-01-21',
+			'2025-01-31',
+			'2025-02-10',
+			'2025-02-20',
+			'2025-03-02',
+			'2025-03-12',
+			'2025-03-22',
+			'2025-04-01'
+		]);
+		const wrapped = buildWrapped(sparse, 2025, { now: new Date('2025-04-02T00:00:00Z') })!;
+		expect(bestWeekScene(wrapped)).toBeNull();
 	});
 });
 
