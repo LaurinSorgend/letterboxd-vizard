@@ -5,13 +5,19 @@
 	import Wrapped from './Wrapped.svelte';
 	import { buildWrapped } from './wrapped';
 	import { eligibleYears } from '$lib/viz/recap';
-	import type { EnrichedFilm, WatchlistEntry } from '$lib/types';
+	import type { CollectionParts, EnrichedFilm, WatchlistEntry } from '$lib/types';
 
 	let {
 		films,
 		watchlist = [],
+		collections = [],
 		viewer = null
-	}: { films: EnrichedFilm[]; watchlist?: WatchlistEntry[]; viewer?: string | null } = $props();
+	}: {
+		films: EnrichedFilm[];
+		watchlist?: WatchlistEntry[];
+		collections?: CollectionParts[];
+		viewer?: string | null;
+	} = $props();
 
 	const now = new Date();
 	const december = now.getMonth() === 11;
@@ -31,6 +37,7 @@
 			: buildWrapped(films, year, {
 					viewer,
 					watchlist,
+					collections,
 					locale: typeof navigator === 'undefined' ? 'en' : navigator.language
 				})
 	);

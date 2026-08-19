@@ -1,4 +1,4 @@
-import type { EnrichRequestItem, OmdbRatings, TmdbMovie } from '$lib/types';
+import type { CollectionParts, EnrichRequestItem, OmdbRatings, TmdbMovie } from '$lib/types';
 
 const BATCH_SIZE = 50;
 /** Retry batches stay under the server's per-request fetch budget (~2 fetches per film). */
@@ -132,4 +132,68 @@ export async function enrichOmdb(
 	}
 
 	return ratings;
+}
+
+interface CollectionsResponse {
+	results: (CollectionParts | null)[];
+	pending?: number[];
+}
+
+async function fetchCollectionsBatch(batch: number[]): Promise<CollectionsResponse> {
+	const response = await fetch('/api/collections', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ ids: batch })
+	});
+	if (!response.ok) {
+		throw new Error(`Collection lookup failed (${response.status}): ${await response.text()}`);
+	}
+	return (await response.json()) as CollectionsResponse;
+}
+
+/**
+ * Collection sizes for the franchises in a library. `pending` ids were deferred under the
+ * server's per-request fetch budget, not resolved to "no collection" — they are retried the
+ * same way `enrichFilms` retries them, so a large library still gets every franchise size in
+ * one visit instead of losing the ones that didn't fit the first request's budget.
+ */
+export async function fetchCollections(ids: number[]): Promise<CollectionParts[]> {
+	const unique = [...new Set(ids)];
+	const found: CollectionParts[] = [];
+	let queue = unique.map((_, index) => index);
+
+	for (let round = 0; round < MAX_ROUNDS && queue.length > 0; round++) {
+		const size = round === 0 ? BATCH_SIZE : RETRY_BATCH_SIZE;
+		const batches: number[][] = [];
+		for (let start = 0; start < queue.length; start += size) {
+			batches.push(queue.slice(start, start + size));
+		}
+
+		const retry: number[] = [];
+		let next = 0;
+		async function worker() {
+			while (next < batches.length) {
+				const batch = batches[next++];
+				try {
+					const { results, pending } = await fetchCollectionsBatch(batch.map((i) => unique[i]));
+					const stillPending = new Set(pending ?? []);
+					batch.forEach((itemIndex, batchIndex) => {
+						if (stillPending.has(batchIndex)) {
+							retry.push(itemIndex);
+							return;
+						}
+						const parts = results[batchIndex];
+						if (parts) found.push(parts);
+					});
+				} catch {
+					// A failed HTTP/network batch is retried next round rather than dropped outright.
+					retry.push(...batch);
+				}
+			}
+		}
+		await Promise.all(Array.from({ length: Math.min(MAX_IN_FLIGHT, batches.length) }, worker));
+		queue = retry;
+	}
+
+	return found;
 }

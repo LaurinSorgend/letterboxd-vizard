@@ -59,10 +59,16 @@
 		watchesPerYear
 	} from '$lib/viz/stats';
 	import { parseExport } from '$lib/ingest/parse';
-	import { enrichFilms, enrichOmdb } from '$lib/ingest/enrich';
+	import { enrichFilms, enrichOmdb, fetchCollections } from '$lib/ingest/enrich';
 	import { watchedTmdbIds } from '$lib/viz/seeds';
 	import { clearSnapshot, loadSnapshot, saveSnapshot } from '$lib/store';
-	import type { EnrichedFilm, LetterboxdData, OmdbRatings, WatchlistEntry } from '$lib/types';
+	import type {
+		CollectionParts,
+		EnrichedFilm,
+		LetterboxdData,
+		OmdbRatings,
+		WatchlistEntry
+	} from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
 	let phase: Phase = $state('idle');
@@ -73,6 +79,7 @@
 	let errorMessage: string | null = $state(null);
 	let watchlistIds: number[] = $state([]);
 	let watchlist: WatchlistEntry[] = $state([]);
+	let collections: CollectionParts[] = $state([]);
 	let includeWatchlist = $state(false);
 	let remember = $state(false);
 	let saveError: string | null = $state(null);
@@ -132,6 +139,7 @@
 			films = snapshot.films;
 			watchlistIds = snapshot.watchlistIds;
 			watchlist = snapshot.watchlist ?? [];
+			collections = snapshot.collections ?? [];
 			data = { films: snapshot.films, watchlist, profile: snapshot.profile };
 			remember = true;
 			phase = 'ready';
@@ -139,7 +147,9 @@
 	});
 
 	function persist() {
-		if (saveSnapshot({ films, watchlist, watchlistIds, profile: data?.profile ?? null })) {
+		if (
+			saveSnapshot({ films, watchlist, watchlistIds, profile: data?.profile ?? null, collections })
+		) {
 			saveError = null;
 		} else {
 			remember = false;
@@ -190,6 +200,11 @@
 				...f,
 				omdb: f.tmdb?.imdbId ? (omdb.get(f.tmdb.imdbId) ?? null) : null
 			}));
+
+			const franchises = films
+				.map((film) => film.tmdb?.collection?.id)
+				.filter((id): id is number => typeof id === 'number');
+			collections = franchises.length > 0 ? await fetchCollections(franchises) : [];
 
 			phase = 'ready';
 			if (remember) persist();
@@ -247,6 +262,7 @@
 		<WrappedEntry
 			{films}
 			{watchlist}
+			{collections}
 			viewer={data?.profile?.givenName || data?.profile?.username || null}
 		/>
 

@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import type { EnrichedFilm, Profile, WatchlistEntry } from '$lib/types';
+import type { CollectionParts, EnrichedFilm, Profile, WatchlistEntry } from '$lib/types';
 
 /** Bump when the snapshot shape changes so stale data is ignored, not misread. */
 const KEY = 'letterboxd-vizard:snapshot:v5';
@@ -11,6 +11,7 @@ export interface Snapshot {
 	watchlist: WatchlistEntry[];
 	watchlistIds: number[];
 	profile: Profile | null;
+	collections: CollectionParts[];
 }
 
 /** Drops snapshots left by superseded KEY generations; they are dead weight against the quota. */
