@@ -74,9 +74,11 @@ export function watchlistAge(library: Library): WatchlistAge | null {
 		.map((entry) => ({ entry, days: daysBetween(entry.added, today) }))
 		.sort((a, b) => b.days - a.days);
 	const oldest = ages[0];
+	// Ascending, matching recap.ts's and stats.ts's median convention (upper middle on a tie).
+	const ascending = ages.map((age) => age.days).sort((a, b) => a - b);
 	return {
 		oldest: { name: oldest.entry.name, added: oldest.entry.added, days: oldest.days },
-		medianDays: ages[Math.floor(ages.length / 2)].days,
+		medianDays: ascending[Math.floor(ascending.length / 2)],
 		sized: dated.length
 	};
 }

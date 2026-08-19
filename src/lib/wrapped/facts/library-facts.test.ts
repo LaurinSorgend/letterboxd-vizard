@@ -63,6 +63,43 @@ describe('watchlistMaths', () => {
 		expect(result?.oldest).toMatchObject({ name: 'Queued 6', added: '2019-01-01' });
 		expect(result?.oldest.days).toBe(2571);
 	});
+
+	it('takes the upper median day-gap, matching the rest of the codebase', () => {
+		// 30 distinct added-dates, one day apart: 2024-01-01 .. 2024-01-30, against
+		// now = 2024-03-01. Day-gaps run from 60 (2024-01-01, oldest) down to 31
+		// (2024-01-30, newest): 30 consecutive integers, no ties. The true median sits
+		// between the 15th and 16th ascending values (0-indexed 14 and 15): 45 and 46.
+		// recap.ts's and stats.ts's convention (sort ascending, take floor(n/2)) picks
+		// the upper one, 46. The old descending-sort-then-floor(n/2) code picked the
+		// lower one, 45 -- this pins the fix to the upper convention.
+		const distinct = Array.from({ length: 30 }, (_, i) => ({
+			uri: `d${i}`,
+			name: `Distinct ${i}`,
+			year: 2000,
+			added: `2024-01-${String(i + 1).padStart(2, '0')}`
+		}));
+		const result = watchlistAge(
+			buildLibrary({
+				films: bulk(12),
+				year: 2025,
+				watchlist: distinct,
+				now: new Date('2024-03-01T00:00:00Z')
+			})
+		);
+		expect(result?.medianDays).toBe(46);
+	});
+
+	it('drops out when too few entries carry a date, even with a large watchlist', () => {
+		const sparse = Array.from({ length: 25 }, (_, i) => ({
+			uri: `s${i}`,
+			name: `Sparse ${i}`,
+			year: 2000,
+			added: i < 10 ? '2020-01-01' : null
+		}));
+		const library = buildLibrary({ films: bulk(12), year: 2025, watchlist: sparse, now });
+		expect(watchlistMaths(library)).not.toBeNull();
+		expect(watchlistAge(library)).toBeNull();
+	});
 });
 
 describe('directorBreadth', () => {
