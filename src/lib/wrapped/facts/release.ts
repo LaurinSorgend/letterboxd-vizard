@@ -59,16 +59,20 @@ export interface QuickWatch {
 	insideThirty: number;
 }
 
+/**
+ * A film watched before its TMDB release date is a festival or regional screening, not a genuine
+ * quick turnaround, so `quickestWatch` only considers the positive lags `releaseLags` left intact.
+ */
 export function quickestWatch(library: Library): QuickWatch | null {
-	const lags = releaseLags(library);
-	if (lags.length === 0) return null;
-	const fastest = lags.reduce((quickest, lag) => (lag.days < quickest.days ? lag : quickest));
+	const positive = releaseLags(library).filter((lag) => lag.days > 0);
+	if (positive.length === 0) return null;
+	const fastest = positive.reduce((quickest, lag) => (lag.days < quickest.days ? lag : quickest));
 	if (fastest.days > QUICK_DAYS) return null;
 	return {
 		film: fastest.film,
 		days: fastest.days,
 		released: fastest.released,
-		insideThirty: lags.filter((lag) => lag.days <= QUICK_DAYS).length
+		insideThirty: positive.filter((lag) => lag.days <= QUICK_DAYS).length
 	};
 }
 

@@ -14,6 +14,11 @@ const brutalist = film({
 	tmdb: tmdb({ releaseDate: '2025-01-24', year: 2025 })
 });
 const undated = film({ ...watched(['2025-02-02']), tmdb: tmdb({ releaseDate: null, year: null }) });
+const earlyBird = film({
+	name: 'Early Bird',
+	...watched(['2025-01-10']),
+	tmdb: tmdb({ releaseDate: '2025-02-01', year: 2025 })
+});
 
 const library = buildLibrary({ films: [stalker, brutalist, undated], year: 2025 });
 
@@ -48,6 +53,14 @@ describe('quickestWatch', () => {
 
 	it('drops out when nothing arrived inside thirty days', () => {
 		expect(quickestWatch(buildLibrary({ films: [stalker], year: 2025 }))).toBeNull();
+	});
+
+	it('ignores a watch that predates the release date', () => {
+		const withEarly = buildLibrary({
+			films: [stalker, brutalist, earlyBird, undated],
+			year: 2025
+		});
+		expect(quickestWatch(withEarly)).toMatchObject({ film: brutalist, days: 3, insideThirty: 1 });
 	});
 });
 
