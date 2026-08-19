@@ -166,7 +166,7 @@ describe('biggestCollection', () => {
 			last: '2025-04-30',
 			total: 6
 		});
-		expect(result?.films).toHaveLength(3);
+		expect(result?.shownFilms).toHaveLength(3);
 	});
 
 	it('reports a null total when the collection size was never fetched', () => {

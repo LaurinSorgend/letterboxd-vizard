@@ -131,7 +131,8 @@ export interface Worked {
 	name: string;
 	/** How many of the franchise's films the year actually covered, before the poster cap. */
 	seen: number;
-	films: EnrichedFilm[];
+	/** Capped at six for the poster row; count with `seen`. */
+	shownFilms: EnrichedFilm[];
 	first: string;
 	last: string;
 	/** How many films TMDB lists in the franchise, or null when the size was never fetched. */
@@ -155,7 +156,7 @@ export function biggestCollection(library: Library): Worked | null {
 		// TMDB names every franchise "<name> Collection", which reads as noise on a slide.
 		name: library.collections.get(id)?.name ?? raw.replace(/ Collection$/, ''),
 		seen: films.length,
-		films: [...films].sort((a, b) => (a.tmdb?.year ?? 0) - (b.tmdb?.year ?? 0)).slice(0, 6),
+		shownFilms: [...films].sort((a, b) => (a.tmdb?.year ?? 0) - (b.tmdb?.year ?? 0)).slice(0, 6),
 		first: dates[0],
 		last: dates[dates.length - 1],
 		total: library.collections.get(id)?.total ?? null

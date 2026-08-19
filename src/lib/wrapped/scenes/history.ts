@@ -96,7 +96,7 @@ export function fiveStarScene(data: Wrapped): Scene | null {
 		],
 		body: {
 			kind: 'posters',
-			posters: top.films.map((film) => posterOf(film, '★ 5'))
+			posters: top.shownFilms.map((film) => posterOf(film, '★ 5'))
 		}
 	};
 }
@@ -119,7 +119,7 @@ export function firstTimersScene(data: Wrapped): Scene | null {
 		],
 		body: {
 			kind: 'posters',
-			posters: fresh.films.map((film) => posterOf(film, film.rating ? `★ ${film.rating}` : ''))
+			posters: fresh.shownFilms.map((film) => posterOf(film, film.rating ? `★ ${film.rating}` : ''))
 		}
 	};
 }

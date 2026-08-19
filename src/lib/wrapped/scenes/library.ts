@@ -135,7 +135,7 @@ export function collectionScene(data: Wrapped): Scene | null {
 			{ label: 'First', value: longDate(worked.first) },
 			{ label: 'Last', value: longDate(worked.last) }
 		],
-		body: { kind: 'posters', posters: worked.films.map((film) => posterOf(film, '')) }
+		body: { kind: 'posters', posters: worked.shownFilms.map((film) => posterOf(film, '')) }
 	};
 }
 

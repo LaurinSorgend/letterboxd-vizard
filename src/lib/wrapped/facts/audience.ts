@@ -42,7 +42,8 @@ export interface Languages {
 	count: number;
 	own: number;
 	largest: BarDatum | null;
-	bars: BarDatum[];
+	/** Capped at five for the bar chart; count with `count`. */
+	shownBars: BarDatum[];
 }
 
 export function languageShare(library: Library): Languages | null {
@@ -56,5 +57,13 @@ export function languageShare(library: Library): Languages | null {
 
 	const label = languageNames.of(language) ?? language;
 	const bars = byLanguage(spoken).filter((datum) => datum.label !== label);
-	return { language, label, share, count, own, largest: bars[0] ?? null, bars: bars.slice(0, 5) };
+	return {
+		language,
+		label,
+		share,
+		count,
+		own,
+		largest: bars[0] ?? null,
+		shownBars: bars.slice(0, 5)
+	};
 }

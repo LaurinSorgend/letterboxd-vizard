@@ -99,7 +99,7 @@ describe('freshness', () => {
 		expect(result?.thisYear).toBe(5);
 		expect(result?.share).toBeCloseTo(0.25);
 		expect(result?.preMillennium).toBe(15);
-		expect(result?.films).toHaveLength(5);
+		expect(result?.shownFilms).toHaveLength(5);
 	});
 
 	it('drops out under three releases from the year', () => {

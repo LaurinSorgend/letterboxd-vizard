@@ -44,7 +44,7 @@ export function freshnessScene(data: Wrapped): Scene | null {
 		],
 		body: {
 			kind: 'posters',
-			posters: fresh.films.map((film) => posterOf(film, film.rating ? `★ ${film.rating}` : ''))
+			posters: fresh.shownFilms.map((film) => posterOf(film, film.rating ? `★ ${film.rating}` : ''))
 		}
 	};
 }

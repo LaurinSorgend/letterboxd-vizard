@@ -71,7 +71,8 @@ export interface FiveStars {
 	lastYear: number | null;
 	/** The half-star step used most often, so the top rating has something to sit against. */
 	modal: number | null;
-	films: EnrichedFilm[];
+	/** Capped at six for the poster row; count with `count`. */
+	shownFilms: EnrichedFilm[];
 }
 
 function ratingsIn(library: Library, year: number): number[] {
@@ -94,14 +95,15 @@ export function fiveStars(library: Library): FiveStars | null {
 		rated: ratings.length,
 		lastYear: previous.length > 0 ? previous.filter((rating) => rating === 5).length : null,
 		modal,
-		films: top.slice(0, 6)
+		shownFilms: top.slice(0, 6)
 	};
 }
 
 export interface FirstTimers {
 	directors: number;
 	top: { name: string; count: number } | null;
-	films: EnrichedFilm[];
+	/** Capped at six for the poster row; count with `byFirstTimers`. */
+	shownFilms: EnrichedFilm[];
 	byFirstTimers: number;
 }
 
@@ -136,7 +138,7 @@ export function firstTimeDirectors(library: Library): FirstTimers | null {
 	return {
 		directors: fresh.length,
 		top: { name: fresh[0].label, count: fresh[0].count },
-		films: [...films]
+		shownFilms: [...films]
 			.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name))
 			.slice(0, 6),
 		byFirstTimers: films.length
