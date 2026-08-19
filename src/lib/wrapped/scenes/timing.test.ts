@@ -26,10 +26,8 @@ describe('gapSilenceScene', () => {
 	it('reports the longest silence with both ends of it', () => {
 		const scene = gapSilenceScene(data());
 		expect(scene).toMatchObject({ id: 'silence', value: '223', valueKind: 'number' });
-		// longDate uses toLocaleDateString('en', ...), which orders month before day
-		// ("January 9"), not day before month ("9 January").
-		expect(scene?.note).toContain('January 9');
-		expect(scene?.note).toContain('August 20');
+		expect(scene?.note).toContain('9 January');
+		expect(scene?.note).toContain('20 August');
 	});
 
 	it('drops out when the year never went quiet', () => {
@@ -90,5 +88,24 @@ describe('doubleBillScene', () => {
 
 	it('drops out under three such days', () => {
 		expect(doubleBillScene(data())).toBeNull();
+	});
+
+	it('reads correctly with more than one triple day', () => {
+		const doubles = spread([
+			'2025-02-01',
+			'2025-02-01',
+			'2025-02-01',
+			'2025-03-01',
+			'2025-03-01',
+			'2025-03-01',
+			'2025-04-01',
+			'2025-04-01',
+			'2025-05-01',
+			'2025-06-01'
+		]);
+		const scene = doubleBillScene(buildWrapped(doubles, 2025)!);
+		expect(scene?.note).toBe(
+			'3 days with more than one film. On 2 of them you watched three or more.'
+		);
 	});
 });

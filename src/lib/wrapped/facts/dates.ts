@@ -28,7 +28,7 @@ export function monthOf(iso: string): number {
 }
 
 export function longDate(iso: string): string {
-	return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en', {
+	return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
 		day: 'numeric',
 		month: 'long',
 		timeZone: 'UTC'

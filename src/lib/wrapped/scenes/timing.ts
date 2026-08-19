@@ -97,7 +97,7 @@ export function doubleBillScene(data: Wrapped): Scene | null {
 		label: 'Two in a night',
 		value: String(bills.days),
 		valueKind: 'number',
-		note: `${plural(bills.days, 'day')} with more than one film.${bills.triples > 0 ? ` On ${plural(bills.triples, 'of them')} you watched three or more.` : ''}`,
+		note: `${plural(bills.days, 'day')} with more than one film.${bills.triples > 0 ? ` On ${bills.triples} of them you watched three or more.` : ''}`,
 		stats,
 		body: { kind: 'none' }
 	};
