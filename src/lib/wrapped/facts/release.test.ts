@@ -110,4 +110,17 @@ describe('freshness', () => {
 	it('drops out under twenty dated films', () => {
 		expect(freshness(buildLibrary({ films: releases(19, 5), year: 2025 }))).toBeNull();
 	});
+
+	it('shares against every film in the year, not just the dated ones', () => {
+		const undatedPair = Array.from({ length: 2 }, () =>
+			film({ ...watched(['2025-07-01']), tmdb: tmdb({ releaseDate: null, year: null }) })
+		);
+		const result = freshness(
+			buildLibrary({ films: [...releases(20, 5), ...undatedPair], year: 2025 })
+		);
+		// 20 dated (5 current) + 2 undated = 22 films watched in the year; thisYear stays 5,
+		// but the denominator is every film, not just the dated 20.
+		expect(result?.thisYear).toBe(5);
+		expect(result?.share).toBeCloseTo(5 / 22);
+	});
 });

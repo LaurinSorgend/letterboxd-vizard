@@ -64,6 +64,38 @@ describe('longestWaitScene', () => {
 	});
 });
 
+/** 20 dated films (5 current-year) plus 2 films with no TMDB release date at all. */
+const withUndated = [
+	...Array.from({ length: 20 }, (_, i) =>
+		film({
+			...watched([`2025-10-${String((i % 28) + 1).padStart(2, '0')}`]),
+			rating: 4,
+			tmdb: tmdb({ releaseDate: i < 5 ? '2025-03-01' : '1994-03-01', year: i < 5 ? 2025 : 1994 })
+		})
+	),
+	...Array.from({ length: 2 }, () =>
+		film({ ...watched(['2025-11-01']), tmdb: tmdb({ releaseDate: null, year: null }) })
+	)
+];
+
+/** 10 dated films (5 current-year): under the twenty-dated floor, well past the three-current one. */
+const thinButFresh = Array.from({ length: 10 }, (_, i) =>
+	film({
+		...watched([`2025-12-${String((i % 28) + 1).padStart(2, '0')}`]),
+		rating: 4,
+		tmdb: tmdb({ releaseDate: i < 5 ? '2025-03-01' : '1994-03-01', year: i < 5 ? 2025 : 1994 })
+	})
+);
+
+/** 20 dated films (2 current-year): past the twenty-dated floor, under the three-current one. */
+const plentyButStale = Array.from({ length: 20 }, (_, i) =>
+	film({
+		...watched([`2025-04-${String((i % 28) + 1).padStart(2, '0')}`]),
+		rating: 4,
+		tmdb: tmdb({ releaseDate: i < 2 ? '2025-03-01' : '1994-03-01', year: i < 2 ? 2025 : 1994 })
+	})
+);
+
 describe('freshnessScene', () => {
 	it('reports the share of the year that was new', () => {
 		const scene = freshnessScene(buildWrapped(archive, 2025)!);
@@ -71,9 +103,21 @@ describe('freshnessScene', () => {
 		expect(scene?.body.kind).toBe('posters');
 	});
 
-	it('drops out with fewer than three releases from the year', () => {
-		const old = archive.slice(3);
-		expect(freshnessScene(buildWrapped(old, 2025)!)).toBeNull();
+	it('shares against every film watched, not just the dated ones', () => {
+		const scene = freshnessScene(buildWrapped(withUndated, 2025)!);
+		// 5 current-year of 22 films watched (20 dated + 2 undated) = 22.7%, rounds to 23%.
+		expect(scene).toMatchObject({ value: '23%' });
+		expect(scene?.note).toBe(
+			'5 of your 22 films came out in 2025. The rest of the year you spent in the archive.'
+		);
+	});
+
+	it('drops out under twenty dated films even with enough current-year ones', () => {
+		expect(freshnessScene(buildWrapped(thinButFresh, 2025)!)).toBeNull();
+	});
+
+	it('drops out under three current-year films even with enough dated ones', () => {
+		expect(freshnessScene(buildWrapped(plentyButStale, 2025)!)).toBeNull();
 	});
 });
 

@@ -100,7 +100,7 @@ export function freshness(library: Library): Freshness | null {
 	const current = dated.filter((film) => releaseYearOf(film) === library.year);
 	if (current.length < 3) return null;
 	return {
-		share: current.length / dated.length,
+		share: current.length / library.slice.length,
 		thisYear: current.length,
 		lastYear: dated.filter((film) => releaseYearOf(film) === library.year - 1).length,
 		preMillennium: dated.filter((film) => (releaseYearOf(film) ?? 0) < 2000).length,
