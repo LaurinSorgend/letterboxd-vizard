@@ -33,9 +33,12 @@ export function languageScene(data: Wrapped): Scene | null {
 		valueKind: 'number',
 		note: `${spoken.count} of ${spoken.count + spoken.own} films were in a language other than ${spoken.label}.${spoken.largest ? ` ${spoken.largest.label} did most of the work, at ${spoken.largest.count}.` : ''}`,
 		stats: [
-			{ label: spoken.label, value: String(spoken.own) },
-			{ label: 'Other languages', value: String(spoken.count) },
-			{ label: spoken.largest?.label ?? 'Other', value: String(spoken.largest?.count ?? 0) }
+			{ label: 'Languages', value: String(spoken.languages) },
+			{
+				label: spoken.largest ? `Largest non-${spoken.label}` : 'Other',
+				value: spoken.largest ? `${spoken.largest.label}, ${spoken.largest.count}` : '0'
+			},
+			{ label: spoken.label, value: String(spoken.own) }
 		],
 		body: { kind: 'bars', bars: barsFrom(spoken.shownBars) }
 	};

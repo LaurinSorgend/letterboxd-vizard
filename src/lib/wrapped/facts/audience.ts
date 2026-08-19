@@ -42,7 +42,9 @@ export interface Languages {
 	count: number;
 	own: number;
 	largest: BarDatum | null;
-	/** Capped at five for the bar chart; count with `count`. */
+	/** Distinct languages across the year, the viewer's own plus every other one spoken. */
+	languages: number;
+	/** Capped at five for the bar chart; count with `languages`. */
 	shownBars: BarDatum[];
 }
 
@@ -64,6 +66,7 @@ export function languageShare(library: Library): Languages | null {
 		count,
 		own,
 		largest: bars[0] ?? null,
+		languages: bars.length + 1,
 		shownBars: bars.slice(0, 5)
 	};
 }

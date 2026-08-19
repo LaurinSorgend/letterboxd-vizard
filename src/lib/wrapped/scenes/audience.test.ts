@@ -53,6 +53,29 @@ describe('languageScene', () => {
 		const scene = languageScene(buildWrapped(films, 2025, { locale: 'iw' })!);
 		expect(scene?.note).toBe('5 of 20 films were in a language other than Hebrew.');
 	});
+
+	it('counts every distinct language, not just the five shown in the bar chart', () => {
+		// Six non-English languages plus English is seven distinct languages, but the bar
+		// row caps at five: a fixture where those two numbers differ tells the fixed
+		// `languages` field apart from the display-capped `shownBars.length` it replaced.
+		const codes = ['en', 'fr', 'de', 'es', 'it', 'ja', 'ko'];
+		const counts = [5, 10, 8, 6, 4, 3, 2];
+		const languages: string[] = [];
+		counts.forEach((count, index) => {
+			for (let n = 0; n < count; n += 1) languages.push(codes[index]);
+		});
+		const films = many(
+			(i) => ({ tmdb: tmdb({ originalLanguage: languages[i] }) }),
+			languages.length
+		);
+		const scene = languageScene(buildWrapped(films, 2025)!);
+		expect(scene?.stats).toEqual([
+			{ label: 'Languages', value: '7' },
+			{ label: 'Largest non-English', value: 'French, 10' },
+			{ label: 'English', value: '5' }
+		]);
+		expect(scene?.body.kind === 'bars' && scene.body.bars).toHaveLength(5);
+	});
 });
 
 describe('criticScene', () => {
