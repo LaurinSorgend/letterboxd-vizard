@@ -127,12 +127,17 @@ function labelBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palett
 function noteBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette): Block {
 	ctx.font = font('body', 36);
 	const lines = wrap(ctx, scene.note, STORY.width - STORY.margin * 2, 4);
+	const footnote = scene.footnote ?? '';
 	return {
-		height: lines.length * 50 + 16,
+		height: lines.length * 50 + 16 + (footnote ? 44 : 0),
 		draw: (y) => {
 			ctx.font = font('body', 36);
 			ctx.fillStyle = palette.muted;
 			lines.forEach((line, i) => ctx.fillText(line, STORY.margin, y + i * 50));
+			if (!footnote) return;
+			ctx.font = font('mono', 26);
+			ctx.fillStyle = palette.stamp;
+			ctx.fillText(footnote.toUpperCase(), STORY.margin, y + lines.length * 50 + 12);
 		}
 	};
 }

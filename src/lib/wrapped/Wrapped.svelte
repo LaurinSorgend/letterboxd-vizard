@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { cubicOut } from 'svelte/easing';
 	import Frame from './Frame.svelte';
-	import { buildScenes } from './scenes';
+	import { assemble, buildDeck } from './deck';
 	import { deliver, paletteFrom } from './canvas';
 	import { storyCard, summaryCard } from './cards';
 	import type { Wrapped } from './wrapped';
 
 	let { data, onclose }: { data: Wrapped; onclose: () => void } = $props();
 
-	const scenes = $derived(buildScenes(data));
+	let expanded = $state(false);
+	const deck = $derived(buildDeck(data));
+	const scenes = $derived(assemble(deck, expanded));
 	const reduced =
 		typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -146,6 +148,19 @@
 										{/if}
 									</div>
 								{/snippet}
+								{#snippet extras()}
+									{#if !expanded}
+										<button
+											class="reveal"
+											onclick={() => {
+												expanded = true;
+												go(1);
+											}}
+										>
+											Show the other {deck.extras.length} frames
+										</button>
+									{/if}
+								{/snippet}
 							</Frame>
 						</div>
 					{/key}
@@ -199,9 +214,11 @@
 		>
 			{playing ? 'Pause' : 'Play'}
 		</button>
-		<button class="share" onclick={() => share(last ? 'poster' : 'scene')} disabled={busy}>
-			{busy ? 'Rendering…' : last ? 'Save the slide' : 'Save this frame'}
-		</button>
+		{#if scene.id !== 'more'}
+			<button class="share" onclick={() => share(last ? 'poster' : 'scene')} disabled={busy}>
+				{busy ? 'Rendering…' : last ? 'Save the slide' : 'Save this frame'}
+			</button>
+		{/if}
 		<!-- svelte-ignore a11y_autofocus -->
 		<button autofocus onclick={() => go(1)} disabled={last} aria-label="Next frame">
 			<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -439,6 +456,24 @@
 	}
 	.count {
 		color: var(--w-screen);
+	}
+
+	.reveal {
+		margin-top: clamp(8px, 1.4cqh, 14px);
+		padding: 10px 18px;
+		font: inherit;
+		font-size: clamp(0.8rem, 1.6cqw, 1rem);
+		color: var(--w-ink);
+		background: none;
+		border: 1px solid var(--w-accent);
+		cursor: pointer;
+	}
+	.reveal:hover {
+		color: var(--w-accent);
+	}
+	.reveal:focus-visible {
+		outline: 2px solid var(--w-accent);
+		outline-offset: 3px;
 	}
 
 	.preview {

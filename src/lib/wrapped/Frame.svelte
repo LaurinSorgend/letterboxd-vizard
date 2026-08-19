@@ -2,7 +2,12 @@
 	import { imageUrl } from '$lib/viz/images';
 	import type { Poster, Scene } from './scenes';
 
-	let { scene, poster }: { scene: Scene; poster?: import('svelte').Snippet } = $props();
+	let {
+		scene,
+		poster,
+		extras
+	}: { scene: Scene; poster?: import('svelte').Snippet; extras?: import('svelte').Snippet } =
+		$props();
 
 	const dense = $derived(scene.body.kind === 'bars' && scene.body.bars.length > 6);
 </script>
@@ -33,6 +38,9 @@
 	<p class="value" data-kind={scene.valueKind}>{scene.value}</p>
 	<h2 class="label">{scene.label}</h2>
 	<p class="note">{scene.note}</p>
+	{#if scene.footnote}
+		<p class="footnote">{scene.footnote}</p>
+	{/if}
 
 	{#if scene.body.kind === 'bars'}
 		<ul class="bars" class:dense>
@@ -52,6 +60,8 @@
 		</ul>
 	{:else if scene.body.kind === 'summary' && poster}
 		{@render poster()}
+	{:else if scene.body.kind === 'gate' && extras}
+		{@render extras()}
 	{/if}
 
 	{#if scene.stats.length > 0}
@@ -125,6 +135,15 @@
 		line-height: var(--leading-normal);
 		color: var(--w-muted);
 		text-wrap: pretty;
+	}
+
+	.footnote {
+		margin: 0;
+		font-family: var(--font-mono);
+		font-size: clamp(0.62rem, 1.15cqw, 0.8rem);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--w-muted);
 	}
 
 	.bars,
