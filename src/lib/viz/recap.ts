@@ -5,21 +5,27 @@ import {
 	byGenre,
 	byPerson,
 	longestRun,
-	obscurityShare,
 	ratingGaps,
 	totalRuntimeMinutes,
 	type BarDatum,
 	type RatingGap,
 	type Streak
 } from './stats';
-import type { EnrichedFilm } from '$lib/types';
+import { verdictFor, type Personality } from './verdicts';
+import { buildLibrary, type Library } from '$lib/wrapped/library';
+import type { CollectionParts, EnrichedFilm, WatchlistEntry } from '$lib/types';
+
+export type { Personality };
 
 /** Letterboxd's own bar for a Year in Review. Under it the numbers describe noise, not a year. */
 const MIN_FILMS = 10;
 
-export interface Personality {
-	title: string;
-	detail: string;
+/** What a recap is allowed to know beyond the films themselves. */
+export interface RecapContext {
+	watchlist?: WatchlistEntry[];
+	collections?: CollectionParts[];
+	locale?: string;
+	now?: Date;
 }
 
 export interface Recap {
@@ -39,6 +45,8 @@ export interface Recap {
 	gap: RatingGap | null;
 	countries: number;
 	languages: number;
+	/** The whole export plus the year's slice, the input every frame and verdict computes from. */
+	library: Library;
 	personality: Personality;
 	/** True while the year is still running, so the copy can say the picture is not final. */
 	partial: boolean;
@@ -90,95 +98,19 @@ function extremeByVotes(films: EnrichedFilm[], want: 'low' | 'high'): EnrichedFi
 	return best;
 }
 
-function median(values: number[]): number | null {
-	if (values.length === 0) return null;
-	const sorted = [...values].sort((a, b) => a - b);
-	return sorted[Math.floor(sorted.length / 2)];
-}
-
-interface Traits {
-	year: number;
-	count: number;
-	months: number;
-	obscure: number | null;
-	medianYear: number | null;
-	countries: number;
-	meanRuntime: number | null;
-	topDirector: BarDatum | null;
-	avg: number | null;
-}
-
-/**
- * Ordered most specific first, and the first match wins, so the label is deterministic and the
- * line under it always cites the number that earned it. Nothing here renders a generic string.
- */
-const RULES: { title: string; when: (t: Traits) => boolean; detail: (t: Traits) => string }[] = [
-	{
-		title: 'The Deep Diver',
-		when: (t) => (t.obscure ?? 0) >= 0.45,
-		detail: (t) =>
-			`${Math.round((t.obscure ?? 0) * 100)}% of what you watched has under 1,000 TMDB ratings.`
-	},
-	{
-		title: 'The Time Traveller',
-		when: (t) => t.medianYear !== null && t.year - t.medianYear >= 25,
-		detail: (t) => `Your median film came out in ${t.medianYear}.`
-	},
-	{
-		title: 'The Globetrotter',
-		when: (t) => t.countries >= 20,
-		detail: (t) => `You watched films from ${t.countries} countries.`
-	},
-	{
-		title: 'The Marathoner',
-		when: (t) => (t.meanRuntime ?? 0) >= 125,
-		detail: (t) => `Your average film ran ${Math.round(t.meanRuntime ?? 0)} minutes.`
-	},
-	{
-		title: 'The Completist',
-		when: (t) => (t.topDirector?.count ?? 0) >= 6,
-		detail: (t) => `You watched ${t.topDirector?.count} films by ${t.topDirector?.label}.`
-	},
-	{
-		title: 'The Generous',
-		when: (t) => (t.avg ?? 0) >= 3.8,
-		detail: (t) => `You averaged ★ ${(t.avg ?? 0).toFixed(2)} across the year.`
-	},
-	{
-		title: 'The Regular',
-		when: () => true,
-		detail: (t) => `${t.count} films across ${t.months} months of the year.`
-	}
-];
-
-function personalityOf(traits: Traits): Personality {
-	const rule = RULES.find((candidate) => candidate.when(traits)) ?? RULES[RULES.length - 1];
-	return { title: rule.title, detail: rule.detail(traits) };
-}
-
 /** Everything the recap cards need for one year, or null when that year is too thin to describe. */
-export function buildRecap(films: EnrichedFilm[], year: number, now = new Date()): Recap | null {
+export function buildRecap(
+	films: EnrichedFilm[],
+	year: number,
+	context: RecapContext = {}
+): Recap | null {
 	const slice = films.filter((film) => film.watchedDates.some((date) => inYear(date, year)));
 	if (slice.length < MIN_FILMS) return null;
 
 	const watchDates = slice.flatMap((film) => film.watchedDates.filter((d) => inYear(d, year)));
-	const runtimes = slice.map((film) => film.tmdb?.runtime).filter((r): r is number => !!r);
 	const topDirector = byPerson(slice, 'directors')[0] ?? null;
 	const avg = avgRating(slice);
-
-	const traits: Traits = {
-		year,
-		count: slice.length,
-		months: new Set(watchDates.map((date) => date.slice(0, 7))).size,
-		obscure: obscurityShare(slice),
-		medianYear: median(
-			slice.map((film) => film.tmdb?.year ?? film.year).filter((y): y is number => y !== null)
-		),
-		countries: new Set(slice.flatMap((f) => (f.tmdb ? effectiveCountries(f.tmdb) : []))).size,
-		meanRuntime: runtimes.length > 0 ? runtimes.reduce((a, b) => a + b, 0) / runtimes.length : null,
-		topDirector,
-		avg
-	};
+	const library = buildLibrary({ films, year, ...context });
 
 	return {
 		year,
@@ -202,11 +134,12 @@ export function buildRecap(films: EnrichedFilm[], year: number, now = new Date()
 		mostPopular: extremeByVotes(slice, 'high'),
 		streak: longestStreak(slice, year),
 		gap: ratingGaps(slice).over[0] ?? null,
-		countries: traits.countries,
+		countries: new Set(slice.flatMap((f) => (f.tmdb ? effectiveCountries(f.tmdb) : []))).size,
 		languages: new Set(
 			slice.map((film) => film.tmdb?.originalLanguage).filter((l): l is string => !!l)
 		).size,
-		personality: personalityOf(traits),
-		partial: year === now.getFullYear()
+		library,
+		personality: verdictFor(library),
+		partial: year === (context.now ?? new Date()).getFullYear()
 	};
 }

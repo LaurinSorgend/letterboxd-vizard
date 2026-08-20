@@ -549,7 +549,7 @@
 			</section>
 		{/if}
 
-		<YearRecap {films} />
+		<YearRecap {films} {watchlist} />
 
 		<Recommendations {films} {watchlistIds} bind:includeWatchlist />
 

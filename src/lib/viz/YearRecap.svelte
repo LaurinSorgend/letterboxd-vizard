@@ -2,15 +2,15 @@
 	import { imageUrl } from './images';
 	import { webHref } from './href';
 	import { buildRecap, eligibleYears } from './recap';
-	import type { EnrichedFilm } from '$lib/types';
+	import type { EnrichedFilm, WatchlistEntry } from '$lib/types';
 
-	let { films }: { films: EnrichedFilm[] } = $props();
+	let { films, watchlist = [] }: { films: EnrichedFilm[]; watchlist?: WatchlistEntry[] } = $props();
 
 	const years = $derived(eligibleYears(films, new Date()));
 	// svelte-ignore state_referenced_locally
 	let chosen: number | null = $state(Math.max(...years));
 	const year = $derived(chosen !== null && years.includes(chosen) ? chosen : (years[0] ?? null));
-	const recap = $derived(year === null ? null : buildRecap(films, year));
+	const recap = $derived(year === null ? null : buildRecap(films, year, { watchlist }));
 
 	/* Diary dates are calendar days with no time zone of their own, so format them as UTC. */
 	function shortDate(iso: string): string {

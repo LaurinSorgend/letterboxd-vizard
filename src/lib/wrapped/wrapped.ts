@@ -1,5 +1,5 @@
 import { aggregateCountries, type CountryStat } from '$lib/viz/countries';
-import { buildRecap, type Recap } from '$lib/viz/recap';
+import { buildRecap, type Recap, type RecapContext } from '$lib/viz/recap';
 import {
 	byGenre,
 	byLanguage,
@@ -8,8 +8,8 @@ import {
 	type BarDatum,
 	type RatingGap
 } from '$lib/viz/stats';
-import { buildLibrary, datesIn, type Library } from './library';
-import type { CollectionParts, EnrichedFilm, WatchlistEntry } from '$lib/types';
+import { datesIn } from './library';
+import type { EnrichedFilm } from '$lib/types';
 
 const MONTHS = Array.from({ length: 12 }, (_, month) =>
 	new Date(Date.UTC(2000, month, 1)).toLocaleDateString('en', { month: 'long', timeZone: 'UTC' })
@@ -30,8 +30,6 @@ export interface BusiestDay {
 /** Everything the deck shows, on top of the card recap the page already builds. */
 export interface Wrapped extends Recap {
 	viewer: string | null;
-	/** The whole export plus the year's slice, the input every frame computes from. */
-	library: Library;
 	days: number;
 	/** Diary entries per calendar month, January first. */
 	perMonth: number[];
@@ -137,12 +135,8 @@ function leadingCountries(films: EnrichedFilm[]): CountryStat[] {
 }
 
 /** What the deck is allowed to know beyond the films themselves. */
-export interface DeckContext {
+export interface DeckContext extends RecapContext {
 	viewer?: string | null;
-	watchlist?: WatchlistEntry[];
-	collections?: CollectionParts[];
-	locale?: string;
-	now?: Date;
 }
 
 /** The full deck's data for one year, or null when that year is too thin to describe. */
@@ -151,10 +145,9 @@ export function buildWrapped(
 	year: number,
 	context: DeckContext = {}
 ): Wrapped | null {
-	const recap = buildRecap(films, year, context.now);
+	const recap = buildRecap(films, year, context);
 	if (!recap) return null;
 
-	const library = buildLibrary({ films, year, ...context });
 	const slice = recap.films;
 	const perMonth = monthTally(slice, year);
 	const gaps = ratingGaps(slice);
@@ -162,7 +155,6 @@ export function buildWrapped(
 	return {
 		...recap,
 		viewer: context.viewer ?? null,
-		library,
 		days: Math.round(recap.hours / 24),
 		perMonth,
 		busiestMonth: peakMonth(perMonth),
