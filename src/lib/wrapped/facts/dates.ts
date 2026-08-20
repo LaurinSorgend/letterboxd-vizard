@@ -27,10 +27,17 @@ export function monthOf(iso: string): number {
 	return Number.parseInt(iso.slice(5, 7), 10) - 1;
 }
 
-export function longDate(iso: string): string {
+/**
+ * Day and month, plus the year when the date falls outside `within`. Most dates on a slide sit
+ * inside the year being recapped, where repeating it would be noise; a watchlist entry added
+ * four years ago needs it.
+ */
+export function longDate(iso: string, within: number): string {
+	const sameYear = iso.slice(0, 4) === String(within);
 	return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
 		day: 'numeric',
 		month: 'long',
+		year: sameYear ? undefined : 'numeric',
 		timeZone: 'UTC'
 	});
 }

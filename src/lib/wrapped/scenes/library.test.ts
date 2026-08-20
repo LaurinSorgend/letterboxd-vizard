@@ -118,10 +118,10 @@ describe('watchlistScene', () => {
 		const scene = watchlistAgeScene(buildWrapped(base({}, 20), 2025, { watchlist, now })!);
 		expect(scene).toMatchObject({ id: 'watchlist-age', valueKind: 'name', value: 'Queued 6' });
 		expect(scene?.note).toBe(
-			'You added it on 1 January and have not watched it since. That is 7.0 years of good intentions.'
+			'You added it on 1 January 2019 and have not watched it since. That is 7.0 years of good intentions.'
 		);
 		expect(scene?.stats).toEqual([
-			{ label: 'Added', value: '1 January' },
+			{ label: 'Added', value: '1 January 2019' },
 			{ label: 'Waiting', value: '7.0 years' },
 			{ label: 'Median age', value: '7.0 years' }
 		]);

@@ -68,9 +68,9 @@ export function watchlistAgeScene(data: Wrapped): Scene | null {
 		label: 'Longest on the list',
 		value: age.oldest.name,
 		valueKind: 'name',
-		note: `You added it on ${longDate(age.oldest.added)} and have not watched it since. That is ${formatDays(age.oldest.days)} of good intentions.`,
+		note: `You added it on ${longDate(age.oldest.added, data.year)} and have not watched it since. That is ${formatDays(age.oldest.days)} of good intentions.`,
 		stats: [
-			{ label: 'Added', value: longDate(age.oldest.added) },
+			{ label: 'Added', value: longDate(age.oldest.added, data.year) },
 			{ label: 'Waiting', value: formatDays(age.oldest.days) },
 			{ label: 'Median age', value: formatDays(age.medianDays) }
 		],
@@ -129,11 +129,11 @@ export function collectionScene(data: Wrapped): Scene | null {
 		label: 'The set you worked through',
 		value: worked.name,
 		valueKind: 'name',
-		note: `${covered[0].toUpperCase()}${covered.slice(1)}, between ${longDate(worked.first)} and ${longDate(worked.last)}.`,
+		note: `${covered[0].toUpperCase()}${covered.slice(1)}, between ${longDate(worked.first, data.year)} and ${longDate(worked.last, data.year)}.`,
 		stats: [
 			{ label: 'Films', value: worked.total ? `${seen} of ${worked.total}` : String(seen) },
-			{ label: 'First', value: longDate(worked.first) },
-			{ label: 'Last', value: longDate(worked.last) }
+			{ label: 'First', value: longDate(worked.first, data.year) },
+			{ label: 'Last', value: longDate(worked.last, data.year) }
 		],
 		body: { kind: 'posters', posters: worked.shownFilms.map((film) => posterOf(film, '')) }
 	};

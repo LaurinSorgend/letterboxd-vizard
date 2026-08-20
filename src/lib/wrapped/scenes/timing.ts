@@ -14,10 +14,10 @@ export function gapSilenceScene(data: Wrapped): Scene | null {
 	if (!gap || gap.days < MIN_GAP_DAYS) return null;
 	const note =
 		gap.kind === 'late-start'
-			? `You did not start until ${longDate(gap.to)}. ${plural(gap.days, 'day')} of ${data.year} went by first.`
+			? `You did not start until ${longDate(gap.to, data.year)}. ${plural(gap.days, 'day')} of ${data.year} went by first.`
 			: gap.kind === 'early-stop'
-				? `Your last entry was ${longDate(gap.from)}, and nothing followed it. ${plural(gap.days, 'day')}.`
-				: `You logged nothing between ${longDate(gap.from)} and ${longDate(gap.to)}. ${plural(gap.days, 'day')}, your longest stretch of the year.`;
+				? `Your last entry was ${longDate(gap.from, data.year)}, and nothing followed it. ${plural(gap.days, 'day')}.`
+				: `You logged nothing between ${longDate(gap.from, data.year)} and ${longDate(gap.to, data.year)}. ${plural(gap.days, 'day')}, your longest stretch of the year.`;
 	return {
 		id: 'silence',
 		accent: 'indigo',
@@ -26,8 +26,8 @@ export function gapSilenceScene(data: Wrapped): Scene | null {
 		valueKind: 'number',
 		note,
 		stats: [
-			{ label: 'From', value: longDate(gap.from) },
-			{ label: 'To', value: longDate(gap.to) },
+			{ label: 'From', value: longDate(gap.from, data.year) },
+			{ label: 'To', value: longDate(gap.to, data.year) },
 			{ label: 'Second longest', value: `${gap.second} days` }
 		],
 		body: { kind: 'none' }
@@ -69,9 +69,9 @@ export function bestWeekScene(data: Wrapped): Scene | null {
 		label: 'The heaviest week',
 		value: String(week.count),
 		valueKind: 'number',
-		note: `${plural(week.count, 'film')} between ${longDate(week.start)} and ${longDate(week.end)}.`,
+		note: `${plural(week.count, 'film')} between ${longDate(week.start, data.year)} and ${longDate(week.end, data.year)}.`,
 		stats: [
-			{ label: 'From', value: longDate(week.start) },
+			{ label: 'From', value: longDate(week.start, data.year) },
 			{ label: 'Best other week', value: String(week.runnerUp) }
 		],
 		body: {
@@ -89,7 +89,7 @@ export function doubleBillScene(data: Wrapped): Scene | null {
 		{ label: 'Share of entries', value: `${Math.round(bills.share * 100)}%` }
 	];
 	if (bills.heaviest) {
-		stats.push({ label: 'Heaviest', value: longDate(bills.heaviest.date) });
+		stats.push({ label: 'Heaviest', value: longDate(bills.heaviest.date, data.year) });
 	}
 	return {
 		id: 'doubles',

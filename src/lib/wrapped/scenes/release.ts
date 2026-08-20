@@ -17,10 +17,10 @@ export function longestWaitScene(data: Wrapped): Scene | null {
 		label: 'The longest wait',
 		value: String(wait.years),
 		valueKind: 'number',
-		note: `${wait.film.name} came out in ${released}. You watched it on ${longDate(wait.watched)}, ${plural(wait.years, 'year')} later.${extra}`,
+		note: `${wait.film.name} came out in ${released}. You watched it on ${longDate(wait.watched, data.year)}, ${plural(wait.years, 'year')} later.${extra}`,
 		stats: [
 			{ label: 'Released', value: released },
-			{ label: 'Watched', value: longDate(wait.watched) },
+			{ label: 'Watched', value: longDate(wait.watched, data.year) },
 			{ label: 'Waited 20+ years', value: String(wait.overTwenty) }
 		],
 		body: { kind: 'posters', posters: [posterOf(wait.film, released)] }
@@ -64,7 +64,7 @@ export function shelfScene(data: Wrapped): Scene | null {
 		valueKind: 'number',
 		note: `You watched ${quick.film.name} ${quick.days === 0 ? 'on the day it opened' : `${plural(quick.days, 'day')} after it opened`}.${extra}`,
 		stats: [
-			{ label: 'Released', value: longDate(quick.released) },
+			{ label: 'Released', value: longDate(quick.released, data.year) },
 			{ label: 'Inside 30 days', value: String(quick.insideThirty) }
 		],
 		body: { kind: 'posters', posters: [posterOf(quick.film, `${quick.days}d`)] }
