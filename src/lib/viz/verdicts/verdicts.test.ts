@@ -14,8 +14,23 @@ const dateOf = (i: number, year: number, first: number) =>
 
 const COUNT = 40;
 
-const bulk = (count: number, over: Parameters<typeof film>[0] = {}, year = 2025) =>
-	Array.from({ length: count }, (_, i) => film({ ...watched([dateOf(i, year, 5)]), ...over }));
+/**
+ * Ratings spread across five steps and hearts on one film in five, so no rating label fires
+ * either: a year rated all at one step is a Metronome, and one rated nowhere an Abstainer.
+ * `KIND` lifts the average past The Generous without narrowing the spread.
+ */
+const QUIET = [2, 3, 3.5, 4, 5];
+const KIND = [3.5, 4, 4.5, 5, 5];
+
+const scored = (i: number, scale: number[]) => ({
+	rating: scale[i % scale.length],
+	liked: i % 5 === 0
+});
+
+const bulk = (count: number, over: Parameters<typeof film>[0] = {}, year = 2025, scale = QUIET) =>
+	Array.from({ length: count }, (_, i) =>
+		film({ ...watched([dateOf(i, year, 5)]), ...scored(i, scale), ...over })
+	);
 
 describe('rulesInOrder', () => {
 	it('lists every implemented rule exactly once, in the declared order', () => {
@@ -37,12 +52,12 @@ describe('verdictFor', () => {
 	});
 
 	it('keeps The Generous for a kind year', () => {
-		const films = bulk(COUNT, { rating: 4.5, tmdb: tmdb({ voteCount: 50_000, year: 2020 }) });
+		const films = bulk(COUNT, { tmdb: tmdb({ voteCount: 50_000, year: 2020 }) }, 2025, KIND);
 		expect(verdictFor(buildLibrary({ films, year: 2025 })).title).toBe('The Generous');
 	});
 
 	it('falls back to The Regular and cites the count', () => {
-		const films = bulk(COUNT, { rating: 3, tmdb: tmdb({ voteCount: 6_000, year: 2020 }) });
+		const films = bulk(COUNT, { tmdb: tmdb({ voteCount: 6_000, year: 2020 }) });
 		const verdict = verdictFor(buildLibrary({ films, year: 2025 }));
 		expect(verdict.title).toBe('The Regular');
 		expect(verdict.detail).toBe('40 films across 12 months of the year.');
@@ -82,7 +97,7 @@ describe('verdictFor rule order', () => {
 		const films = Array.from({ length: COUNT }, (_, i) =>
 			film({
 				...watched([dateOf(i, YEAR, 10)]),
-				rating: toggles.highRating ? 4 : 3,
+				...scored(i, toggles.highRating ? KIND : QUIET),
 				tmdb: tmdb({
 					runtime: toggles.longRuntime ? 150 : 90,
 					year: toggles.oldMedian ? 1970 : 2020,
@@ -157,7 +172,7 @@ describe('verdictFor rule order', () => {
 	it('picks Generous when only 6 matches', () => {
 		const verdict = verdictFor(makeLibrary({ ...ALL_FALSE, highRating: true }));
 		expect(verdict.title).toBe('The Generous');
-		expect(verdict.detail).toBe('You averaged ★ 4.00 across the year.');
+		expect(verdict.detail).toBe('You averaged ★ 4.40 across the year.');
 	});
 
 	it('falls back to Regular when nothing else matches', () => {
