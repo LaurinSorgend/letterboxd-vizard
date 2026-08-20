@@ -28,9 +28,11 @@ describe('RHYTHM', () => {
 		}
 	});
 
-	it('leaves a middling year unlabelled, so every fixture below turns on one dial', () => {
-		const fired = RHYTHM.filter((entry) => entry.when(neutralTraits())).map((entry) => entry.id);
-		expect(fired).toEqual([]);
+	it('leaves a middling year unlabelled across the whole registry, not just this section', () => {
+		const fired = rulesInOrder()
+			.filter((entry) => entry.when(neutralTraits()))
+			.map((entry) => entry.id);
+		expect(fired).toEqual(['regular']);
 	});
 });
 
@@ -156,6 +158,8 @@ describe('The Sprinter', () => {
 	it('needs two fifths of the entries on doubled-up days', () => {
 		expect(rule('sprinter').when(neutralTraits({ sprintShare: 0.4 }))).toBe(true);
 		expect(rule('sprinter').when(neutralTraits({ sprintShare: 0.39 }))).toBe(false);
+		expect(rule('sprinter').when(neutralTraits({ sprintShare: 0.4, entries: 25 }))).toBe(true);
+		expect(rule('sprinter').when(neutralTraits({ sprintShare: 0.4, entries: 24 }))).toBe(false);
 	});
 
 	it('cites the entries, not the days, and the threshold they were counted at', () => {
@@ -206,6 +210,8 @@ describe('The Lapsed', () => {
 		expect(rule('lapsed').when(neutralTraits({ ...early, firstQuarterShare: 0.54 }))).toBe(false);
 		expect(rule('lapsed').when(neutralTraits({ ...early, lastThirdShare: 0.09 }))).toBe(true);
 		expect(rule('lapsed').when(neutralTraits({ ...early, lastThirdShare: 0.1 }))).toBe(false);
+		expect(rule('lapsed').when(neutralTraits({ ...early, films: 25 }))).toBe(true);
+		expect(rule('lapsed').when(neutralTraits({ ...early, films: 24 }))).toBe(false);
 	});
 
 	it('cites both ends of the year', () => {

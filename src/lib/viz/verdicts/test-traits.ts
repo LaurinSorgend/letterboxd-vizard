@@ -43,7 +43,7 @@ export function neutralTraits(over: Partial<Traits> = {}): Traits {
 		topDecade: 2010,
 		topDecadeShare: 0.3,
 		foreignShare: 0.2,
-		topCountry: 'United States',
+		topCountry: 'US',
 		topCountryShare: 0.5,
 		topGenre: 'Drama',
 		topGenreShare: 0.25,
