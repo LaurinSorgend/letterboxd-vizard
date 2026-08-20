@@ -1,0 +1,67 @@
+import type { Traits } from './traits';
+
+/**
+ * A middling year that fires no rule, so a test can turn on exactly one dial and know the
+ * result came from that dial. Internally coherent: `monthCounts` sums to `entries`, the month
+ * shares are that month's slice of `entries`, and `recentYears[0]` is this year's `films`.
+ */
+export function neutralTraits(over: Partial<Traits> = {}): Traits {
+	return {
+		year: 2025,
+		films: 36,
+		entries: 40,
+		activeMonths: 10,
+		monthCounts: [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 0],
+		decemberShare: 0,
+		firstQuarterShare: 0.3,
+		lastThirdShare: 0.2,
+		sprintShare: 0.1,
+		weekendShare: 0.3,
+		longestGapDays: 20,
+		previousYearFilms: 30,
+		recentYears: [36, 30, 26],
+		loggedBeforePreviousYear: true,
+		rated: 27,
+		ratedShare: 0.75,
+		meanRating: 3.2,
+		fiveStarShare: 0.1,
+		pairShare: 0.3,
+		likedCount: 9,
+		likedShare: 0.25,
+		crowdCount: 20,
+		crowdMeanAbs: 0.5,
+		crowdMeanSigned: 0.1,
+		metascoreCount: 20,
+		metascoreMean: 60,
+		medianVotes: 5_000,
+		lowVoteShare: 0.1,
+		highVoteShare: 0.3,
+		obscureShare: 0.1,
+		medianYear: 2015,
+		releasedThisYearShare: 0.1,
+		preEightiesShare: 0.1,
+		topDecade: 2010,
+		topDecadeShare: 0.3,
+		foreignShare: 0.2,
+		topCountry: 'United States',
+		topCountryShare: 0.5,
+		topGenre: 'Drama',
+		topGenreShare: 0.25,
+		meanRuntime: 105,
+		runtimeCount: 36,
+		televisionShare: 0,
+		countries: 8,
+		rewatchShare: 0.1,
+		topCollection: { name: 'Example', count: 2 },
+		topDirector: { name: 'Example Director', count: 3 },
+		topCastMember: { name: 'Example Player', count: 3 },
+		reviewShare: 0.2,
+		reviewWords: 200,
+		tagShare: 0.1,
+		distinctTags: 3,
+		watchlistSize: 18,
+		watchlistRatio: 0.5,
+		watchlistAddedThisYear: 6,
+		...over
+	};
+}

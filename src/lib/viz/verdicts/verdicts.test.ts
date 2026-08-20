@@ -4,10 +4,18 @@ import { buildLibrary } from '$lib/wrapped/library';
 import { verdictFor } from './index';
 import { ORDER, rulesInOrder } from './rules';
 
+/**
+ * A distinct date per film, spread over all twelve months. No repeated date, so nothing here
+ * reads as a double bill, and forty films, so nothing reads as a small evenly-paced year either:
+ * the volume and rhythm labels all stay quiet and each fixture below tests what it says it does.
+ */
+const dateOf = (i: number, year: number, first: number) =>
+	`${year}-${String((i % 12) + 1).padStart(2, '0')}-${String(Math.floor(i / 12) + first).padStart(2, '0')}`;
+
+const COUNT = 40;
+
 const bulk = (count: number, over: Parameters<typeof film>[0] = {}, year = 2025) =>
-	Array.from({ length: count }, (_, i) =>
-		film({ ...watched([`${year}-${String((i % 12) + 1).padStart(2, '0')}-05`]), ...over })
-	);
+	Array.from({ length: count }, (_, i) => film({ ...watched([dateOf(i, year, 5)]), ...over }));
 
 describe('rulesInOrder', () => {
 	it('lists every implemented rule exactly once, in the declared order', () => {
@@ -24,28 +32,29 @@ describe('rulesInOrder', () => {
 
 describe('verdictFor', () => {
 	it('keeps The Deep Diver for an obscure year', () => {
-		const films = bulk(20, { tmdb: tmdb({ voteCount: 200 }) });
+		const films = bulk(COUNT, { tmdb: tmdb({ voteCount: 200 }) });
 		expect(verdictFor(buildLibrary({ films, year: 2025 })).title).toBe('The Deep Diver');
 	});
 
 	it('keeps The Generous for a kind year', () => {
-		const films = bulk(20, { rating: 4.5, tmdb: tmdb({ voteCount: 50_000, year: 2020 }) });
+		const films = bulk(COUNT, { rating: 4.5, tmdb: tmdb({ voteCount: 50_000, year: 2020 }) });
 		expect(verdictFor(buildLibrary({ films, year: 2025 })).title).toBe('The Generous');
 	});
 
 	it('falls back to The Regular and cites the count', () => {
-		const films = bulk(12, { rating: 3, tmdb: tmdb({ voteCount: 6_000, year: 2020 }) });
+		const films = bulk(COUNT, { rating: 3, tmdb: tmdb({ voteCount: 6_000, year: 2020 }) });
 		const verdict = verdictFor(buildLibrary({ films, year: 2025 }));
 		expect(verdict.title).toBe('The Regular');
-		expect(verdict.detail).toContain('12');
+		expect(verdict.detail).toBe('40 films across 12 months of the year.');
 	});
 });
 
 /**
- * Each fixture below satisfies every implemented rule from its own position in the evaluation
- * order onward, and none before it, so a fixture that wins on rule N also proves rule N outranks
- * every rule listed after it. Chained across all seven fixtures, that pins the whole order — not
- * just the seven outcomes in isolation — the way the three tests above cannot on their own.
+ * Each fixture below satisfies every taste rule from its own position in the evaluation order
+ * onward, and none before it, so a fixture that wins on rule N also proves rule N outranks every
+ * taste rule listed after it. Chained across all seven fixtures, that pins their whole order —
+ * not just the seven outcomes in isolation — the way the three tests above cannot on their own.
+ * None of them fires a volume or rhythm label, so those never interpose.
  */
 describe('verdictFor rule order', () => {
 	const YEAR = 2025;
@@ -70,9 +79,9 @@ describe('verdictFor rule order', () => {
 	};
 
 	function makeLibrary(toggles: Toggles) {
-		const films = Array.from({ length: 20 }, (_, i) =>
+		const films = Array.from({ length: COUNT }, (_, i) =>
 			film({
-				...watched([`${YEAR}-${String((i % 12) + 1).padStart(2, '0')}-10`]),
+				...watched([dateOf(i, YEAR, 10)]),
 				rating: toggles.highRating ? 4 : 3,
 				tmdb: tmdb({
 					runtime: toggles.longRuntime ? 150 : 90,
@@ -126,7 +135,7 @@ describe('verdictFor rule order', () => {
 			})
 		);
 		expect(verdict.title).toBe('The Globetrotter');
-		expect(verdict.detail).toBe('You watched films from 20 countries.');
+		expect(verdict.detail).toBe('You watched films from 40 countries.');
 	});
 
 	it('picks Marathoner when 4 onward matches but not 1-3', () => {
@@ -154,6 +163,6 @@ describe('verdictFor rule order', () => {
 	it('falls back to Regular when nothing else matches', () => {
 		const verdict = verdictFor(makeLibrary(ALL_FALSE));
 		expect(verdict.title).toBe('The Regular');
-		expect(verdict.detail).toBe('20 films across 12 months of the year.');
+		expect(verdict.detail).toBe('40 films across 12 months of the year.');
 	});
 });
