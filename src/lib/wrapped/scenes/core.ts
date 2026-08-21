@@ -291,6 +291,10 @@ export function verdictScene(data: Wrapped): Scene {
 		valueKind: 'name',
 		note: data.personality.detail,
 		stats: [],
+		footnote:
+			data.personality.alsoTrue.length > 0
+				? `Also true: ${data.personality.alsoTrue.join(', ')}`
+				: undefined,
 		body: { kind: 'none' }
 	};
 }

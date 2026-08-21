@@ -337,8 +337,10 @@ function verdictBlock(ctx: CanvasRenderingContext2D, data: Wrapped, palette: Pal
 	const title = fitFont(ctx, data.personality.title, measure, 84, 44);
 	ctx.font = font('body', 30);
 	const lines = wrap(ctx, data.personality.detail, measure, 2);
+	const alsoTrue = data.personality.alsoTrue;
+	const alsoTrueLine = alsoTrue.length > 0 ? `Also true: ${alsoTrue.join(', ')}` : null;
 	return {
-		height: 34 + title * 1.1 + lines.length * 40,
+		height: 34 + title * 1.1 + lines.length * 40 + (alsoTrueLine ? 34 : 0),
 		draw: (y) => {
 			ctx.font = font('mono', 22);
 			ctx.fillStyle = palette.muted;
@@ -350,6 +352,10 @@ function verdictBlock(ctx: CanvasRenderingContext2D, data: Wrapped, palette: Pal
 			ctx.fillStyle = palette.muted;
 			const body = y + 34 + title * 1.1;
 			lines.forEach((line, i) => ctx.fillText(line, POSTER.margin, body + i * 40));
+			if (!alsoTrueLine) return;
+			ctx.font = font('mono', 22);
+			ctx.fillStyle = palette.stamp;
+			ctx.fillText(alsoTrueLine, POSTER.margin, body + lines.length * 40);
 		}
 	};
 }

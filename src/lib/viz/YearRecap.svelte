@@ -164,6 +164,9 @@
 				<span class="eyebrow">Your year in one word</span>
 				<strong class="value name">{recap.personality.title}</strong>
 				<span class="detail">{recap.personality.detail}</span>
+				{#if recap.personality.alsoTrue.length > 0}
+					<span class="also">Also true: {recap.personality.alsoTrue.join(', ')}</span>
+				{/if}
 			</li>
 		</ul>
 	</section>
@@ -241,6 +244,10 @@
 	.detail {
 		font-size: var(--text-sm);
 		color: var(--fg-secondary);
+	}
+	.also {
+		font-size: var(--text-xs);
+		color: var(--ctp-subtext0);
 	}
 
 	.posters {

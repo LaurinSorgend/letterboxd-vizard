@@ -33,6 +33,54 @@ const bulk = (count: number, over: Parameters<typeof film>[0] = {}, year = 2025,
 		film({ ...watched([dateOf(i, year, 5)]), ...scored(i, scale), ...over })
 	);
 
+const YEAR = 2025;
+const DIRECTOR = { name: 'Auteur One', tmdbId: 777, profilePath: null };
+
+interface Toggles {
+	obscure: boolean;
+	oldMedian: boolean;
+	manyCountries: boolean;
+	longRuntime: boolean;
+	loyalDirector: boolean;
+	highRating: boolean;
+}
+
+const ALL_FALSE: Toggles = {
+	obscure: false,
+	oldMedian: false,
+	manyCountries: false,
+	longRuntime: false,
+	loyalDirector: false,
+	highRating: false
+};
+
+/**
+ * Quiet on every taste axis at once, not only the ones this section's own rules read:
+ * runtime sits between the Miniaturist and Marathoner thresholds, vote counts between the
+ * Deep Diver and Populist thresholds, countries spread across three so none dominates, and
+ * the release years spread across three decades so the median clears the Time Traveller's
+ * gap without clearing the Archivist's pre-1980 share or the Settler's single-decade share.
+ * Shared beyond the rule-order cascade below: it is also the "nothing but the fallback"
+ * fixture for the also-true and near-miss tests, since a 12-film library trips the Sampler
+ * and the Ritualist instead of falling through.
+ */
+function makeLibrary(toggles: Toggles) {
+	const films = Array.from({ length: COUNT }, (_, i) =>
+		film({
+			...watched([dateOf(i, YEAR, 10)]),
+			...scored(i, toggles.highRating ? KIND : QUIET),
+			tmdb: tmdb({
+				runtime: toggles.longRuntime ? 150 : 105,
+				year: toggles.oldMedian ? [1985, 1995, 2000][i % 3] : 2020,
+				countries: [toggles.manyCountries ? `C${i}` : ['US', 'GB', 'FR'][i % 3]],
+				voteCount: toggles.obscure ? 200 : 5_000,
+				directors: toggles.loyalDirector && i < 6 ? [DIRECTOR] : []
+			})
+		})
+	);
+	return buildLibrary({ films, year: YEAR });
+}
+
 describe('rulesInOrder', () => {
 	it('lists every implemented rule exactly once, in the declared order', () => {
 		const ids = rulesInOrder().map((rule) => rule.id);
@@ -65,7 +113,7 @@ describe('verdictFor', () => {
 		const films = bulk(COUNT, { tmdb: tmdb({ voteCount: 6_000, year: 2020 }) });
 		const verdict = verdictFor(buildLibrary({ films, year: 2025 }));
 		expect(verdict.title).toBe('The Regular');
-		expect(verdict.detail).toBe('40 films across 12 months of the year.');
+		expect(verdict.detail).toMatch(/^40 films across 12 months of the year\./);
 	});
 });
 
@@ -77,51 +125,6 @@ describe('verdictFor', () => {
  * None of them fires a volume or rhythm label, so those never interpose.
  */
 describe('verdictFor rule order', () => {
-	const YEAR = 2025;
-	const DIRECTOR = { name: 'Auteur One', tmdbId: 777, profilePath: null };
-
-	interface Toggles {
-		obscure: boolean;
-		oldMedian: boolean;
-		manyCountries: boolean;
-		longRuntime: boolean;
-		loyalDirector: boolean;
-		highRating: boolean;
-	}
-
-	const ALL_FALSE: Toggles = {
-		obscure: false,
-		oldMedian: false,
-		manyCountries: false,
-		longRuntime: false,
-		loyalDirector: false,
-		highRating: false
-	};
-
-	/**
-	 * Quiet on every taste axis at once, not only the ones this section's own rules read:
-	 * runtime sits between the Miniaturist and Marathoner thresholds, vote counts between the
-	 * Deep Diver and Populist thresholds, countries spread across three so none dominates, and
-	 * the release years spread across three decades so the median clears the Time Traveller's
-	 * gap without clearing the Archivist's pre-1980 share or the Settler's single-decade share.
-	 */
-	function makeLibrary(toggles: Toggles) {
-		const films = Array.from({ length: COUNT }, (_, i) =>
-			film({
-				...watched([dateOf(i, YEAR, 10)]),
-				...scored(i, toggles.highRating ? KIND : QUIET),
-				tmdb: tmdb({
-					runtime: toggles.longRuntime ? 150 : 105,
-					year: toggles.oldMedian ? [1985, 1995, 2000][i % 3] : 2020,
-					countries: [toggles.manyCountries ? `C${i}` : ['US', 'GB', 'FR'][i % 3]],
-					voteCount: toggles.obscure ? 200 : 5_000,
-					directors: toggles.loyalDirector && i < 6 ? [DIRECTOR] : []
-				})
-			})
-		);
-		return buildLibrary({ films, year: YEAR });
-	}
-
 	it('picks Deep Diver when every rule from 1 onward matches', () => {
 		const verdict = verdictFor(
 			makeLibrary({
@@ -190,7 +193,7 @@ describe('verdictFor rule order', () => {
 	it('falls back to Regular when nothing else matches', () => {
 		const verdict = verdictFor(makeLibrary(ALL_FALSE));
 		expect(verdict.title).toBe('The Regular');
-		expect(verdict.detail).toBe('40 films across 12 months of the year.');
+		expect(verdict.detail).toMatch(/^40 films across 12 months of the year\./);
 	});
 
 	/**
@@ -203,5 +206,36 @@ describe('verdictFor rule order', () => {
 		const traits = buildTraits(makeLibrary(ALL_FALSE));
 		const matched = rulesInOrder().filter((rule) => rule.when(traits));
 		expect(matched.map((rule) => rule.id)).toEqual(['regular']);
+	});
+});
+
+describe('also true', () => {
+	it('names the next two labels that also matched', () => {
+		const films = Array.from({ length: 400 }, (_, i) =>
+			film({
+				...watched([
+					`2025-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`
+				]),
+				tmdb: tmdb({ voteCount: 200, countries: ['KR'], originalLanguage: 'ko', year: 2015 })
+			})
+		);
+		const verdict = verdictFor(buildLibrary({ films, year: 2025 }));
+		const titles = new Set(rulesInOrder().map((rule) => rule.title));
+		expect(verdict.alsoTrue).toHaveLength(2);
+		expect(new Set(verdict.alsoTrue).size).toBe(2);
+		expect(verdict.alsoTrue).not.toContain(verdict.title);
+		for (const title of verdict.alsoTrue) expect(titles.has(title)).toBe(true);
+	});
+
+	it('leaves alsoTrue empty when only the fallback matched', () => {
+		expect(verdictFor(makeLibrary(ALL_FALSE)).alsoTrue).toEqual([]);
+	});
+});
+
+describe('The Regular', () => {
+	it('cites the margin it came closest on', () => {
+		const verdict = verdictFor(makeLibrary(ALL_FALSE));
+		expect(verdict.title).toBe('The Regular');
+		expect(verdict.detail).toMatch(/widest margin/i);
 	});
 });
