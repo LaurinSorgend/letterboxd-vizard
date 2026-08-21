@@ -4,7 +4,8 @@ Drop your Letterboxd data-export zip and get visualizations of your film history
 a world map of your watches, rating habits vs TMDB, what you heart, how long after
 release you get to a film and how widely seen it is, watches over time, genres,
 languages, directors, actors, franchises, recurring themes, a network of films
-joined by shared cast, your library as a poster wall and a recap of every year.
+joined by shared cast, your library as a poster wall and a year in review deck,
+frame by frame, ending in a verdict on your year.
 
 ![Example Image 1](/docs/assets/1.jpg)
 ![Example Image 2](/docs/assets/2.jpg)
