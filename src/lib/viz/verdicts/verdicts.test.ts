@@ -3,6 +3,7 @@ import { film, tmdb, watched } from '$lib/testing/fixtures';
 import { buildLibrary } from '$lib/wrapped/library';
 import { verdictFor } from './index';
 import { ORDER, rulesInOrder } from './rules';
+import { buildTraits } from './traits';
 
 /**
  * A distinct date per film, spread over all twelve months. No repeated date, so nothing here
@@ -52,7 +53,7 @@ describe('verdictFor', () => {
 	});
 
 	it('keeps The Generous for a kind year', () => {
-		const films = bulk(COUNT, { tmdb: tmdb({ voteCount: 50_000, year: 2020 }) }, 2025, KIND);
+		const films = bulk(COUNT, { tmdb: tmdb({ voteCount: 6_000, year: 2020 }) }, 2025, KIND);
 		expect(verdictFor(buildLibrary({ films, year: 2025 })).title).toBe('The Generous');
 	});
 
@@ -93,16 +94,23 @@ describe('verdictFor rule order', () => {
 		highRating: false
 	};
 
+	/**
+	 * Quiet on every taste axis at once, not only the ones this section's own rules read:
+	 * runtime sits between the Miniaturist and Marathoner thresholds, vote counts between the
+	 * Deep Diver and Populist thresholds, countries spread across three so none dominates, and
+	 * the release years spread across three decades so the median clears the Time Traveller's
+	 * gap without clearing the Archivist's pre-1980 share or the Settler's single-decade share.
+	 */
 	function makeLibrary(toggles: Toggles) {
 		const films = Array.from({ length: COUNT }, (_, i) =>
 			film({
 				...watched([dateOf(i, YEAR, 10)]),
 				...scored(i, toggles.highRating ? KIND : QUIET),
 				tmdb: tmdb({
-					runtime: toggles.longRuntime ? 150 : 90,
-					year: toggles.oldMedian ? 1970 : 2020,
-					countries: [toggles.manyCountries ? `C${i}` : 'US'],
-					voteCount: toggles.obscure ? 200 : 50_000,
+					runtime: toggles.longRuntime ? 150 : 105,
+					year: toggles.oldMedian ? [1985, 1995, 2000][i % 3] : 2020,
+					countries: [toggles.manyCountries ? `C${i}` : ['US', 'GB', 'FR'][i % 3]],
+					voteCount: toggles.obscure ? 200 : 5_000,
 					directors: toggles.loyalDirector && i < 6 ? [DIRECTOR] : []
 				})
 			})
@@ -136,7 +144,7 @@ describe('verdictFor rule order', () => {
 			})
 		);
 		expect(verdict.title).toBe('The Time Traveller');
-		expect(verdict.detail).toBe('Your median film came out in 1970.');
+		expect(verdict.detail).toBe('Your median film came out in 1995.');
 	});
 
 	it('picks Globetrotter when 3 onward matches but not 1-2', () => {
@@ -179,5 +187,17 @@ describe('verdictFor rule order', () => {
 		const verdict = verdictFor(makeLibrary(ALL_FALSE));
 		expect(verdict.title).toBe('The Regular');
 		expect(verdict.detail).toBe('40 films across 12 months of the year.');
+	});
+
+	/**
+	 * The integration-level twin of `neutralTraits`: a library that reads quiet on every trait
+	 * this suite knows about should match nothing but the fallback. When a later section adds a
+	 * rule that fires here too, this fails on a named interposing id instead of on a title string
+	 * six tests away from the fixture that actually needs adjusting.
+	 */
+	it('the quiet library matches only the fallback', () => {
+		const traits = buildTraits(makeLibrary(ALL_FALSE));
+		const matched = rulesInOrder().filter((rule) => rule.when(traits));
+		expect(matched.map((rule) => rule.id)).toEqual(['regular']);
 	});
 });
