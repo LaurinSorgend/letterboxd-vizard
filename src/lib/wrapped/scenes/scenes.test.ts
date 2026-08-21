@@ -106,4 +106,22 @@ describe('buildScenes', () => {
 		const actorScene = buildScenes(data!).find((scene) => scene.id === 'actor');
 		expect(actorScene?.note).toBe('Billed in 2 of your films.');
 	});
+
+	it('drops the "you were one of them" line when the deepest cut has no votes at all', () => {
+		const localFilms = Array.from({ length: 12 }, (_, i) =>
+			film({
+				...watched([`2025-0${(i % 9) + 1}-1${i % 9}`]),
+				rating: 3.5,
+				tmdb: tmdb({
+					genres: ['Drama'],
+					runtime: 110,
+					countries: ['FR'],
+					voteCount: i === 0 ? 0 : 5000
+				})
+			})
+		);
+		const data = buildWrapped(localFilms, 2025);
+		const deepCutScene = buildScenes(data!).find((scene) => scene.id === 'deep-cut');
+		expect(deepCutScene?.note).toBe('0 ratings across TMDB and IMDb.');
+	});
 });

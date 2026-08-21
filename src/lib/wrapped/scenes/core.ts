@@ -271,7 +271,7 @@ export function deepCutScene(data: Wrapped): Scene | null {
 		label: 'Deepest cut',
 		value: data.mostObscure.name,
 		valueKind: 'name',
-		note: `${votes.toLocaleString('en')} ratings across TMDB and IMDb. You were one of them.`,
+		note: `${votes.toLocaleString('en')} ratings across TMDB and IMDb.${votes > 0 ? ' You were one of them.' : ''}`,
 		stats: data.mostPopular
 			? [
 					{ label: 'Biggest crowd', value: data.mostPopular.name },
