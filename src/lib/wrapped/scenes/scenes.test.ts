@@ -78,4 +78,32 @@ describe('buildScenes', () => {
 			body: { kind: 'bars', bars: [{ label: 'Drama', value: '12', share: 1 }] }
 		});
 	});
+
+	it('does not double the s in "films" when a director has more than one film this year', () => {
+		const director = { name: 'Sidney Lumet', tmdbId: 1, profilePath: null };
+		const localFilms = Array.from({ length: 10 }, (_, i) =>
+			film({
+				...watched([`2025-0${(i % 9) + 1}-1${i % 9}`]),
+				rating: 3.5,
+				tmdb: tmdb({ genres: ['Drama'], directors: i < 2 ? [director] : [], countries: ['FR'] })
+			})
+		);
+		const data = buildWrapped(localFilms, 2025);
+		const directorScene = buildScenes(data!).find((scene) => scene.id === 'director');
+		expect(directorScene?.note).toBe('2 of their films this year, averaging ★ 3.50.');
+	});
+
+	it('does not double the s in "films" when an actor is billed in more than one film this year', () => {
+		const actor = { name: 'Alan Tudyk', tmdbId: 2, profilePath: null };
+		const localFilms = Array.from({ length: 10 }, (_, i) =>
+			film({
+				...watched([`2025-0${(i % 9) + 1}-1${i % 9}`]),
+				rating: 3.5,
+				tmdb: tmdb({ genres: ['Drama'], cast: i < 2 ? [actor] : [], countries: ['FR'] })
+			})
+		);
+		const data = buildWrapped(localFilms, 2025);
+		const actorScene = buildScenes(data!).find((scene) => scene.id === 'actor');
+		expect(actorScene?.note).toBe('Billed in 2 of your films.');
+	});
 });

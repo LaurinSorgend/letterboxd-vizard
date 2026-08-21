@@ -173,7 +173,7 @@ export function directorScene(data: Wrapped): Scene | null {
 		'indigo',
 		'Director of the year',
 		(person) =>
-			`${plural(person.count, 'of their films')} this year${person.avg !== null ? `, averaging ${stars(person.avg)}` : ''}.`,
+			`${plural(person.count, 'of their films', 'of their films')} this year${person.avg !== null ? `, averaging ${stars(person.avg)}` : ''}.`,
 		data.topDirectors
 	);
 }
@@ -183,7 +183,7 @@ export function actorScene(data: Wrapped): Scene | null {
 		'actor',
 		'indigo',
 		'On screen most',
-		(person) => `Billed in ${plural(person.count, 'of your films')}.`,
+		(person) => `Billed in ${plural(person.count, 'of your films', 'of your films')}.`,
 		data.topActors
 	);
 }
