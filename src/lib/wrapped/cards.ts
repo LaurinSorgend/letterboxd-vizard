@@ -224,7 +224,7 @@ function barBlock(
 	};
 }
 
-function statBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette): Block {
+export function statBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette): Block {
 	return {
 		height: 118,
 		draw: (y) => {
@@ -232,14 +232,16 @@ function statBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette
 			ctx.fillRect(STORY.margin, y, STORY.width - STORY.margin * 2, 2);
 			let x = STORY.margin;
 			for (const stat of scene.stats.slice(0, 3)) {
+				const label = stat.label.toUpperCase();
 				ctx.font = font('mono', 24);
+				const labelWidth = ctx.measureText(label).width;
 				ctx.fillStyle = palette.muted;
-				ctx.fillText(stat.label.toUpperCase(), x, y + 24);
+				ctx.fillText(label, x, y + 24);
 				ctx.font = font('mono', 40);
 				ctx.fillStyle = palette.ink;
 				const value = stat.value.length > 18 ? `${stat.value.slice(0, 17)}…` : stat.value;
 				ctx.fillText(value, x, y + 58);
-				x += Math.max(ctx.measureText(value).width, 200) + 48;
+				x += Math.max(ctx.measureText(value).width, labelWidth, 200) + 48;
 			}
 		}
 	};
