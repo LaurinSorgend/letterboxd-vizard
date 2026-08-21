@@ -44,6 +44,10 @@ describe('rulesInOrder', () => {
 		const last = rulesInOrder().at(-1);
 		expect(last?.id).toBe('regular');
 	});
+
+	it('implements every id in the evaluation order', () => {
+		expect(rulesInOrder().map((rule) => rule.id)).toEqual(ORDER);
+	});
 });
 
 describe('verdictFor', () => {

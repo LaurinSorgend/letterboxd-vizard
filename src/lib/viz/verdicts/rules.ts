@@ -1,3 +1,4 @@
+import { HABIT } from './habit';
 import { RATINGS } from './ratings';
 import { RHYTHM } from './rhythm';
 import { TASTE } from './taste';
@@ -108,7 +109,7 @@ const EXISTING: Rule[] = [
 ];
 
 /** Every implemented rule, in evaluation order. Later tasks add sections to `SECTIONS`. */
-const SECTIONS: Rule[][] = [EXISTING, RHYTHM, RATINGS, TASTE];
+const SECTIONS: Rule[][] = [EXISTING, RHYTHM, RATINGS, TASTE, HABIT];
 
 export function rulesInOrder(): Rule[] {
 	const byId = new Map(SECTIONS.flat().map((rule) => [rule.id, rule]));
