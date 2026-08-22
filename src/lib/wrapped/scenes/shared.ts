@@ -50,7 +50,7 @@ export interface Scene {
 export const stars = (rating: number | null): string =>
 	rating === null ? '—' : `★ ${rating.toFixed(2)}`;
 export const plural = (n: number, one: string, many = `${one}s`): string =>
-	`${n} ${n === 1 ? one : many}`;
+	`${n.toLocaleString('en')} ${n === 1 ? one : many}`;
 
 export function posterOf(film: EnrichedFilm, meta: string): Poster {
 	return {
