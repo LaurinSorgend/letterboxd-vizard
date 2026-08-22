@@ -206,7 +206,7 @@
 	<p class="live" role="status">Frame {index + 1} of {scenes.length}: {scene?.label}</p>
 
 	<div class="controls">
-		<button onclick={() => go(-1)} disabled={index === 0} aria-label="Previous frame">
+		<button class="prev" onclick={() => go(-1)} disabled={index === 0} aria-label="Previous frame">
 			<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
 				<path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2" />
 			</svg>
@@ -219,13 +219,18 @@
 		>
 			{playing ? 'Pause' : 'Play'}
 		</button>
-		{#if scene.id !== 'more'}
-			<button class="share" onclick={() => share(last ? 'poster' : 'scene')} disabled={busy}>
-				{busy ? 'Rendering…' : last ? 'Save the slide' : 'Save this frame'}
-			</button>
-		{/if}
+		<!-- The gate holds nothing worth saving, but the control keeps its place: a button that
+		     leaves the row moves every other control out from under the viewer's thumb. -->
+		<button
+			class="share"
+			onclick={() => share(last ? 'poster' : 'scene')}
+			disabled={busy || scene.id === 'more'}
+		>
+			{busy ? 'Rendering…' : last ? 'Save the slide' : 'Save this frame'}
+		</button>
 		<!-- svelte-ignore a11y_autofocus -->
 		<button
+			class="next"
 			autofocus
 			bind:this={nextButton}
 			onclick={() => go(1)}
@@ -516,11 +521,25 @@
 		white-space: nowrap;
 	}
 
+	/* Every control keeps its own column, so the gate frame dropping the save button leaves a
+	 * hole rather than sliding Next halfway across the room mid-run. */
 	.controls {
-		display: flex;
-		align-items: stretch;
+		display: grid;
+		grid-template-columns: auto auto minmax(0, 1fr) auto;
 		gap: 8px;
 		padding: clamp(12px, 2vh, 20px) clamp(16px, 4vw, 56px) clamp(16px, 3vh, 28px);
+	}
+	.prev {
+		grid-column: 1;
+	}
+	.play {
+		grid-column: 2;
+	}
+	.share {
+		grid-column: 3;
+	}
+	.next {
+		grid-column: 4;
 	}
 	button {
 		display: inline-flex;
@@ -552,7 +571,6 @@
 		outline-offset: 2px;
 	}
 	.share {
-		flex: 1;
 		font-weight: 700;
 		color: var(--w-room);
 		background: var(--w-screen);
@@ -602,15 +620,20 @@
 			grid-template-columns: minmax(0, 1fr) auto;
 		}
 		.controls {
-			flex-wrap: wrap;
+			grid-template-columns: auto minmax(0, 1fr) auto;
 			padding: 12px 16px 16px;
 		}
-		.play {
-			flex: 1;
+		.prev,
+		.play,
+		.next {
+			grid-row: 1;
+		}
+		.next {
+			grid-column: 3;
 		}
 		.share {
-			order: 5;
-			flex-basis: 100%;
+			grid-row: 2;
+			grid-column: 1 / -1;
 		}
 		.message {
 			bottom: 152px;

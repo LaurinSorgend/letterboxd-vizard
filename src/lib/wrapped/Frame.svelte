@@ -46,8 +46,8 @@
 		<ul class="bars" class:dense>
 			{#each scene.body.bars as bar, i (bar.label + i)}
 				<li style="--share: {bar.share}">
-					<span class="bar-track"><span class="bar-fill"></span></span>
 					<span class="bar-label">{bar.label}</span>
+					<span class="bar-track"><span class="bar-fill"></span></span>
 					<span class="bar-value" data-numeric>{bar.value}</span>
 				</li>
 			{/each}
@@ -95,6 +95,11 @@
 	 * rather than justifying the box keeps long frames scrollable from their own top. */
 	.frame > :first-child {
 		margin-top: auto;
+	}
+	/* A frame taller than the gate scrolls; it never squeezes. Left to shrink, the headline
+	 * and the note collapse to nothing and their glyphs print over the caption rule. */
+	.frame > * {
+		flex-shrink: 0;
 	}
 
 	.value {
@@ -155,10 +160,12 @@
 		width: 100%;
 	}
 
-	/* Horizontal rows for a handful of named categories. */
+	/* Horizontal rows for a handful of named categories. Label, bar and count are written in
+	   that order so each row places on one line: a track declared before its label would be
+	   auto-placed into a second row, leaving every label under the wrong bar. */
 	.bars li {
 		display: grid;
-		grid-template-columns: minmax(6ch, 12ch) minmax(0, 1fr) auto;
+		grid-template-columns: minmax(6ch, 12ch) minmax(0, 1fr) 4ch;
 		align-items: center;
 		gap: 12px;
 		padding: clamp(2px, 0.5cqh, 5px) 0;
@@ -185,6 +192,7 @@
 	.bar-value {
 		grid-column: 3;
 		font-size: clamp(0.75rem, 1.5cqw, 0.95rem);
+		text-align: right;
 		color: var(--w-muted);
 	}
 
@@ -232,6 +240,9 @@
 		display: none;
 	}
 
+	/* A poster is half again as tall as it is wide, so a row of one or two given the full
+	   measure would stand taller than the gate and push the frame into a scroll. Each count
+	   takes only what keeps a single poster under 15cqw; four or more already are. */
 	.posters {
 		display: grid;
 		grid-auto-flow: column;
@@ -240,7 +251,13 @@
 		max-width: min(100%, 58cqw);
 	}
 	.posters[data-count='1'] {
-		max-width: min(100%, 18cqw);
+		max-width: min(100%, 15cqw);
+	}
+	.posters[data-count='2'] {
+		max-width: min(100%, 31cqw);
+	}
+	.posters[data-count='3'] {
+		max-width: min(100%, 46cqw);
 	}
 	.posters a,
 	.posters span:not(.noposter) {
