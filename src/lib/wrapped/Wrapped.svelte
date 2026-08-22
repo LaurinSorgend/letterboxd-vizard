@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { cubicOut } from 'svelte/easing';
+	import { fade } from 'svelte/transition';
 	import Frame from './Frame.svelte';
 	import { assemble, buildDeck } from './deck';
 	import { deliver, paletteFrom } from './canvas';
 	import { storyCard, summaryCard } from './cards';
+	import { posterRain } from './rain';
 	import type { Wrapped } from './wrapped';
 
 	let { data, onclose }: { data: Wrapped; onclose: () => void } = $props();
@@ -26,6 +28,7 @@
 
 	const scene = $derived(scenes[Math.min(index, scenes.length - 1)]);
 	const last = $derived(index >= scenes.length - 1);
+	const rain = $derived(posterRain(data.films));
 
 	function go(step: number) {
 		const next = index + step;
@@ -136,6 +139,17 @@
 	<div class="projector">
 		<div class="carriage">
 			<div class="gate">
+				{#if scene.id === 'title' && rain.length > 0}
+					<div class="rain" aria-hidden="true" out:fade={{ duration: 260 }}>
+						{#each rain as column, c (c)}
+							<div class="column" style="--fall: {column.speed}s; --offset: {column.offset}s">
+								{#each [...column.posters, ...column.posters] as src, i (i)}
+									<img {src} alt="" />
+								{/each}
+							</div>
+						{/each}
+					</div>
+				{/if}
 				<div class="stage">
 					{#key index}
 						<div class="slide" in:drop={{ from: direction }} out:drop={{ from: -direction }}>
@@ -309,6 +323,50 @@
 		}
 		62% {
 			filter: brightness(0.99);
+		}
+	}
+
+	/* The tray running through before the show: the year's posters fall past the gate, every
+	 * column at its own speed. Declared before the stage so it prints under the slide and the
+	 * year still reads over the top, and masked away where the title sits. */
+	.rain {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		column-gap: clamp(6px, 1cqw, 14px);
+		padding: 0 clamp(6px, 1cqw, 14px);
+		overflow: hidden;
+		opacity: 0.3;
+		pointer-events: none;
+		mask-image: linear-gradient(to bottom, #000 0%, #000 38%, transparent 86%);
+	}
+	.column {
+		animation: fall var(--fall) linear var(--offset) infinite;
+	}
+	/* Each poster takes exactly its own height plus its margin, so the doubled stack is two
+	 * identical halves and a -50% pass loops without a seam. A row gap would leave half a
+	 * gap over and the join would show every time round. The floor is what guarantees four
+	 * posters outrun the gate on a narrow screen; above it they keep their own shape. */
+	.rain img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 2 / 3;
+		min-height: 30cqh;
+		margin-bottom: clamp(6px, 1cqw, 14px);
+		object-fit: cover;
+	}
+	@keyframes fall {
+		from {
+			transform: translateY(-50%);
+		}
+		to {
+			transform: translateY(0);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.column {
+			animation: none;
 		}
 	}
 
