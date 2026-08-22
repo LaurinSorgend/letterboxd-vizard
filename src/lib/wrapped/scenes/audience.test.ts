@@ -64,21 +64,20 @@ describe('languageScene', () => {
 		expect(scene?.stats).toContainEqual({ label: 'Other', value: '0' });
 	});
 
-	it('counts languages correctly even when none were the viewer’s own', () => {
-		// own === 0: every film is in a foreign language, so the "own" bucket the old
-		// `bars.length + 1` formula assumed always existed is not there. Only one distinct
-		// language plays here (French), so the correct count is 1. The old formula would
-		// have added 1 regardless, inventing an English entry that was never watched and
-		// reporting 2 — this fixture disagrees with that answer, which is what pins the fix.
+	it('drops the frame for a year watched entirely in one language, whatever the browser says', () => {
+		// A French speaker with an English browser watched twenty French films. Measured
+		// against the locale this reads "100% not in English", which is a fact about Chrome
+		// rather than about the viewer; measured against what they watched there is nothing
+		// foreign here at all, and the frame has nothing to say.
 		const films = many(() => ({ tmdb: tmdb({ originalLanguage: 'fr' }) }), 20);
-		const scene = languageScene(buildWrapped(films, 2025)!);
-		expect(scene?.stats).toContainEqual({ label: 'Languages', value: '1' });
+		expect(languageScene(buildWrapped(films, 2025, { locale: 'en-GB' })!)).toBeNull();
 	});
 
-	it('counts every distinct language, not just the five shown in the bar chart', () => {
-		// Six non-English languages plus English is seven distinct languages, but the bar
-		// row caps at five: a fixture where those two numbers differ tells the fixed
-		// `languages` field apart from the display-capped `shownBars.length` it replaced.
+	it('measures against the most-watched language, not English, and counts every language', () => {
+		// English is present but is not the language of this year: French is, at ten films.
+		// So the frame reads "not in French", the runner-up is German, and English drops into
+		// the foreign column. Seven distinct languages against a bar row capped at five also
+		// tells the `languages` field apart from the `shownBars.length` it replaced.
 		const codes = ['en', 'fr', 'de', 'es', 'it', 'ja', 'ko'];
 		const counts = [5, 10, 8, 6, 4, 3, 2];
 		const languages: string[] = [];
@@ -89,11 +88,12 @@ describe('languageScene', () => {
 			(i) => ({ tmdb: tmdb({ originalLanguage: languages[i] }) }),
 			languages.length
 		);
-		const scene = languageScene(buildWrapped(films, 2025)!);
+		const scene = languageScene(buildWrapped(films, 2025, { locale: 'en-GB' })!);
+		expect(scene?.label).toBe('Not in French');
 		expect(scene?.stats).toEqual([
 			{ label: 'Languages', value: '7' },
-			{ label: 'Largest non-English', value: 'French, 10' },
-			{ label: 'English', value: '5' }
+			{ label: 'Largest non-French', value: 'German, 8' },
+			{ label: 'French', value: '10' }
 		]);
 		expect(scene?.body.kind === 'bars' && scene.body.bars).toHaveLength(5);
 	});

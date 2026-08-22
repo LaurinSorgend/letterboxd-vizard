@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { film, watched } from '$lib/testing/fixtures';
-import { buildLibrary, datesIn, entriesIn, speaksEnglish, viewerLanguage } from './library';
+import { film, tmdb, watched } from '$lib/testing/fixtures';
+import { buildLibrary, datesIn, entriesIn, viewerLanguage } from './library';
 
 const stalker = film(watched(['2024-12-31', '2025-04-12', '2025-01-02'], 4));
 const nosferatu = film(watched(['2025-06-01']));
@@ -20,13 +20,28 @@ describe('buildLibrary', () => {
 
 	it('defaults the locale to English', () => {
 		expect(library.locale).toBe('en');
-		expect(speaksEnglish(library)).toBe(true);
+	});
+});
+
+describe('viewerLanguage', () => {
+	const spoken = (language: string, dates: string[]) =>
+		film({ ...watched(dates), tmdb: tmdb({ originalLanguage: language }) });
+
+	it('is the language the viewer watched most, whatever the browser reports', () => {
+		const library = buildLibrary({
+			films: [
+				spoken('ja', ['2025-01-01']),
+				spoken('ja', ['2025-02-01']),
+				spoken('en', ['2025-03-01'])
+			],
+			year: 2025,
+			locale: 'en-GB'
+		});
+		expect(viewerLanguage(library)).toBe('ja');
 	});
 
-	it('reads the language of the viewer off a BCP-47 tag', () => {
+	it('falls back to the locale when no film carries a language', () => {
 		expect(viewerLanguage(buildLibrary({ films: [], year: 2025, locale: 'de-DE' }))).toBe('de');
-		expect(speaksEnglish(buildLibrary({ films: [], year: 2025, locale: 'de-DE' }))).toBe(false);
-		expect(speaksEnglish(buildLibrary({ films: [], year: 2025, locale: 'en-GB' }))).toBe(true);
 	});
 });
 

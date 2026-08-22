@@ -36,15 +36,18 @@ export function entriesIn(film: EnrichedFilm, year: number): DiaryEntry[] {
 }
 
 /**
- * The primary subtag of the viewer's locale. "Not in English" is only a claim about the viewer
- * when the viewer speaks English, so the language frames measure against this instead.
+ * The language the viewer watches in, taken to be the one they watched most. A browser locale
+ * says where someone is, not what they read subtitles for, and a year spent mostly in Japanese
+ * is nobody's foreign year. The locale is only the fallback when nothing carries a language.
  */
 export function viewerLanguage(library: Library): string {
-	return library.locale.split('-')[0];
-}
-
-export function speaksEnglish(library: Library): boolean {
-	return viewerLanguage(library) === 'en';
+	const counts = new Map<string, number>();
+	for (const film of library.slice) {
+		const spoken = film.tmdb?.originalLanguage;
+		if (spoken) counts.set(spoken, (counts.get(spoken) ?? 0) + 1);
+	}
+	const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+	return ranked[0]?.[0] ?? library.locale.split('-')[0];
 }
 
 export function buildLibrary(input: LibraryInput): Library {

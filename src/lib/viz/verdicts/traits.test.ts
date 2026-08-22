@@ -71,7 +71,9 @@ describe('buildTraits', () => {
 		expect(traits.topGenreShare).toBeCloseTo(0.6);
 		expect(traits.topCountry).toBe('KR');
 		expect(traits.topCountryShare).toBe(1);
-		expect(traits.foreignShare).toBeCloseTo(0.75);
+		// Fifteen of twenty in Korean makes Korean this viewer's language, so the five English
+		// films are the foreign ones — the en-GB locale on the fixture does not decide it.
+		expect(traits.foreignShare).toBeCloseTo(0.25);
 		expect(traits.televisionShare).toBeCloseTo(0.15);
 		expect(traits.meanRuntime).toBe(90);
 	});
