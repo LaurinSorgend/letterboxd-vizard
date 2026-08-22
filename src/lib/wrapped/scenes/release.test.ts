@@ -47,7 +47,7 @@ describe('longestWaitScene', () => {
 		expect(scene?.body.kind).toBe('posters');
 		expect(scene?.note).toContain('1979');
 		expect(scene?.note).toBe(
-			'Film 18 came out in 1979. You watched it on 15 September, 46 years later. 16 other films waited more than twenty years for you.'
+			'Film 18 came out in 1979. You watched it on 15 September 2025, 46 years later. 16 other films waited more than twenty years for you.'
 		);
 	});
 
@@ -55,7 +55,7 @@ describe('longestWaitScene', () => {
 		const scene = longestWaitScene(buildWrapped(decadeWaiters, 2025)!);
 		expect(scene?.value).toBe('10');
 		expect(scene?.note).toBe(
-			'Patience came out in 2015. You watched it on 10 June, 10 years later.'
+			'Patience came out in 2015. You watched it on 10 June 2025, 10 years later.'
 		);
 	});
 

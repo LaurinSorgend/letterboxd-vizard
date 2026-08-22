@@ -7,7 +7,7 @@ import {
 	watchlistMaths,
 	writing
 } from '../facts/library-facts';
-import { longDate } from '../facts/dates';
+import { datePair, longDate } from '../facts/dates';
 import { formatDays } from '$lib/viz/stats';
 import { count, plural, posterOf, stars, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
@@ -131,6 +131,7 @@ export function collectionScene(data: Wrapped): Scene | null {
 	const worked = biggestCollection(data.library);
 	if (!worked) return null;
 	const seen = worked.seen;
+	const [first, last] = datePair(worked.first, worked.last, data.year);
 	const [ofSeen, ofTotal] = spellPair(seen, worked.total ?? 0);
 	const covered = worked.total
 		? `${ofSeen} of the ${ofTotal} films in the ${worked.name} collection`
@@ -141,11 +142,11 @@ export function collectionScene(data: Wrapped): Scene | null {
 		label: 'The set you worked through',
 		value: worked.name,
 		valueKind: 'name',
-		note: `${covered[0].toUpperCase()}${covered.slice(1)}, between ${longDate(worked.first, data.year)} and ${longDate(worked.last, data.year)}.`,
+		note: `${covered[0].toUpperCase()}${covered.slice(1)}, between ${first} and ${last}.`,
 		stats: [
 			{ label: 'Films', value: worked.total ? `${seen} of ${worked.total}` : String(seen) },
-			{ label: 'First', value: longDate(worked.first, data.year) },
-			{ label: 'Last', value: longDate(worked.last, data.year) }
+			{ label: 'First', value: first },
+			{ label: 'Last', value: last }
 		],
 		body: { kind: 'posters', posters: worked.shownFilms.map((film) => posterOf(film, '')) }
 	};

@@ -1,7 +1,7 @@
 import { combinedVoteCount, type BarDatum } from '$lib/viz/stats';
 import { alsoTrueLine } from '$lib/viz/verdicts';
 import type { Wrapped } from '../wrapped';
-import { longDate } from '../facts/dates';
+import { datePair, longDate } from '../facts/dates';
 import { barsFrom, count, plural, posterOf, runtimeLabel, stars } from './shared';
 import type { Accent, Scene } from './shared';
 
@@ -94,13 +94,14 @@ export function monthScene(data: Wrapped): Scene | null {
 export function streakScene(data: Wrapped): Scene | null {
 	if (!data.streak) return null;
 	const day = data.busiestDay;
+	const [from, to] = datePair(data.streak.start, data.streak.end, data.year);
 	return {
 		id: 'streak',
 		accent: 'cyan',
 		label: 'Longest streak',
 		value: String(data.streak.days),
 		valueKind: 'number',
-		note: `Consecutive days with something logged, from ${longDate(data.streak.start, data.year)} to ${longDate(data.streak.end, data.year)}.`,
+		note: `Consecutive days with something logged, from ${from} to ${to}.`,
 		stats: day
 			? [
 					{ label: 'Heaviest day', value: String(day.count) },

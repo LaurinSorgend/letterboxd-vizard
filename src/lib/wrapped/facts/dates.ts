@@ -33,11 +33,28 @@ export function monthOf(iso: string): number {
  * four years ago needs it.
  */
 export function longDate(iso: string, within: number): string {
-	const sameYear = iso.slice(0, 4) === String(within);
+	return iso.slice(0, 4) === String(within) ? format(iso, undefined) : fullDate(iso);
+}
+
+/** Day, month and year, for a date a sentence cannot place on its own. */
+export function fullDate(iso: string): string {
+	return format(iso, 'numeric');
+}
+
+/**
+ * Both ends of a range, written the same way. A window that crosses New Year would otherwise
+ * read "between 28 December and 3 January 2026", dating one end and not the other.
+ */
+export function datePair(from: string, to: string, within: number): [string, string] {
+	const inside = from.slice(0, 4) === String(within) && to.slice(0, 4) === String(within);
+	return inside ? [format(from, undefined), format(to, undefined)] : [fullDate(from), fullDate(to)];
+}
+
+function format(iso: string, year: 'numeric' | undefined): string {
 	return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
 		day: 'numeric',
 		month: 'long',
-		year: sameYear ? undefined : 'numeric',
+		year,
 		timeZone: 'UTC'
 	});
 }

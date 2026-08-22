@@ -1,5 +1,5 @@
 import { bestWeek, doubleBills, longestGap, weekdays } from '../facts/timing';
-import { longDate, weekdayName } from '../facts/dates';
+import { datePair, longDate, weekdayName } from '../facts/dates';
 import { plural, posterOf, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
@@ -12,12 +12,13 @@ const MIN_DOUBLE_DAYS = 3;
 export function gapSilenceScene(data: Wrapped): Scene | null {
 	const gap = longestGap(data.library);
 	if (!gap || gap.days < MIN_GAP_DAYS) return null;
+	const [from, to] = datePair(gap.from, gap.to, data.year);
 	const note =
 		gap.kind === 'late-start'
-			? `You did not start until ${longDate(gap.to, data.year)}. ${plural(gap.days, 'day')} of ${data.year} went by first.`
+			? `You did not start until ${to}. ${plural(gap.days, 'day')} of ${data.year} went by first.`
 			: gap.kind === 'early-stop'
-				? `Your last entry was ${longDate(gap.from, data.year)}, and nothing followed it. ${plural(gap.days, 'day')}.`
-				: `You logged nothing between ${longDate(gap.from, data.year)} and ${longDate(gap.to, data.year)}. ${plural(gap.days, 'day')}, your longest stretch of the year.`;
+				? `Your last entry was ${from}, and nothing followed it. ${plural(gap.days, 'day')}.`
+				: `You logged nothing between ${from} and ${to}. ${plural(gap.days, 'day')}, your longest stretch of the year.`;
 	return {
 		id: 'silence',
 		accent: 'indigo',
@@ -26,8 +27,8 @@ export function gapSilenceScene(data: Wrapped): Scene | null {
 		valueKind: 'number',
 		note,
 		stats: [
-			{ label: 'From', value: longDate(gap.from, data.year) },
-			{ label: 'To', value: longDate(gap.to, data.year) },
+			{ label: 'From', value: from },
+			{ label: 'To', value: to },
 			{ label: 'Second longest', value: `${gap.second} days` }
 		],
 		body: { kind: 'none' }
@@ -63,15 +64,17 @@ export function weekdayScene(data: Wrapped): Scene | null {
 export function bestWeekScene(data: Wrapped): Scene | null {
 	const week = bestWeek(data.library);
 	if (!week || week.count < MIN_WEEK_FILMS) return null;
+	// A seven-day window opened in late December closes in January, so both ends want the year.
+	const [start, end] = datePair(week.start, week.end, data.year);
 	return {
 		id: 'week',
 		accent: 'amber',
 		label: 'The heaviest week',
 		value: String(week.count),
 		valueKind: 'number',
-		note: `${plural(week.count, 'film')} between ${longDate(week.start, data.year)} and ${longDate(week.end, data.year)}.`,
+		note: `${plural(week.count, 'film')} between ${start} and ${end}.`,
 		stats: [
-			{ label: 'From', value: longDate(week.start, data.year) },
+			{ label: 'From', value: start },
 			{ label: 'Best other week', value: String(week.runnerUp) }
 		],
 		body: {

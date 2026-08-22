@@ -1,5 +1,5 @@
 import { freshness, longestWait, quickestWatch } from '../facts/release';
-import { longDate } from '../facts/dates';
+import { fullDate, longDate } from '../facts/dates';
 import { plural, posterOf, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
@@ -17,10 +17,10 @@ export function longestWaitScene(data: Wrapped): Scene | null {
 		label: 'The longest wait',
 		value: String(wait.years),
 		valueKind: 'number',
-		note: `${wait.film.name} came out in ${released}. You watched it on ${longDate(wait.watched, data.year)}, ${plural(wait.years, 'year')} later.${extra}`,
+		note: `${wait.film.name} came out in ${released}. You watched it on ${fullDate(wait.watched)}, ${plural(wait.years, 'year')} later.${extra}`,
 		stats: [
 			{ label: 'Released', value: released },
-			{ label: 'Watched', value: longDate(wait.watched, data.year) },
+			{ label: 'Watched', value: fullDate(wait.watched) },
 			{ label: 'Waited 20+ years', value: String(wait.overTwenty) }
 		],
 		body: { kind: 'posters', posters: [posterOf(wait.film, released)] }
