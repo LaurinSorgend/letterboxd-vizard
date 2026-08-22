@@ -107,7 +107,7 @@ describe('buildScenes', () => {
 		expect(actorScene?.note).toBe('Billed in 2 of your films.');
 	});
 
-	it('drops the "you were one of them" line when the deepest cut has no votes at all', () => {
+	it('drops the deepest cut entirely when it has no votes to cite', () => {
 		const localFilms = Array.from({ length: 12 }, (_, i) =>
 			film({
 				...watched([`2025-0${(i % 9) + 1}-1${i % 9}`]),
@@ -122,6 +122,6 @@ describe('buildScenes', () => {
 		);
 		const data = buildWrapped(localFilms, 2025);
 		const deepCutScene = buildScenes(data!).find((scene) => scene.id === 'deep-cut');
-		expect(deepCutScene?.note).toBe('0 ratings across TMDB and IMDb.');
+		expect(deepCutScene).toBeUndefined();
 	});
 });
