@@ -9,14 +9,21 @@ import {
 } from '../facts/library-facts';
 import { longDate } from '../facts/dates';
 import { formatDays } from '$lib/viz/stats';
-import { plural, posterOf, stars, type Scene } from './shared';
+import { count, plural, posterOf, stars, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
 const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
 /** Small counts read better as words inside a sentence; anything larger stays a numeral. */
-function spell(count: number): string {
-	return count < NUMBER_WORDS.length ? NUMBER_WORDS[count] : String(count);
+function spell(n: number): string {
+	return n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : count(n);
+}
+
+/** Words and digits do not mix inside one phrase, so a pair falls back together. */
+function spellPair(a: number, b: number): [string, string] {
+	return a < NUMBER_WORDS.length && b < NUMBER_WORDS.length
+		? [spell(a), spell(b)]
+		: [count(a), count(b)];
 }
 
 export function writingScene(data: Wrapped): Scene | null {
@@ -28,13 +35,13 @@ export function writingScene(data: Wrapped): Scene | null {
 		id: 'words',
 		accent: 'neutral',
 		label: 'Words written',
-		value: written.words.toLocaleString('en'),
+		value: count(written.words),
 		valueKind: 'number',
-		note: `${plural(written.reviews, 'review')}, ${written.words.toLocaleString('en')} words.${written.longest ? ` The longest ran to ${written.longest.words} words, on ${written.longest.film.name}.` : ''}`,
+		note: `${plural(written.reviews, 'review')}, ${plural(written.words, 'word')}.${written.longest ? ` The longest ran to ${plural(written.longest.words, 'word')}, on ${written.longest.film.name}.` : ''}`,
 		stats: [
-			{ label: 'Reviews', value: String(written.reviews) },
-			{ label: 'Longest', value: `${written.longest?.words ?? 0} words` },
-			{ label: 'Left in silence', value: String(written.silent) }
+			{ label: 'Reviews', value: count(written.reviews) },
+			{ label: 'Longest', value: plural(written.longest?.words ?? 0, 'word') },
+			{ label: 'Left in silence', value: count(written.silent) }
 		],
 		body: { kind: 'none' }
 	};
@@ -49,11 +56,11 @@ export function watchlistScene(data: Wrapped): Scene | null {
 		label: 'Watchlist arithmetic',
 		value: maths.years.toFixed(1),
 		valueKind: 'number',
-		note: `${maths.size} films on your watchlist. At ${maths.watched} a year, and assuming you never add another, that is ${maths.years.toFixed(1)} years of viewing.`,
+		note: `${plural(maths.size, 'film')} on your watchlist. At ${count(maths.watched)} a year, and assuming you never add another, that is ${maths.years.toFixed(1)} years of viewing.`,
 		stats: [
-			{ label: 'On the watchlist', value: String(maths.size) },
-			{ label: 'Watched this year', value: String(maths.watched) },
-			{ label: 'Added this year', value: String(maths.addedThisYear) }
+			{ label: 'On the watchlist', value: count(maths.size) },
+			{ label: 'Watched this year', value: count(maths.watched) },
+			{ label: 'Added this year', value: count(maths.addedThisYear) }
 		],
 		body: { kind: 'none' }
 	};
@@ -124,8 +131,9 @@ export function collectionScene(data: Wrapped): Scene | null {
 	const worked = biggestCollection(data.library);
 	if (!worked) return null;
 	const seen = worked.seen;
+	const [ofSeen, ofTotal] = spellPair(seen, worked.total ?? 0);
 	const covered = worked.total
-		? `${spell(seen)} of the ${spell(worked.total)} films in the ${worked.name} collection`
+		? `${ofSeen} of the ${ofTotal} films in the ${worked.name} collection`
 		: `${spell(seen)} films from the ${worked.name} collection`;
 	return {
 		id: 'collection',

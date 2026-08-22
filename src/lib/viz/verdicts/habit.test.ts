@@ -40,7 +40,7 @@ describe('habit rules', () => {
 		).toBe(false);
 	});
 
-	it('The Optimist needs a queue growing faster than the viewer', () => {
+	it('The Optimist needs a large backlog and a queue several years deep', () => {
 		expect(
 			rule('optimist').when(neutralTraits({ watchlistSize: 412, watchlistRatio: 6.7, films: 61 }))
 		).toBe(true);

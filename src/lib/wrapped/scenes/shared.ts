@@ -50,7 +50,10 @@ export interface Scene {
 export const stars = (rating: number | null): string =>
 	rating === null ? '—' : `★ ${rating.toFixed(1)}`;
 export const plural = (n: number, one: string, many = `${one}s`): string =>
-	`${n.toLocaleString('en')} ${n === 1 ? one : many}`;
+	`${count(n)} ${n === 1 ? one : many}`;
+
+/** A counted figure. Years and ratings are not counts and must not be grouped this way. */
+export const count = (n: number): string => n.toLocaleString('en');
 
 export function posterOf(film: EnrichedFilm, meta: string): Poster {
 	return {

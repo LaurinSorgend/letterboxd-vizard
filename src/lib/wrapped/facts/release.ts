@@ -5,6 +5,8 @@ import type { EnrichedFilm } from '$lib/types';
 /** Twenty films with a release date is the floor at which a share is worth quoting. */
 const MIN_DATED = 20;
 const MIN_WAIT_YEARS = 5;
+/** The spec's frame 1: one very old film is not a wait worth reporting. */
+const MIN_WAIT_DATED = 10;
 const QUICK_DAYS = 30;
 
 export interface Lag {
@@ -39,7 +41,7 @@ export interface LongestWait {
 
 export function longestWait(library: Library): LongestWait | null {
 	const lags = releaseLags(library);
-	if (lags.length === 0) return null;
+	if (lags.length < MIN_WAIT_DATED) return null;
 	const worst = lags.reduce((slowest, lag) => (lag.days > slowest.days ? lag : slowest));
 	const years = Math.floor(worst.days / 365.25);
 	if (years < MIN_WAIT_YEARS) return null;

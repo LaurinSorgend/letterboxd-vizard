@@ -64,6 +64,25 @@ describe('buildScenes', () => {
 		}
 	});
 
+	/* The binding rule is that a frame whose data fails its condition disappears rather than
+	   rendering a dash or a zero. Three frames broke it and were caught only by review, so the
+	   deck now asserts it in one place. Stats rows are tables and are out of scope. */
+	it('never states a zero or a dash in a headline or in note prose', () => {
+		const sparse = [
+			...Array.from({ length: 12 }, (_, i) =>
+				film({ ...watched([`2025-0${(i % 9) + 1}-1${i % 9}`]), rating: 3.5 })
+			),
+			...Array.from({ length: 3 }, () => film(watched(['2019-01-01'])))
+		];
+		for (const data of [buildWrapped(films, 2025)!, buildWrapped(sparse, 2025)!]) {
+			for (const scene of buildScenes(data)) {
+				const prose = `${scene.value} ${scene.note} ${scene.footnote ?? ''}`;
+				expect(prose, `${scene.id} headline or note`).not.toMatch(/—/);
+				expect(prose, `${scene.id} headline or note`).not.toMatch(/(^|[^\d,.])0([^\d.%]|$)/);
+			}
+		}
+	});
+
 	it('pins the genre scene exactly, since its content does not depend on fixture identity', () => {
 		const data = buildWrapped(films, 2025);
 		const genreScene = buildScenes(data!).find((scene) => scene.id === 'genre');

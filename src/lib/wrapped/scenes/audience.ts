@@ -1,6 +1,6 @@
 import { languageShare, obscurity } from '../facts/audience';
 import { widestCriticGap } from '../facts/critics';
-import { barsFrom, plural, posterOf, stars, type Scene } from './shared';
+import { barsFrom, count, plural, posterOf, stars, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
 export function obscurityScene(data: Wrapped): Scene | null {
@@ -16,7 +16,7 @@ export function obscurityScene(data: Wrapped): Scene | null {
 		stats: [
 			{ label: 'Median votes', value: spread.median.toLocaleString('en') },
 			{ label: 'Lower quartile', value: spread.lowerQuartile.toLocaleString('en') },
-			{ label: 'Over 10,000', value: String(spread.overTenThousand) }
+			{ label: 'Over 10,000', value: count(spread.overTenThousand) }
 		],
 		body: { kind: 'none' }
 	};

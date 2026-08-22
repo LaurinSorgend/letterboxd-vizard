@@ -27,6 +27,16 @@ const openingDay = film({
 
 const library = buildLibrary({ films: [stalker, brutalist, undated], year: 2025 });
 
+/* longestWait needs ten films with a release date before it will report one, so the wait
+   fixtures carry eight more that are dated but wait nowhere near five years. */
+const padding = Array.from({ length: 8 }, (_, i) =>
+	film({
+		...watched([`2025-06-0${i + 1}`]),
+		tmdb: tmdb({ releaseDate: '2025-01-01', year: 2025 })
+	})
+);
+const waits = buildLibrary({ films: [stalker, brutalist, undated, ...padding], year: 2025 });
+
 describe('releaseLags', () => {
 	it('measures from release to the first watch inside the year', () => {
 		const lags = releaseLags(library);
@@ -37,7 +47,7 @@ describe('releaseLags', () => {
 
 describe('longestWait', () => {
 	it('names the film that waited longest, in whole years', () => {
-		expect(longestWait(library)).toMatchObject({
+		expect(longestWait(waits)).toMatchObject({
 			film: stalker,
 			years: 45,
 			released: '1979-05-13',
@@ -47,7 +57,12 @@ describe('longestWait', () => {
 	});
 
 	it('drops out when nothing waited five years', () => {
-		expect(longestWait(buildLibrary({ films: [brutalist], year: 2025 }))).toBeNull();
+		expect(longestWait(buildLibrary({ films: [brutalist, ...padding], year: 2025 }))).toBeNull();
+	});
+
+	it('drops out under ten films with a release date, however long the wait was', () => {
+		// Nine dated films, one of them a 45-year wait: the wait qualifies, the sample does not.
+		expect(longestWait(buildLibrary({ films: [stalker, ...padding], year: 2025 }))).toBeNull();
 	});
 });
 

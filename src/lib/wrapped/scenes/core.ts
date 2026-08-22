@@ -2,7 +2,7 @@ import { combinedVoteCount, type BarDatum } from '$lib/viz/stats';
 import { alsoTrueLine } from '$lib/viz/verdicts';
 import type { Wrapped } from '../wrapped';
 import { longDate } from '../facts/dates';
-import { barsFrom, plural, posterOf, runtimeLabel, stars } from './shared';
+import { barsFrom, count, plural, posterOf, runtimeLabel, stars } from './shared';
 import type { Accent, Scene } from './shared';
 
 export function titleScene(data: Wrapped): Scene {
@@ -30,30 +30,33 @@ export function countScene(data: Wrapped): Scene {
 		id: 'count',
 		accent: 'amber',
 		label: 'Films watched',
-		value: data.films.length.toLocaleString('en'),
+		value: count(data.films.length),
 		valueKind: 'number',
 		note:
 			data.rewatches > 0
 				? `${plural(data.watches, 'diary entry', 'diary entries')}, of which ${plural(data.rewatches, 'was', 'were')} a return visit.`
 				: `${plural(data.watches, 'diary entry', 'diary entries')}, every one of them a first watch.`,
 		stats: [
-			{ label: 'Entries', value: String(data.watches) },
-			{ label: 'Rewatches', value: String(data.rewatches) },
-			{ label: 'Rated', value: String(data.films.filter((film) => film.rating !== null).length) }
+			{ label: 'Entries', value: count(data.watches) },
+			{ label: 'Rewatches', value: count(data.rewatches) },
+			{ label: 'Rated', value: count(data.films.filter((film) => film.rating !== null).length) }
 		],
 		body: { kind: 'none' }
 	};
 }
 
-export function hoursScene(data: Wrapped): Scene {
-	const weeks = data.partial ? Math.max(1, new Date().getMonth() + 1) * 4.35 : 52;
+export function hoursScene(data: Wrapped): Scene | null {
+	// Runtimes come from TMDB, so a library that never matched has nothing to total and the
+	// frame disappears rather than headlining a zero.
+	if (data.hours === 0) return null;
+	const weeks = data.partial ? Math.max(1, data.library.now.getMonth() + 1) * 4.35 : 52;
 	return {
 		id: 'hours',
 		accent: 'gold',
 		label: 'Hours in the dark',
 		value: data.hours.toLocaleString('en'),
 		valueKind: 'number',
-		note: `${plural(data.days, 'day')} end to end, if you never stopped to sleep.`,
+		note: `${plural(data.days || data.hours, data.days ? 'day' : 'hour')} end to end, if you never stopped to sleep.`,
 		stats: [
 			{ label: 'Per week', value: (data.hours / weeks).toFixed(1) },
 			{ label: 'Days', value: String(data.days) }

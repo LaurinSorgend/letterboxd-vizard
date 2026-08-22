@@ -65,7 +65,12 @@ export interface WatchlistAge {
 }
 
 export function watchlistAge(library: Library): WatchlistAge | null {
-	const dated = library.watchlist.filter((entry) => entry.added !== null) as (WatchlistEntry & {
+	// The frame says "and have not watched it since", so a watchlist row for a film already in
+	// the diary cannot be the winner. Letterboxd exports keep such rows until they are removed.
+	const seen = new Set(library.all.map((film) => film.uri));
+	const dated = library.watchlist.filter(
+		(entry) => entry.added !== null && !seen.has(entry.uri)
+	) as (WatchlistEntry & {
 		added: string;
 	})[];
 	if (dated.length < MIN_WATCHLIST) return null;

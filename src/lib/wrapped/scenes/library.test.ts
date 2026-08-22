@@ -281,7 +281,7 @@ describe('collectionScene', () => {
 			buildWrapped(films, 2025, { collections: [{ id: 8091, name: 'Alien', total: 20 }] })!
 		);
 		expect(scene?.note).toBe(
-			'Nine of the 20 films in the Alien collection, between 8 January and 8 September.'
+			'9 of the 20 films in the Alien collection, between 8 January and 8 September.'
 		);
 		expect(scene?.stats.find((stat) => stat.label === 'Films')?.value).toBe('9 of 20');
 		if (scene?.body.kind !== 'posters') throw new Error('expected a posters body');
