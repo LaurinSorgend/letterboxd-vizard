@@ -1,4 +1,5 @@
 import { combinedVoteCount, type BarDatum } from '$lib/viz/stats';
+import { alsoTrueLine } from '$lib/viz/verdicts';
 import type { Wrapped } from '../wrapped';
 import { longDate } from '../facts/dates';
 import { barsFrom, plural, posterOf, runtimeLabel, stars } from './shared';
@@ -292,10 +293,7 @@ export function verdictScene(data: Wrapped): Scene {
 		valueKind: 'name',
 		note: data.personality.detail,
 		stats: [],
-		footnote:
-			data.personality.alsoTrue.length > 0
-				? `Also true: ${data.personality.alsoTrue.join(', ')}`
-				: undefined,
+		footnote: alsoTrueLine(data.personality) ?? undefined,
 		body: { kind: 'none' }
 	};
 }

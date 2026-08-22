@@ -84,4 +84,18 @@ describe('buildTraits', () => {
 		expect(traits.watchlistSize).toBe(110);
 		expect(traits.watchlistRatio).toBeCloseTo(5.5);
 	});
+
+	it('counts a rewatch from the entry that was one, not from a flag set anywhere in the export', () => {
+		// Watched once in 2025 and returned to in 2026. `film.rewatch` is true for the whole
+		// export, so a per-film flag would score the 2025 first watch as a return visit.
+		const later = film({ ...watched(['2025-06-01', '2026-06-01']), rewatch: true });
+		const rest = Array.from({ length: 19 }, (_, i) => film(watched([`2025-01-${10 + i}`])));
+		const only2025 = buildTraits(buildLibrary({ films: [later, ...rest], year: 2025 }));
+		expect(only2025.rewatchShare).toBe(0);
+
+		// The same film in 2026, where the second viewing genuinely is the rewatch.
+		const in2026 = Array.from({ length: 19 }, (_, i) => film(watched([`2026-01-${10 + i}`])));
+		const next = buildTraits(buildLibrary({ films: [later, ...in2026], year: 2026 }));
+		expect(next.rewatchShare).toBeCloseTo(1 / 20);
+	});
 });

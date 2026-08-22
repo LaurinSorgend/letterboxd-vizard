@@ -54,11 +54,14 @@ describe('perYearScene', () => {
 		expect(perYearScene(buildWrapped(yearOf(2025, 12), 2025)!)).toBeNull();
 	});
 
-	it('shows an em dash when the year before had nothing logged', () => {
+	it('says nothing was logged rather than counting zero when the year before was empty', () => {
 		const films = [...yearOf(2023, 5), ...yearOf(2025, 15)];
 		const scene = perYearScene(buildWrapped(films, 2025)!);
+		// The prose never states a zero; the Change stat is a table cell and may show a dash.
+		expect(scene?.note).toBe(
+			'15 films in 2025. Nothing logged in 2024. Your busiest year was 2025, with 15.'
+		);
 		expect(scene?.stats.find((s) => s.label === 'Change')?.value).toBe('—');
-		expect(scene?.note).toContain('against 0 in 2024');
 	});
 });
 
@@ -134,9 +137,9 @@ describe('fiveStarScene', () => {
 		const scene = fiveStarScene(data());
 		expect(scene).toMatchObject({ id: 'five-stars', value: '25' });
 		expect(scene?.body.kind).toBe('posters');
-		// Full string: "gave 0" alone would be meaningless without the noun it counts.
+		// Full string: a zero in prose reads as an error, so the empty year is worded, not counted.
 		expect(scene?.note).toBe(
-			'25 five-star ratings out of 26 rated films. Last year you gave 0 five-star ratings.'
+			'25 five-star ratings out of 26 rated films. Last year you gave none.'
 		);
 	});
 
@@ -187,11 +190,11 @@ describe('driftScene', () => {
 		// Full string pins the before/after ordering: before is the earliest entry (2019, ★3.00),
 		// after is this year's (★4.50) — a swapped formula would flip which year sits next to which star.
 		expect(scene?.note).toBe(
-			'You gave it ★ 3.00 in 2019 and ★ 4.50 this time. 1 film in your diary changed your mind this year.'
+			'You gave it ★ 3.0 in 2019 and ★ 4.5 this time. 1 film in your diary changed your mind this year.'
 		);
 		expect(scene?.stats).toEqual([
-			{ label: 'Then', value: '★ 3.00' },
-			{ label: 'Now', value: '★ 4.50' },
+			{ label: 'Then', value: '★ 3.0' },
+			{ label: 'Now', value: '★ 4.5' },
 			{ label: 'Moved by', value: '+1.5' }
 		]);
 		expect(scene?.label).toBe('It grew on you');
@@ -210,11 +213,11 @@ describe('driftScene', () => {
 		const scene = driftScene(buildWrapped(films, 2025)!);
 		expect(scene?.label).toBe('It did not hold up');
 		expect(scene?.note).toBe(
-			'You gave it ★ 4.50 in 2020 and ★ 3.00 this time. 1 film in your diary changed your mind this year.'
+			'You gave it ★ 4.5 in 2020 and ★ 3.0 this time. 1 film in your diary changed your mind this year.'
 		);
 		expect(scene?.stats).toEqual([
-			{ label: 'Then', value: '★ 4.50' },
-			{ label: 'Now', value: '★ 3.00' },
+			{ label: 'Then', value: '★ 4.5' },
+			{ label: 'Now', value: '★ 3.0' },
 			{ label: 'Moved by', value: '-1.5' }
 		]);
 	});

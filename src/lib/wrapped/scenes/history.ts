@@ -30,7 +30,11 @@ export function perYearScene(data: Wrapped): Scene | null {
 		label: 'Films per year',
 		value: String(current.count),
 		valueKind: 'number',
-		note: `${plural(current.count, 'film')} in ${data.year}, against ${previous?.count ?? 0} in ${data.year - 1}. Your busiest year was ${best.year}, with ${best.count}.`,
+		note: `${plural(current.count, 'film')} in ${data.year}${
+			previous && previous.count > 0
+				? `, against ${previous.count} in ${data.year - 1}`
+				: `. Nothing logged in ${data.year - 1}`
+		}. Your busiest year was ${best.year}, with ${best.count}.`,
 		stats: [
 			{ label: String(data.year - 1), value: String(previous?.count ?? 0) },
 			{ label: 'Change', value: change },
@@ -78,6 +82,12 @@ export function fiveStarScene(data: Wrapped): Scene | null {
 	// A count of zero would still clear the MIN_RATED gate below, but the frame exists to show off
 	// five-star films: with none to show, it drops out rather than headlining a zero.
 	if (!top || top.count === 0) return null;
+	const lastYear =
+		top.lastYear === null
+			? ''
+			: top.lastYear === 0
+				? ' Last year you gave none.'
+				: ` Last year you gave ${plural(top.lastYear, 'five-star rating')}.`;
 	return {
 		id: 'five-stars',
 		accent: 'gold',
@@ -86,7 +96,7 @@ export function fiveStarScene(data: Wrapped): Scene | null {
 		valueKind: 'number',
 		// `top.rated` is the same population `top.share` is a fraction of, so the two always agree —
 		// a locally recomputed count (e.g. films with a non-null current rating) can diverge from it.
-		note: `${plural(top.count, 'five-star rating')} out of ${plural(top.rated, 'rated film')}.${top.lastYear === null ? '' : ` Last year you gave ${plural(top.lastYear, 'five-star rating')}.`}`,
+		note: `${plural(top.count, 'five-star rating')} out of ${plural(top.rated, 'rated film')}.${lastYear}`,
 		stats: [
 			{ label: 'Share', value: `${Math.round(top.share * 100)}%` },
 			{ label: 'Most-used rating', value: stars(top.modal) },

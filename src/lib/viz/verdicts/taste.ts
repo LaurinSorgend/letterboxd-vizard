@@ -1,3 +1,4 @@
+import { countryName } from '../countries';
 import type { Rule } from './rules';
 
 /** The US is the modal country for most libraries, so it only counts as a residence at 85%. */
@@ -19,7 +20,7 @@ export const TASTE: Rule[] = [
 		title: 'The Omnivore',
 		when: (t) => t.lowVoteShare >= 0.15 && t.highVoteShare >= 0.15 && t.films >= 25,
 		detail: (t) =>
-			`${Math.round(t.lowVoteShare * 100)}% of your rated films sat under 1,000 TMDB votes, and ${Math.round(t.highVoteShare * 100)}% sat over 10,000.`
+			`${Math.round(t.lowVoteShare * 100)}% of the films TMDB has counted sat under 1,000 votes, and ${Math.round(t.highVoteShare * 100)}% sat over 10,000.`
 	},
 	{
 		id: 'frontrunner',
@@ -58,7 +59,7 @@ export const TASTE: Rule[] = [
 		title: 'The Resident',
 		when: (t) => residency(t.topCountry, t.topCountryShare) && t.films >= 20,
 		detail: (t) =>
-			`${Math.round(t.topCountryShare * 100)}% of your year was produced in one country.`
+			`${Math.round(t.topCountryShare * 100)}% of your year was produced in ${countryName(t.topCountry ?? '')}.`
 	},
 	{
 		id: 'specialist',

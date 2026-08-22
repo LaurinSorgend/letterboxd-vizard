@@ -72,6 +72,9 @@ describe('doubleBills', () => {
 			heaviest: { date: '2025-02-02', count: 3 }
 		});
 		expect(result?.share).toBeCloseTo(5 / 6);
+		// The two shares must not coincide: 5 of 6 entries sat on a 2+ day, only 3 on a 3+ day,
+		// and The Sprinter is keyed on the narrower one.
+		expect(result?.tripleShare).toBeCloseTo(3 / 6);
 	});
 
 	it('reports no heaviest day when nothing reached three', () => {

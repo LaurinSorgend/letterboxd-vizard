@@ -219,11 +219,10 @@ describe('likedScene', () => {
 		];
 		const scene = likedScene(buildWrapped(films, 2025)!);
 		expect(scene).toMatchObject({ id: 'liked', value: 'Road House' });
-		expect(scene?.note).toBe(
-			'You hearted it and gave it ★ 2.50. 0 other films got a heart without four stars.'
-		);
+		// The winner is itself an under-four heart, so a lone one leaves no others to cite.
+		expect(scene?.note).toBe('You hearted it and gave it ★ 2.5.');
 		expect(scene?.stats).toEqual([
-			{ label: 'Rating', value: '★ 2.50' },
+			{ label: 'Rating', value: '★ 2.5' },
 			{ label: 'Hearts this year', value: '12' },
 			{ label: 'Hearts under ★ 4', value: '1' }
 		]);

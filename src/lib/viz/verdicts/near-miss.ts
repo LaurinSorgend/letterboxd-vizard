@@ -9,9 +9,13 @@ export interface NearMiss {
 interface Probe {
 	label: string;
 	value: (t: Traits) => number | null;
-	threshold: number;
+	/** A function where the rule's own bar moves with the traits, as The Resident's does. */
+	threshold: number | ((t: Traits) => number);
 	format: (value: number) => string;
 }
+
+const barOf = (probe: Probe, traits: Traits): number =>
+	typeof probe.threshold === 'number' ? probe.threshold : probe.threshold(traits);
 
 const percent = (value: number): string => `${Math.round(value * 100)}%`;
 const plainNumber = (value: number): string => Math.round(value).toLocaleString('en');
@@ -22,7 +26,13 @@ const minutes = (value: number): string => `${Math.round(value).toLocaleString('
  * recognise, and each maps onto a label they could have had.
  */
 const PROBES: Probe[] = [
-	{ label: 'country', value: (t) => t.topCountryShare, threshold: 0.6, format: percent },
+	{
+		label: 'country',
+		value: (t) => t.topCountryShare,
+		// The same bar The Resident sets: the US is the modal country for most libraries.
+		threshold: (t) => (t.topCountry === 'US' ? 0.85 : 0.6),
+		format: percent
+	},
 	{ label: 'genre', value: (t) => t.topGenreShare, threshold: 0.5, format: percent },
 	{ label: 'subtitles', value: (t) => t.foreignShare, threshold: 0.65, format: percent },
 	{ label: 'obscurity', value: (t) => t.obscureShare, threshold: 0.45, format: percent },
@@ -44,17 +54,21 @@ const PROBES: Probe[] = [
 /** The condition the year came closest to meeting without meeting it. */
 export function nearestMiss(traits: Traits): NearMiss | null {
 	if (traits.films === 0) return null;
-	const scored = PROBES.map((probe) => ({ probe, value: probe.value(traits) }))
+	const scored = PROBES.map((probe) => ({
+		probe,
+		value: probe.value(traits),
+		bar: barOf(probe, traits)
+	}))
 		.filter(
-			(entry): entry is { probe: Probe; value: number } =>
-				entry.value !== null && entry.value > 0 && entry.value < entry.probe.threshold
+			(entry): entry is { probe: Probe; value: number; bar: number } =>
+				entry.value !== null && entry.value > 0 && entry.value < entry.bar
 		)
-		.sort((a, b) => b.value / b.probe.threshold - a.value / a.probe.threshold);
+		.sort((a, b) => b.value / b.bar - a.value / a.bar);
 	const closest = scored[0];
 	if (!closest) return null;
 	return {
 		label: closest.probe.label,
 		actual: closest.probe.format(closest.value),
-		threshold: closest.probe.format(closest.probe.threshold)
+		threshold: closest.probe.format(closest.bar)
 	};
 }

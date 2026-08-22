@@ -188,10 +188,13 @@
 		color: var(--w-muted);
 	}
 
-	/* Twelve months will not carry word labels, so the dense set stands the bars up. */
+	/* A dense row will not carry word labels, so it stands the bars up and shares the
+	   measure between however many there are — seven weekdays, twelve months, or a bar
+	   per year in the export. */
 	.bars.dense {
 		display: grid;
-		grid-template-columns: repeat(12, minmax(0, 1fr));
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(0, 1fr);
 		gap: 4px;
 		align-items: end;
 		height: clamp(76px, 20cqh, 140px);

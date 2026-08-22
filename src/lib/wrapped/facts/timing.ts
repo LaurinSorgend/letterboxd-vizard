@@ -80,6 +80,8 @@ export interface DoubleBills {
 	triples: number;
 	/** Share of the year's entries that landed on a day carrying two or more. */
 	share: number;
+	/** The same share for days carrying three or more, which is a much rarer habit. */
+	tripleShare: number;
 	heaviest: { date: string; count: number } | null;
 }
 
@@ -99,6 +101,7 @@ export function doubleBills(library: Library): DoubleBills | null {
 		days: multiple.length,
 		triples: triples.length,
 		share: multiple.reduce((sum, [, count]) => sum + count, 0) / library.dates.length,
+		tripleShare: triples.reduce((sum, [, count]) => sum + count, 0) / library.dates.length,
 		heaviest: heaviest ? { date: heaviest[0], count: heaviest[1] } : null
 	};
 }

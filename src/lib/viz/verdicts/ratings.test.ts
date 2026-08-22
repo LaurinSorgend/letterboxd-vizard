@@ -163,7 +163,7 @@ describe('The Sceptic', () => {
 
 	it('cites the mean in the same two decimals as The Generous', () => {
 		expect(rule('sceptic').detail(year(120, 96, { meanRating: 2.6 }))).toBe(
-			'Average rating ★ 2.60 across 96 films.'
+			'Average rating ★ 2.6 across 96 films.'
 		);
 	});
 });
@@ -235,7 +235,7 @@ describe('The Barometer', () => {
 
 	it('cites the gap in stars, to two decimals', () => {
 		expect(rule('barometer').detail(year(120, 96, close))).toBe(
-			'On average your ratings sat 0.50 stars from the crowd, across 30 films.'
+			'On average your ratings sat 0.5 stars from the crowd, across 30 films.'
 		);
 	});
 });

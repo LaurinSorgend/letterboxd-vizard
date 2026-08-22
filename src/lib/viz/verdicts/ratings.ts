@@ -27,7 +27,7 @@ export const RATINGS: Rule[] = [
 		id: 'sceptic',
 		title: 'The Sceptic',
 		when: (t) => (t.meanRating ?? 5) <= 2.7 && t.rated >= 25,
-		detail: (t) => `Average rating ★ ${(t.meanRating ?? 0).toFixed(2)} across ${t.rated} films.`
+		detail: (t) => `Average rating ★ ${(t.meanRating ?? 0).toFixed(1)} across ${t.rated} films.`
 	},
 	{
 		id: 'enthusiast',
@@ -46,7 +46,7 @@ export const RATINGS: Rule[] = [
 		title: 'The Barometer',
 		when: (t) => (t.crowdMeanAbs ?? 9) <= 0.55 && t.crowdCount >= 30,
 		detail: (t) =>
-			`On average your ratings sat ${(t.crowdMeanAbs ?? 0).toFixed(2)} stars from the crowd, across ${t.crowdCount} films.`
+			`On average your ratings sat ${(t.crowdMeanAbs ?? 0).toFixed(1)} stars from the crowd, across ${t.crowdCount} films.`
 	},
 	{
 		id: 'contrarian',

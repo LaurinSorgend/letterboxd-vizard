@@ -73,7 +73,7 @@ describe('buildScenes', () => {
 			label: 'Genre of the year',
 			value: 'Drama',
 			valueKind: 'name',
-			note: '12 films, averaging ★ 3.50. A film counts once per genre it carries.',
+			note: '12 films, averaging ★ 3.5. A film counts once per genre it carries.',
 			stats: [],
 			body: { kind: 'bars', bars: [{ label: 'Drama', value: '12', share: 1 }] }
 		});
@@ -90,7 +90,7 @@ describe('buildScenes', () => {
 		);
 		const data = buildWrapped(localFilms, 2025);
 		const directorScene = buildScenes(data!).find((scene) => scene.id === 'director');
-		expect(directorScene?.note).toBe('2 of their films this year, averaging ★ 3.50.');
+		expect(directorScene?.note).toBe('2 of their films this year, averaging ★ 3.5.');
 	});
 
 	it('does not double the s in "films" when an actor is billed in more than one film this year', () => {

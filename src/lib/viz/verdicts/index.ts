@@ -12,6 +12,11 @@ export interface Personality {
 	alsoTrue: string[];
 }
 
+/** The one wording of the runner-up line, shared by the slide, the saved card and the recap. */
+export function alsoTrueLine(personality: Personality): string | null {
+	return personality.alsoTrue.length > 0 ? `Also true: ${personality.alsoTrue.join(', ')}` : null;
+}
+
 /** First match wins, so the label is deterministic and the line under it cites its own number. */
 export function verdictFor(library: Library): Personality {
 	const traits = buildTraits(library);

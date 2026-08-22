@@ -98,7 +98,7 @@ const EXISTING: Rule[] = [
 		id: 'generous',
 		title: 'The Generous',
 		when: (t) => (t.meanRating ?? 0) >= 3.8,
-		detail: (t) => `You averaged ★ ${(t.meanRating ?? 0).toFixed(2)} across the year.`
+		detail: (t) => `You averaged ★ ${(t.meanRating ?? 0).toFixed(1)} across the year.`
 	},
 	{
 		id: 'regular',

@@ -8,7 +8,7 @@ import {
 	type BarDatum,
 	type RatingGap
 } from '$lib/viz/stats';
-import { datesIn } from './library';
+import { datesIn, entriesIn } from './library';
 import type { EnrichedFilm } from '$lib/types';
 
 const MONTHS = Array.from({ length: 12 }, (_, month) =>
@@ -125,7 +125,10 @@ function medianReleaseYear(films: EnrichedFilm[]): number | null {
 }
 
 function countedRewatches(films: EnrichedFilm[], year: number): number {
-	return films.reduce((sum, film) => sum + Math.max(0, datesIn(film, year).length - 1), 0);
+	return films.reduce(
+		(sum, film) => sum + entriesIn(film, year).filter((entry) => entry.rewatch).length,
+		0
+	);
 }
 
 function leadingCountries(films: EnrichedFilm[]): CountryStat[] {

@@ -1,4 +1,5 @@
 import { imageUrl } from '$lib/viz/images';
+import { alsoTrueLine } from '$lib/viz/verdicts';
 import {
 	ensureFonts,
 	fitFont,
@@ -304,7 +305,7 @@ function summaryStats(data: Wrapped): { label: string; value: string }[] {
 		{ label: 'FILMS', value: data.films.length.toLocaleString('en') },
 		{ label: 'HOURS', value: data.hours.toLocaleString('en') },
 		{ label: 'COUNTRIES', value: String(data.countries) },
-		{ label: 'AVERAGE', value: data.avg !== null ? `${data.avg.toFixed(2)}` : '—' },
+		{ label: 'AVERAGE', value: data.avg !== null ? `${data.avg.toFixed(1)}` : '—' },
 		{ label: 'GENRE', value: data.topGenres[0]?.label ?? '—' },
 		{ label: 'DIRECTOR', value: data.topDirectors[0]?.label ?? '—' },
 		{ label: 'ON SCREEN', value: data.topActors[0]?.label ?? '—' },
@@ -339,10 +340,9 @@ function verdictBlock(ctx: CanvasRenderingContext2D, data: Wrapped, palette: Pal
 	const title = fitFont(ctx, data.personality.title, measure, 84, 44);
 	ctx.font = font('body', 30);
 	const lines = wrap(ctx, data.personality.detail, measure, 2);
-	const alsoTrue = data.personality.alsoTrue;
-	const alsoTrueLine = alsoTrue.length > 0 ? `Also true: ${alsoTrue.join(', ')}` : null;
+	const runnerUp = alsoTrueLine(data.personality);
 	return {
-		height: 34 + title * 1.1 + lines.length * 40 + (alsoTrueLine ? 34 : 0),
+		height: 34 + title * 1.1 + lines.length * 40 + (runnerUp ? 34 : 0),
 		draw: (y) => {
 			ctx.font = font('mono', 22);
 			ctx.fillStyle = palette.muted;
@@ -354,10 +354,10 @@ function verdictBlock(ctx: CanvasRenderingContext2D, data: Wrapped, palette: Pal
 			ctx.fillStyle = palette.muted;
 			const body = y + 34 + title * 1.1;
 			lines.forEach((line, i) => ctx.fillText(line, POSTER.margin, body + i * 40));
-			if (!alsoTrueLine) return;
+			if (!runnerUp) return;
 			ctx.font = font('mono', 22);
-			ctx.fillStyle = palette.stamp;
-			ctx.fillText(alsoTrueLine, POSTER.margin, body + lines.length * 40);
+			ctx.fillStyle = palette.muted;
+			ctx.fillText(runnerUp, POSTER.margin, body + lines.length * 40);
 		}
 	};
 }

@@ -17,7 +17,8 @@ export const HABIT: Rule[] = [
 		id: 'loyalist',
 		title: 'The Loyalist',
 		when: (t) => (t.topCollection?.count ?? 0) >= 5,
-		detail: (t) => `${t.topCollection?.count} films from the ${t.topCollection?.name} collection.`
+		detail: (t) =>
+			`You watched ${t.topCollection?.count} films from the ${t.topCollection?.name} collection.`
 	},
 	{
 		id: 'follower',

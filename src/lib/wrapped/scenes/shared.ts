@@ -48,7 +48,7 @@ export interface Scene {
 }
 
 export const stars = (rating: number | null): string =>
-	rating === null ? '—' : `★ ${rating.toFixed(2)}`;
+	rating === null ? '—' : `★ ${rating.toFixed(1)}`;
 export const plural = (n: number, one: string, many = `${one}s`): string =>
 	`${n.toLocaleString('en')} ${n === 1 ? one : many}`;
 

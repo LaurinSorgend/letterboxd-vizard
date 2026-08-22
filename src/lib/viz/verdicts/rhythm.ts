@@ -35,7 +35,7 @@ export const RHYTHM: Rule[] = [
 		title: 'The Sprinter',
 		when: (t) => t.sprintShare >= 0.4 && t.entries >= 25,
 		detail: (t) =>
-			`${Math.round(t.sprintShare * t.entries)} of your ${t.entries} entries landed on days when you watched two or more.`
+			`${Math.round(t.sprintShare * t.entries)} of your ${t.entries} entries landed on days when you watched three or more.`
 	},
 	{
 		id: 'weekender',
@@ -56,7 +56,7 @@ export const RHYTHM: Rule[] = [
 		title: 'The Lapsed',
 		when: (t) => t.firstQuarterShare >= 0.55 && t.lastThirdShare < 0.1 && t.films >= 25,
 		detail: (t) =>
-			`${Math.round(t.firstQuarterShare * t.entries)} entries by the end of March. ${Math.round(t.lastThirdShare * t.entries)} after September.`
+			`${Math.round(t.firstQuarterShare * t.entries)} entries by the end of March. ${Math.round(t.lastThirdShare * t.entries)} from September on.`
 	},
 	{
 		id: 'hibernator',

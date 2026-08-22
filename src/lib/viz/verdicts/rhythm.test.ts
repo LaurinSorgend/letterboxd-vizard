@@ -164,7 +164,7 @@ describe('The Sprinter', () => {
 
 	it('cites the entries, not the days, and the threshold they were counted at', () => {
 		expect(rule('sprinter').detail(neutralTraits({ sprintShare: 0.5 }))).toBe(
-			'20 of your 40 entries landed on days when you watched two or more.'
+			'20 of your 40 entries landed on days when you watched three or more.'
 		);
 	});
 });
@@ -221,7 +221,7 @@ describe('The Lapsed', () => {
 			monthCounts: [8, 8, 8, 3, 3, 3, 3, 2, 1, 1, 0, 0]
 		});
 		expect(rule('lapsed').detail(stopped)).toBe(
-			'24 entries by the end of March. 2 after September.'
+			'24 entries by the end of March. 2 from September on.'
 		);
 	});
 });

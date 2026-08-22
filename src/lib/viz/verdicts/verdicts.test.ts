@@ -187,7 +187,7 @@ describe('verdictFor rule order', () => {
 	it('picks Generous when only 6 matches', () => {
 		const verdict = verdictFor(makeLibrary({ ...ALL_FALSE, highRating: true }));
 		expect(verdict.title).toBe('The Generous');
-		expect(verdict.detail).toBe('You averaged ★ 4.40 across the year.');
+		expect(verdict.detail).toBe('You averaged ★ 4.4 across the year.');
 	});
 
 	it('falls back to Regular when nothing else matches', () => {

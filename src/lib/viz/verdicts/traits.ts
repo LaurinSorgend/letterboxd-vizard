@@ -3,7 +3,7 @@ import { avgRating, byGenre, byPerson, combinedVoteCount, grouped } from '../sta
 import { doubleBills, longestGap, weekdays } from '$lib/wrapped/facts/timing';
 import { filmsPerYear } from '$lib/wrapped/facts/history';
 import { monthOf } from '$lib/wrapped/facts/dates';
-import { datesIn, viewerLanguage, type Library } from '$lib/wrapped/library';
+import { entriesIn, viewerLanguage, type Library } from '$lib/wrapped/library';
 import type { EnrichedFilm } from '$lib/types';
 
 export interface Traits {
@@ -94,7 +94,7 @@ function rhythmTraits(library: Library) {
 			monthCounts.slice(8).reduce((a, b) => a + b, 0),
 			dates.length
 		),
-		sprintShare: doubleBills(library)?.share ?? 0,
+		sprintShare: doubleBills(library)?.tripleShare ?? 0,
 		weekendShare: weekdays(library)?.weekendShare ?? 0,
 		longestGapDays: longestGap(library)?.days ?? 0,
 		previousYearFilms: countFor(year - 1),
@@ -189,7 +189,7 @@ function habitTraits(library: Library) {
 	const reviewed = slice.filter((film) => film.review);
 	const tagged = slice.filter((film) => film.tags.length > 0);
 	const rewatched = slice.reduce(
-		(sum, film) => sum + Math.max(0, datesIn(film, year).length - (film.rewatch ? 0 : 1)),
+		(sum, film) => sum + entriesIn(film, year).filter((entry) => entry.rewatch).length,
 		0
 	);
 	return {

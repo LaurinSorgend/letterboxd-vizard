@@ -113,7 +113,7 @@ describe('criticScene', () => {
 		const scene = criticScene(buildWrapped(films, 2025)!);
 		expect(scene).toMatchObject({ id: 'critics', value: 'Speak No Evil' });
 		expect(scene?.note).toBe(
-			'Critics put it at 34 on Metascore. You gave it ★ 4.50. That is the widest you and the critics stood apart all year.'
+			'Critics put it at 34 on Metascore. You gave it ★ 4.5. That is the widest you and the critics stood apart all year.'
 		);
 		expect(scene?.stats).toContainEqual({ label: 'You were kinder on', value: '1 film' });
 	});

@@ -23,7 +23,7 @@ const scene: Scene = {
 	note: 'note',
 	stats: [
 		{ label: 'Share', value: '10%' },
-		{ label: 'Most-used rating', value: '★ 4.50' },
+		{ label: 'Most-used rating', value: '★ 4.5' },
 		{ label: 'In 2024', value: '21' }
 	],
 	body: { kind: 'none' }

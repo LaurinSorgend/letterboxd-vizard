@@ -100,13 +100,17 @@ export function breadthScene(data: Wrapped): Scene | null {
 export function likedScene(data: Wrapped): Scene | null {
 	const liked = likedNotLoved(data.library);
 	if (!liked) return null;
+	const others =
+		liked.heartsUnderFour > 1
+			? ` ${plural(liked.heartsUnderFour - 1, 'other film')} got a heart without four stars.`
+			: '';
 	return {
 		id: 'liked',
 		accent: 'magenta',
 		label: 'Liked, not loved',
 		value: liked.film.name,
 		valueKind: 'name',
-		note: `You hearted it and gave it ${stars(liked.rating)}. ${plural(liked.heartsUnderFour - 1, 'other film')} got a heart without four stars.`,
+		note: `You hearted it and gave it ${stars(liked.rating)}.${others}`,
 		stats: [
 			{ label: 'Rating', value: stars(liked.rating) },
 			{ label: 'Hearts this year', value: String(liked.hearts) },

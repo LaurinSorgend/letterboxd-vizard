@@ -2,19 +2,38 @@
 	import { imageUrl } from './images';
 	import { webHref } from './href';
 	import { buildRecap, eligibleYears } from './recap';
-	import type { EnrichedFilm, WatchlistEntry } from '$lib/types';
+	import { alsoTrueLine } from './verdicts';
+	import type { CollectionParts, EnrichedFilm, WatchlistEntry } from '$lib/types';
 
-	let { films, watchlist = [] }: { films: EnrichedFilm[]; watchlist?: WatchlistEntry[] } = $props();
+	let {
+		films,
+		watchlist = [],
+		collections = []
+	}: {
+		films: EnrichedFilm[];
+		watchlist?: WatchlistEntry[];
+		collections?: CollectionParts[];
+	} = $props();
 
 	const years = $derived(eligibleYears(films, new Date()));
 	// svelte-ignore state_referenced_locally
 	let chosen: number | null = $state(Math.max(...years));
 	const year = $derived(chosen !== null && years.includes(chosen) ? chosen : (years[0] ?? null));
-	const recap = $derived(year === null ? null : buildRecap(films, year, { watchlist }));
+	/* The same context the deck passes: viewerLanguage drives the verdict, so a recap built
+	   without it can name a different label than the deck does for the same year. */
+	const recap = $derived(
+		year === null
+			? null
+			: buildRecap(films, year, {
+					watchlist,
+					collections,
+					locale: typeof navigator === 'undefined' ? 'en' : navigator.language
+				})
+	);
 
 	/* Diary dates are calendar days with no time zone of their own, so format them as UTC. */
 	function shortDate(iso: string): string {
-		return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en', {
+		return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
 			day: 'numeric',
 			month: 'short',
 			timeZone: 'UTC'
@@ -164,8 +183,8 @@
 				<span class="eyebrow">Your year in one word</span>
 				<strong class="value name">{recap.personality.title}</strong>
 				<span class="detail">{recap.personality.detail}</span>
-				{#if recap.personality.alsoTrue.length > 0}
-					<span class="also">Also true: {recap.personality.alsoTrue.join(', ')}</span>
+				{#if alsoTrueLine(recap.personality)}
+					<span class="also">{alsoTrueLine(recap.personality)}</span>
 				{/if}
 			</li>
 		</ul>
