@@ -7,6 +7,7 @@ import type { Traits } from './traits';
 const rule = (id: string) => RATINGS.find((entry) => entry.id === id)!;
 
 const IDS = [
+	'generous',
 	'abstainer',
 	'metronome',
 	'purist',
@@ -20,6 +21,7 @@ const IDS = [
 ];
 
 const READS_A_MEAN = [
+	'generous',
 	'metronome',
 	'purist',
 	'sceptic',
@@ -60,7 +62,7 @@ function year(films: number, rated: number, over: Partial<Traits> = {}): Traits 
 }
 
 describe('RATINGS', () => {
-	it('exports the ten labels and wires them into the evaluation order', () => {
+	it('exports the rating labels and wires them into the evaluation order', () => {
 		expect(RATINGS.map((entry) => entry.id)).toEqual(IDS);
 		const ordered = rulesInOrder().map((entry) => entry.id);
 		for (const id of IDS) {

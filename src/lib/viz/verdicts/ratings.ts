@@ -2,6 +2,12 @@ import type { Rule } from './rules';
 
 export const RATINGS: Rule[] = [
 	{
+		id: 'generous',
+		title: 'The Generous',
+		when: (t) => (t.meanRating ?? 0) >= 3.8,
+		detail: (t) => `You averaged ★ ${(t.meanRating ?? 0).toFixed(1)} across the year.`
+	},
+	{
 		id: 'abstainer',
 		title: 'The Abstainer',
 		when: (t) => t.ratedShare <= 0.2 && t.films >= 20,

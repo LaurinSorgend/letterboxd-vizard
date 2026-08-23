@@ -139,7 +139,7 @@
 	<div class="projector">
 		<div class="carriage">
 			<div class="gate">
-				{#if scene.id === 'title' && rain.length > 0}
+				{#if scene.backdrop === 'rain' && rain.length > 0}
 					<div class="rain" aria-hidden="true" out:fade={{ duration: 260 }}>
 						{#each rain as column, c (c)}
 							<div class="column" style="--fall: {column.speed}s; --offset: {column.offset}s">
@@ -163,7 +163,7 @@
 										{/if}
 									</div>
 								{/snippet}
-								{#snippet extras()}
+								{#snippet extras(held: number)}
 									{#if !expanded}
 										<button
 											class="reveal"
@@ -176,7 +176,7 @@
 												nextButton?.focus();
 											}}
 										>
-											Show the other {deck.extras.length} frames
+											Show the other {held} frames
 										</button>
 									{/if}
 								{/snippet}
@@ -238,7 +238,7 @@
 		<button
 			class="share"
 			onclick={() => share(last ? 'poster' : 'scene')}
-			disabled={busy || scene.id === 'more'}
+			disabled={busy || scene.body.kind === 'gate'}
 		>
 			{busy ? 'Rendering…' : last ? 'Save the slide' : 'Save this frame'}
 		</button>

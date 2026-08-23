@@ -6,8 +6,12 @@
 		scene,
 		poster,
 		extras
-	}: { scene: Scene; poster?: import('svelte').Snippet; extras?: import('svelte').Snippet } =
-		$props();
+	}: {
+		scene: Scene;
+		poster?: import('svelte').Snippet;
+		/** Rendered on the gate frame, given the number of frames it is holding back. */
+		extras?: import('svelte').Snippet<[number]>;
+	} = $props();
 
 	const dense = $derived(scene.body.kind === 'bars' && scene.body.bars.length > 6);
 </script>
@@ -61,7 +65,7 @@
 	{:else if scene.body.kind === 'summary' && poster}
 		{@render poster()}
 	{:else if scene.body.kind === 'gate' && extras}
-		{@render extras()}
+		{@render extras(scene.body.count)}
 	{/if}
 
 	{#if scene.stats.length > 0}

@@ -10,12 +10,14 @@ export interface Rule {
 	title: string;
 	when: (t: Traits) => boolean;
 	detail: (t: Traits) => string;
+	/** The catch-all that always matches. It never appears as a runner-up, and it earns a near miss. */
+	fallback?: true;
 }
 
 /**
  * Evaluation order: a narrower condition comes before a wider one, and anything reading ratings
- * comes after the guard that establishes there are enough ratings to read. Ids not yet
- * implemented are skipped, so this list is the plan as well as the order.
+ * comes after the guard that establishes there are enough ratings to read. `verdicts.test.ts`
+ * holds this list and the rules themselves to the same set, so neither can drift alone.
  */
 export const ORDER = [
 	'archivist',
@@ -63,54 +65,16 @@ export const ORDER = [
 	'regular'
 ];
 
-const EXISTING: Rule[] = [
-	{
-		id: 'deep-diver',
-		title: 'The Deep Diver',
-		when: (t) => (t.obscureShare ?? 0) >= 0.45,
-		detail: (t) =>
-			`${percent(t.obscureShare ?? 0)} of what you watched has under 1,000 TMDB ratings.`
-	},
-	{
-		id: 'time-traveller',
-		title: 'The Time Traveller',
-		when: (t) => t.medianYear !== null && t.year - t.medianYear >= 25,
-		detail: (t) => `Your median film came out in ${t.medianYear}.`
-	},
-	{
-		id: 'globetrotter',
-		title: 'The Globetrotter',
-		when: (t) => t.countries >= 20,
-		detail: (t) => `You watched films from ${t.countries} countries.`
-	},
-	{
-		id: 'marathoner',
-		title: 'The Marathoner',
-		when: (t) => (t.meanRuntime ?? 0) >= 125,
-		detail: (t) => `Your average film ran ${Math.round(t.meanRuntime ?? 0)} minutes.`
-	},
-	{
-		id: 'completist',
-		title: 'The Completist',
-		when: (t) => (t.topDirector?.count ?? 0) >= 6,
-		detail: (t) => `You watched ${t.topDirector?.count} films by ${t.topDirector?.name}.`
-	},
-	{
-		id: 'generous',
-		title: 'The Generous',
-		when: (t) => (t.meanRating ?? 0) >= 3.8,
-		detail: (t) => `You averaged ★ ${(t.meanRating ?? 0).toFixed(1)} across the year.`
-	},
-	{
-		id: 'regular',
-		title: 'The Regular',
-		when: () => true,
-		detail: (t) => `${t.films} films across ${t.activeMonths} months of the year.`
-	}
-];
+/** What a year gets when nothing sharper is true of it. */
+const REGULAR: Rule = {
+	id: 'regular',
+	title: 'The Regular',
+	when: () => true,
+	detail: (t) => `${t.films} films across ${t.activeMonths} months of the year.`,
+	fallback: true
+};
 
-/** Every implemented rule, in evaluation order. Later tasks add sections to `SECTIONS`. */
-const SECTIONS: Rule[][] = [EXISTING, RHYTHM, RATINGS, TASTE, HABIT];
+const SECTIONS: Rule[][] = [[REGULAR], RHYTHM, RATINGS, TASTE, HABIT];
 
 export function rulesInOrder(): Rule[] {
 	const byId = new Map(SECTIONS.flat().map((rule) => [rule.id, rule]));

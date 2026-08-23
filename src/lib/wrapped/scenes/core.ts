@@ -21,6 +21,7 @@ export function titleScene(data: Wrapped): Scene {
 			{ label: 'Hours', value: count(data.hours) },
 			{ label: 'Average', value: stars(data.avg) }
 		],
+		backdrop: 'rain',
 		body: { kind: 'none' }
 	};
 }

@@ -11,6 +11,31 @@ function residency(country: string | null, share: number): boolean {
 
 export const TASTE: Rule[] = [
 	{
+		id: 'deep-diver',
+		title: 'The Deep Diver',
+		when: (t) => (t.obscureShare ?? 0) >= 0.45,
+		detail: (t) =>
+			`${percent(t.obscureShare ?? 0)} of what you watched has under 1,000 TMDB ratings.`
+	},
+	{
+		id: 'time-traveller',
+		title: 'The Time Traveller',
+		when: (t) => t.medianYear !== null && t.year - t.medianYear >= 25,
+		detail: (t) => `Your median film came out in ${t.medianYear}.`
+	},
+	{
+		id: 'globetrotter',
+		title: 'The Globetrotter',
+		when: (t) => t.countries >= 20,
+		detail: (t) => `You watched films from ${t.countries} countries.`
+	},
+	{
+		id: 'marathoner',
+		title: 'The Marathoner',
+		when: (t) => (t.meanRuntime ?? 0) >= 125,
+		detail: (t) => `Your average film ran ${Math.round(t.meanRuntime ?? 0)} minutes.`
+	},
+	{
 		id: 'populist',
 		title: 'The Populist',
 		when: (t) => (t.medianVotes ?? 0) >= 15_000 && t.films >= 20,

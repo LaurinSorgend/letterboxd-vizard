@@ -22,8 +22,8 @@ export function verdictFor(library: Library): Personality {
 	const traits = buildTraits(library);
 	const matched = rulesInOrder().filter((rule) => rule.when(traits));
 	const winner = matched[0];
-	const others = matched.slice(1).filter((rule) => rule.id !== 'regular');
-	if (winner.id !== 'regular') {
+	const others = matched.slice(1).filter((rule) => !rule.fallback);
+	if (!winner.fallback) {
 		return {
 			title: winner.title,
 			detail: winner.detail(traits),

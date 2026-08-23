@@ -8,6 +8,12 @@ function followed(films: number, appearances: number): boolean {
 
 export const HABIT: Rule[] = [
 	{
+		id: 'completist',
+		title: 'The Completist',
+		when: (t) => (t.topDirector?.count ?? 0) >= 6,
+		detail: (t) => `You watched ${t.topDirector?.count} films by ${t.topDirector?.name}.`
+	},
+	{
 		id: 'returner',
 		title: 'The Returner',
 		when: (t) => t.rewatchShare >= 0.3 && t.entries >= 20,

@@ -73,18 +73,18 @@
 	type Phase = 'idle' | 'working' | 'ready';
 	let phase: Phase = $state('idle');
 	let stage: 'films' | 'ratings' = $state('films');
-	let data: LetterboxdData | null = $state(null);
+	let data = $state<LetterboxdData | null>(null);
 	let films: EnrichedFilm[] = $state([]);
 	let progress = $state({ done: 0, total: 0 });
 	let errorMessage: string | null = $state(null);
 	let watchlistIds: number[] = $state([]);
-	let watchlist: WatchlistEntry[] = $state([]);
 	let collections: CollectionParts[] = $state([]);
 	let includeWatchlist = $state(false);
 	let remember = $state(false);
 	let saveError: string | null = $state(null);
 	let mainEl: HTMLElement | null = $state(null);
 
+	const watchlist = $derived(data?.watchlist ?? []);
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
 	const hasOmdb = $derived(films.some((f) => f.omdb));
 	const watchlistExclude = $derived(includeWatchlist ? [] : watchlistIds);
@@ -138,9 +138,12 @@
 		if (snapshot) {
 			films = snapshot.films;
 			watchlistIds = snapshot.watchlistIds;
-			watchlist = snapshot.watchlist ?? [];
 			collections = snapshot.collections ?? [];
-			data = { films: snapshot.films, watchlist, profile: snapshot.profile };
+			data = {
+				films: snapshot.films,
+				watchlist: snapshot.watchlist ?? [],
+				profile: snapshot.profile
+			};
 			remember = true;
 			phase = 'ready';
 		}
@@ -174,7 +177,6 @@
 		try {
 			const parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
 			data = parsed;
-			watchlist = parsed.watchlist;
 			const total = parsed.films.length + parsed.watchlist.length;
 			const done = { films: 0, watchlist: 0 };
 			const report = () => (progress = { done: done.films + done.watchlist, total });
@@ -201,10 +203,9 @@
 				omdb: f.tmdb?.imdbId ? (omdb.get(f.tmdb.imdbId) ?? null) : null
 			}));
 
-			const franchises = films
-				.map((film) => film.tmdb?.collection?.id)
-				.filter((id): id is number => typeof id === 'number');
-			collections = franchises.length > 0 ? await fetchCollections(franchises) : [];
+			collections = await fetchCollections(
+				films.map((film) => film.tmdb?.collection?.id).filter((id): id is number => id != null)
+			);
 
 			phase = 'ready';
 			if (remember) persist();

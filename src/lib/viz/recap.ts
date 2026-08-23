@@ -104,18 +104,17 @@ export function buildRecap(
 	year: number,
 	context: RecapContext = {}
 ): Recap | null {
-	const slice = films.filter((film) => film.watchedDates.some((date) => inYear(date, year)));
+	const library = buildLibrary({ films, year, ...context });
+	const slice = library.slice;
 	if (slice.length < MIN_FILMS) return null;
 
-	const watchDates = slice.flatMap((film) => film.watchedDates.filter((d) => inYear(d, year)));
 	const topDirector = byPerson(slice, 'directors')[0] ?? null;
 	const avg = avgRating(slice);
-	const library = buildLibrary({ films, year, ...context });
 
 	return {
 		year,
 		films: slice,
-		watches: watchDates.length,
+		watches: library.dates.length,
 		hours: Math.round(totalRuntimeMinutes(slice) / 60),
 		avg,
 		top: [...slice]
@@ -140,6 +139,6 @@ export function buildRecap(
 		).size,
 		library,
 		personality: verdictFor(library),
-		partial: year === (context.now ?? new Date()).getFullYear()
+		partial: year === library.now.getFullYear()
 	};
 }

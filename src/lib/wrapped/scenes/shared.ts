@@ -45,6 +45,8 @@ export interface Scene {
 	stats: Stat[];
 	/** A quiet line under the note: the also-true labels, or anything else that is not a stat. */
 	footnote?: string;
+	/** Something behind the frame rather than in it, for a frame that asks for one. */
+	backdrop?: 'rain';
 	body: SceneBody;
 }
 
