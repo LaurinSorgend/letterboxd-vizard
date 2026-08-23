@@ -1,5 +1,5 @@
 import { count, percent } from '$lib/format';
-import { residencyBar } from './taste';
+import { BARS, residencyBar } from './bars';
 import type { Traits } from './traits';
 
 export interface NearMiss {
@@ -33,22 +33,27 @@ const PROBES: Probe[] = [
 		threshold: (t) => residencyBar(t.topCountry),
 		format: percent
 	},
-	{ label: 'genre', value: (t) => t.topGenreShare, threshold: 0.5, format: percent },
-	{ label: 'subtitles', value: (t) => t.foreignShare, threshold: 0.65, format: percent },
-	{ label: 'obscurity', value: (t) => t.obscureShare, threshold: 0.45, format: percent },
-	{ label: 'rewatches', value: (t) => t.rewatchShare, threshold: 0.3, format: percent },
-	{ label: 'hearts', value: (t) => t.likedShare, threshold: 0.5, format: percent },
-	{ label: 'reviews', value: (t) => t.reviewShare, threshold: 0.5, format: percent },
-	{ label: 'weekends', value: (t) => t.weekendShare, threshold: 0.6, format: percent },
-	{ label: 'December', value: (t) => t.decemberShare, threshold: 0.3, format: percent },
+	{ label: 'genre', value: (t) => t.topGenreShare, threshold: BARS.specialist, format: percent },
+	{ label: 'subtitles', value: (t) => t.foreignShare, threshold: BARS.subtitler, format: percent },
+	{ label: 'obscurity', value: (t) => t.obscureShare, threshold: BARS.deepDiver, format: percent },
+	{ label: 'rewatches', value: (t) => t.rewatchShare, threshold: BARS.returner, format: percent },
+	{ label: 'hearts', value: (t) => t.likedShare, threshold: BARS.enthusiast, format: percent },
+	{ label: 'reviews', value: (t) => t.reviewShare, threshold: BARS.diarist, format: percent },
+	{ label: 'weekends', value: (t) => t.weekendShare, threshold: BARS.weekender, format: percent },
+	{ label: 'December', value: (t) => t.decemberShare, threshold: BARS.crammer, format: percent },
 	{
 		label: 'new releases',
 		value: (t) => t.releasedThisYearShare,
-		threshold: 0.55,
+		threshold: BARS.frontrunner,
 		format: percent
 	},
-	{ label: 'countries', value: (t) => t.countries, threshold: 20, format: plainNumber },
-	{ label: 'runtime', value: (t) => t.meanRuntime, threshold: 125, format: minutes }
+	{
+		label: 'countries',
+		value: (t) => t.countries,
+		threshold: BARS.globetrotter,
+		format: plainNumber
+	},
+	{ label: 'runtime', value: (t) => t.meanRuntime, threshold: BARS.marathoner, format: minutes }
 ];
 
 /** The condition the year came closest to meeting without meeting it. */

@@ -1,3 +1,4 @@
+import { BARS } from './bars';
 import type { Rule } from './rules';
 
 export const RATINGS: Rule[] = [
@@ -38,7 +39,7 @@ export const RATINGS: Rule[] = [
 	{
 		id: 'enthusiast',
 		title: 'The Enthusiast',
-		when: (t) => t.likedShare >= 0.5 && t.films >= 25,
+		when: (t) => t.likedShare >= BARS.enthusiast && t.films >= 25,
 		detail: (t) => `You hearted ${t.likedCount} of ${t.films} films.`
 	},
 	{

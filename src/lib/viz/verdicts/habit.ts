@@ -1,4 +1,5 @@
 import { count } from '$lib/format';
+import { BARS } from './bars';
 import type { Rule } from './rules';
 
 /** A face has to recur beyond coincidence: seven films, or a tenth of a heavy year. */
@@ -16,7 +17,7 @@ export const HABIT: Rule[] = [
 	{
 		id: 'returner',
 		title: 'The Returner',
-		when: (t) => t.rewatchShare >= 0.3 && t.entries >= 20,
+		when: (t) => t.rewatchShare >= BARS.returner && t.entries >= 20,
 		detail: (t) =>
 			`${Math.round(t.rewatchShare * t.entries)} of your ${t.entries} entries were films you had already seen.`
 	},
@@ -36,7 +37,7 @@ export const HABIT: Rule[] = [
 	{
 		id: 'diarist',
 		title: 'The Diarist',
-		when: (t) => t.reviewShare >= 0.5 && t.films >= 20,
+		when: (t) => t.reviewShare >= BARS.diarist && t.films >= 20,
 		detail: (t) =>
 			`You wrote reviews on ${Math.round(t.reviewShare * t.films)} of ${t.films} films, ${count(t.reviewWords)} words in all.`
 	},

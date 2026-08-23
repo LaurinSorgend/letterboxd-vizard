@@ -1,5 +1,5 @@
 import { getOrCreate } from '$lib/collections';
-import { byPerson, grouped, median } from '$lib/viz/stats';
+import { grouped, median } from '$lib/viz/stats';
 import { datesIn, POSTER_ROW, type Library } from '../library';
 import { daysBetween } from './dates';
 import { collectionName, type EnrichedFilm, type WatchlistEntry } from '$lib/types';
@@ -93,7 +93,7 @@ export interface Breadth {
 export function directorBreadth(library: Library): Breadth | null {
 	const directed = library.slice.filter((film) => (film.tmdb?.directors.length ?? 0) > 0);
 	if (directed.length < MIN_DIRECTED) return null;
-	const people = byPerson(library.slice, 'directors');
+	const people = library.directors();
 	const deep = people.filter((person) => person.count >= 4);
 	if (deep.length === 0) return null;
 	return {

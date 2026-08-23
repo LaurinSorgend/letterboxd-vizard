@@ -1,4 +1,5 @@
 import { percent } from '$lib/format';
+import { BARS } from './bars';
 import type { Rule } from './rules';
 
 /** Three years inside a tenth of each other, all substantial: a habit rather than a year. */
@@ -41,13 +42,13 @@ export const RHYTHM: Rule[] = [
 	{
 		id: 'weekender',
 		title: 'The Weekender',
-		when: (t) => t.weekendShare >= 0.6 && t.entries >= 25,
+		when: (t) => t.weekendShare >= BARS.weekender && t.entries >= 25,
 		detail: (t) => `${percent(t.weekendShare)} of your entries were Saturdays and Sundays.`
 	},
 	{
 		id: 'crammer',
 		title: 'The Crammer',
-		when: (t) => t.decemberShare >= 0.3 && t.films >= 25,
+		when: (t) => t.decemberShare >= BARS.crammer && t.films >= 25,
 		detail: (t) =>
 			`${Math.round(t.decemberShare * t.entries)} of your ${t.entries} entries were logged in December.`
 	},

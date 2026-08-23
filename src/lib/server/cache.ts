@@ -158,78 +158,76 @@ export interface RelatedMovie {
 }
 
 /**
- * Related lists for many seeds in a query or two, off-budget like `getCachedMany`: a warm seed
- * phase then costs one subrequest rather than one per seed. Stale and unknown seeds are absent.
+ * A `(key, data, fetched_at)` table read for many keys at once, off-budget like `getCachedMany`:
+ * a warm phase costs a subrequest per chunk rather than one per key. Table and column names are
+ * literals from this module, never request data. Stale and unknown keys are absent.
  */
-export async function getRelatedCachedMany(
+async function getJsonCachedMany<T>(
 	db: D1Database,
-	tmdbIds: number[]
-): Promise<Map<number, RelatedMovie[]>> {
-	const known = new Map<number, RelatedMovie[]>();
-	const cutoff = Date.now() - RELATED_TTL_MS;
-	for (const chunk of chunks(tmdbIds, MAX_PARAMS - 1)) {
-		const marks = chunk.map(() => '?').join(',');
-		const { results } = await db
-			.prepare(`SELECT tmdb_id, data FROM related WHERE tmdb_id IN (${marks}) AND fetched_at > ?`)
-			.bind(...chunk, cutoff)
-			.all<{ tmdb_id: number; data: string }>();
-		for (const row of results) known.set(row.tmdb_id, JSON.parse(row.data) as RelatedMovie[]);
-	}
-	return known;
-}
-
-/** Multi-row upsert so a cold seed phase spends a couple of subrequests, not one per seed. */
-export async function putRelatedCachedMany(
-	db: D1Database,
-	entries: [number, RelatedMovie[]][]
-): Promise<void> {
-	const now = Date.now();
-	for (const chunk of chunks(entries, Math.floor(MAX_PARAMS / 3))) {
-		const marks = chunk.map(() => '(?, ?, ?)').join(',');
-		await db
-			.prepare(`INSERT OR REPLACE INTO related (tmdb_id, data, fetched_at) VALUES ${marks}`)
-			.bind(...chunk.flatMap(([tmdbId, related]) => [tmdbId, JSON.stringify(related), now]))
-			.run();
-	}
-}
-
-/** Collection sizes for many ids in one query, off-budget like `getCachedMany`. */
-export async function getCollectionsCachedMany(
-	db: D1Database,
+	table: string,
+	key: string,
 	ids: number[]
-): Promise<Map<number, CollectionParts>> {
-	const known = new Map<number, CollectionParts>();
+): Promise<Map<number, T>> {
+	const known = new Map<number, T>();
 	const cutoff = Date.now() - RELATED_TTL_MS;
 	for (const chunk of chunks(ids, MAX_PARAMS - 1)) {
 		const marks = chunk.map(() => '?').join(',');
 		const { results } = await db
 			.prepare(
-				`SELECT collection_id, data FROM collections WHERE collection_id IN (${marks}) AND fetched_at > ?`
+				`SELECT ${key} AS id, data FROM ${table} WHERE ${key} IN (${marks}) AND fetched_at > ?`
 			)
 			.bind(...chunk, cutoff)
-			.all<{ collection_id: number; data: string }>();
-		for (const row of results)
-			known.set(row.collection_id, JSON.parse(row.data) as CollectionParts);
+			.all<{ id: number; data: string }>();
+		for (const row of results) known.set(row.id, JSON.parse(row.data) as T);
 	}
 	return known;
 }
 
+/** Multi-row upsert so a cold phase spends a couple of subrequests, not one per key. */
+async function putJsonCachedMany<T>(
+	db: D1Database,
+	table: string,
+	key: string,
+	entries: [number, T][]
+): Promise<void> {
+	const now = Date.now();
+	for (const chunk of chunks(entries, Math.floor(MAX_PARAMS / 3))) {
+		const marks = chunk.map(() => '(?, ?, ?)').join(',');
+		await db
+			.prepare(`INSERT OR REPLACE INTO ${table} (${key}, data, fetched_at) VALUES ${marks}`)
+			.bind(...chunk.flatMap(([id, value]) => [id, JSON.stringify(value), now]))
+			.run();
+	}
+}
+
+export function getRelatedCachedMany(
+	db: D1Database,
+	tmdbIds: number[]
+): Promise<Map<number, RelatedMovie[]>> {
+	return getJsonCachedMany<RelatedMovie[]>(db, 'related', 'tmdb_id', tmdbIds);
+}
+
+export function putRelatedCachedMany(
+	db: D1Database,
+	entries: [number, RelatedMovie[]][]
+): Promise<void> {
+	return putJsonCachedMany(db, 'related', 'tmdb_id', entries);
+}
+
+export function getCollectionsCachedMany(
+	db: D1Database,
+	ids: number[]
+): Promise<Map<number, CollectionParts>> {
+	return getJsonCachedMany<CollectionParts>(db, 'collections', 'collection_id', ids);
+}
+
 /** A miss is not cached: a collection id only comes from a TmdbMovie that already carries one. */
-export async function putCollectionsCachedMany(
+export function putCollectionsCachedMany(
 	db: D1Database,
 	entries: [number, CollectionParts | null][]
 ): Promise<void> {
-	const now = Date.now();
 	const hits = entries.filter((entry): entry is [number, CollectionParts] => entry[1] !== null);
-	for (const chunk of chunks(hits, Math.floor(MAX_PARAMS / 3))) {
-		const marks = chunk.map(() => '(?, ?, ?)').join(',');
-		await db
-			.prepare(
-				`INSERT OR REPLACE INTO collections (collection_id, data, fetched_at) VALUES ${marks}`
-			)
-			.bind(...chunk.flatMap(([id, parts]) => [id, JSON.stringify(parts), now]))
-			.run();
-	}
+	return putJsonCachedMany(db, 'collections', 'collection_id', hits);
 }
 
 /**

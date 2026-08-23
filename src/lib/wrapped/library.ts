@@ -1,3 +1,4 @@
+import { byGenre, byPerson, type BarDatum } from '$lib/viz/stats';
 import type { CollectionParts, DiaryEntry, EnrichedFilm, WatchlistEntry } from '$lib/types';
 
 export interface LibraryInput {
@@ -23,6 +24,25 @@ export interface Library {
 	/** BCP-47 tag from the browser, lowercased; 'en' when unknown. */
 	locale: string;
 	now: Date;
+	/**
+	 * Tallies half a dozen facts and verdicts each want over the same slice. Computed on first
+	 * call and kept, so grouping the year's cast — the dearest of them — happens once per deck.
+	 */
+	directors: () => BarDatum[];
+	cast: () => BarDatum[];
+	genres: () => BarDatum[];
+}
+
+function once<T>(compute: () => T): () => T {
+	let value: T | undefined;
+	let done = false;
+	return () => {
+		if (!done) {
+			value = compute();
+			done = true;
+		}
+		return value as T;
+	};
 }
 
 export function datesIn(film: EnrichedFilm, year: number): string[] {
@@ -78,6 +98,9 @@ export function buildLibrary(input: LibraryInput): Library {
 		watchlist: input.watchlist ?? [],
 		collections: new Map((input.collections ?? []).map((parts) => [parts.id, parts])),
 		locale: (input.locale ?? 'en').toLowerCase(),
-		now: input.now ?? new Date()
+		now: input.now ?? new Date(),
+		directors: once(() => byPerson(slice, 'directors')),
+		cast: once(() => byPerson(slice, 'cast')),
+		genres: once(() => byGenre(slice))
 	};
 }

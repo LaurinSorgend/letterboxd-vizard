@@ -1,9 +1,7 @@
 import { count, percent } from '$lib/format';
 import { countryName } from '../countries';
+import { BARS, residencyBar } from './bars';
 import type { Rule } from './rules';
-
-/** The US is the modal country for most libraries, so it only counts as a residence at 85%. */
-export const residencyBar = (country: string | null): number => (country === 'US' ? 0.85 : 0.6);
 
 function residency(country: string | null, share: number): boolean {
 	return country === null ? false : share >= residencyBar(country);
@@ -13,7 +11,7 @@ export const TASTE: Rule[] = [
 	{
 		id: 'deep-diver',
 		title: 'The Deep Diver',
-		when: (t) => (t.obscureShare ?? 0) >= 0.45,
+		when: (t) => (t.obscureShare ?? 0) >= BARS.deepDiver,
 		detail: (t) =>
 			`${percent(t.obscureShare ?? 0)} of what you watched has under 1,000 TMDB ratings.`
 	},
@@ -26,13 +24,13 @@ export const TASTE: Rule[] = [
 	{
 		id: 'globetrotter',
 		title: 'The Globetrotter',
-		when: (t) => t.countries >= 20,
+		when: (t) => t.countries >= BARS.globetrotter,
 		detail: (t) => `You watched films from ${t.countries} countries.`
 	},
 	{
 		id: 'marathoner',
 		title: 'The Marathoner',
-		when: (t) => (t.meanRuntime ?? 0) >= 125,
+		when: (t) => (t.meanRuntime ?? 0) >= BARS.marathoner,
 		detail: (t) => `Your average film ran ${Math.round(t.meanRuntime ?? 0)} minutes.`
 	},
 	{
@@ -51,7 +49,7 @@ export const TASTE: Rule[] = [
 	{
 		id: 'frontrunner',
 		title: 'The Frontrunner',
-		when: (t) => t.releasedThisYearShare >= 0.55 && t.films >= 20,
+		when: (t) => t.releasedThisYearShare >= BARS.frontrunner && t.films >= 20,
 		detail: (t) => `${percent(t.releasedThisYearShare)} of what you watched came out in ${t.year}.`
 	},
 	{
@@ -74,7 +72,7 @@ export const TASTE: Rule[] = [
 	{
 		id: 'subtitler',
 		title: 'The Subtitler',
-		when: (t) => t.foreignShare >= 0.65 && t.films >= 20,
+		when: (t) => t.foreignShare >= BARS.subtitler && t.films >= 20,
 		detail: (t) => `${percent(t.foreignShare)} of what you watched was not in your own language.`
 	},
 	{
@@ -87,7 +85,7 @@ export const TASTE: Rule[] = [
 	{
 		id: 'specialist',
 		title: 'The Specialist',
-		when: (t) => t.topGenreShare >= 0.5 && t.films >= 20,
+		when: (t) => t.topGenreShare >= BARS.specialist && t.films >= 20,
 		detail: (t) =>
 			`${Math.round(t.topGenreShare * t.films)} ${t.topGenre?.toLowerCase()} films out of ${t.films}.`
 	},

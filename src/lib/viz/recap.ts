@@ -2,8 +2,6 @@ import { getOrCreate } from '$lib/collections';
 import { effectiveCountries } from './countries';
 import {
 	avgRating,
-	byGenre,
-	byPerson,
 	longestRun,
 	ratingGaps,
 	totalRuntimeMinutes,
@@ -108,7 +106,7 @@ export function buildRecap(
 	const slice = library.slice;
 	if (slice.length < MIN_FILMS) return null;
 
-	const topDirector = byPerson(slice, 'directors')[0] ?? null;
+	const topDirector = library.directors()[0] ?? null;
 	const avg = avgRating(slice);
 
 	return {
@@ -126,9 +124,9 @@ export function buildRecap(
 					a.name.localeCompare(b.name)
 			)
 			.slice(0, 5),
-		topGenre: byGenre(slice)[0] ?? null,
+		topGenre: library.genres()[0] ?? null,
 		topDirector,
-		topActor: byPerson(slice, 'cast')[0] ?? null,
+		topActor: library.cast()[0] ?? null,
 		mostObscure: extremeByVotes(slice, 'low'),
 		mostPopular: extremeByVotes(slice, 'high'),
 		streak: longestStreak(slice, year),

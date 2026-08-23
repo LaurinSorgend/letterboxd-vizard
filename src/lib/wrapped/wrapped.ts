@@ -1,13 +1,6 @@
 import { aggregateCountries, type CountryStat } from '$lib/viz/countries';
 import { buildRecap, type Recap, type RecapContext } from '$lib/viz/recap';
-import {
-	byGenre,
-	byLanguage,
-	byPerson,
-	ratingGaps,
-	type BarDatum,
-	type RatingGap
-} from '$lib/viz/stats';
+import { byLanguage, ratingGaps, type BarDatum, type RatingGap } from '$lib/viz/stats';
 import { datesIn, rewatchesIn } from './library';
 import type { EnrichedFilm } from '$lib/types';
 
@@ -156,9 +149,9 @@ export function buildWrapped(
 		busiestMonth: peakMonth(perMonth),
 		busiestDay: busiestDay(slice, year),
 		...bookends(slice, year),
-		topGenres: byGenre(slice).slice(0, 5),
-		topDirectors: byPerson(slice, 'directors').slice(0, 3),
-		topActors: byPerson(slice, 'cast').slice(0, 3),
+		topGenres: recap.library.genres().slice(0, 5),
+		topDirectors: recap.library.directors().slice(0, 3),
+		topActors: recap.library.cast().slice(0, 3),
 		topCountries: leadingCountries(slice),
 		topLanguages: byLanguage(slice).slice(0, 3),
 		longest: extremeBy(slice, (film) => film.tmdb?.runtime ?? null, 'max'),

@@ -17,7 +17,6 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	await requireSession(cookies);
 	await checkRateLimit(platform?.env?.OMDB_LIMITER, getClientAddress());
 
-	const db = await getDb(platform);
 	const body = (await request.json().catch(() => null)) as { imdbIds?: string[] } | null;
 	const imdbIds = body?.imdbIds;
 	if (!Array.isArray(imdbIds) || imdbIds.some((id) => typeof id !== 'string')) {
@@ -26,10 +25,12 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	if (imdbIds.length > MAX_BATCH) {
 		error(400, `Batch too large, send at most ${MAX_BATCH} items`);
 	}
+	// Answered before the database is opened: without a key there is nothing to look up or store.
 	if (!env.OMDB_API_KEY) {
 		return json({ results: imdbIds.map(() => null), pending: [] });
 	}
 
+	const db = await getDb(platform);
 	const known = await getOmdbCachedMany(db, [...new Set(imdbIds)]);
 
 	const budget = new FetchBudget(FETCHES_PER_REQUEST);

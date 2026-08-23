@@ -1,5 +1,5 @@
 import { effectiveCountries } from '../countries';
-import { avgRating, byGenre, byPerson, grouped, median, obscurityShare } from '../stats';
+import { avgRating, grouped, median, obscurityShare } from '../stats';
 import { doubleBills, longestGap, weekdays } from '$lib/wrapped/facts/timing';
 import { filmsPerYear } from '$lib/wrapped/facts/history';
 import { monthOf } from '$lib/wrapped/facts/dates';
@@ -139,7 +139,7 @@ function tasteTraits(library: Library) {
 		const released = releaseYear(film);
 		return released === null ? [] : [String(Math.floor(released / 10) * 10)];
 	});
-	const genres = byGenre(slice);
+	const genres = library.genres();
 	const countries = grouped(slice, (film) => (film.tmdb ? effectiveCountries(film.tmdb) : []));
 	const language = viewerLanguage(library);
 	const spoken = slice.filter((film) => film.tmdb?.originalLanguage);
@@ -177,8 +177,8 @@ function habitTraits(library: Library) {
 	const collections = grouped(slice, (film) =>
 		film.tmdb?.collection ? [collectionName(film.tmdb.collection.name)] : []
 	);
-	const directors = byPerson(slice, 'directors');
-	const cast = byPerson(slice, 'cast');
+	const directors = library.directors();
+	const cast = library.cast();
 	const reviewed = slice.filter((film) => film.review);
 	const tagged = slice.filter((film) => film.tags.length > 0);
 	const rewatched = rewatchesIn(slice, year);

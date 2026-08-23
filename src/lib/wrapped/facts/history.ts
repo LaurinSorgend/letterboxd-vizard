@@ -1,5 +1,5 @@
 import { getOrCreate } from '$lib/collections';
-import { byPerson, type BarDatum } from '$lib/viz/stats';
+import type { BarDatum } from '$lib/viz/stats';
 import { bestRated, datesIn, entriesIn, POSTER_ROW, type Library } from '../library';
 import type { EnrichedFilm } from '$lib/types';
 
@@ -130,9 +130,7 @@ export function firstTimeDirectors(library: Library): FirstTimers | null {
 			.find((p) => p.name === datum.label);
 		return person ? (person.tmdbId ?? person.name) : datum.label;
 	};
-	const fresh = byPerson(library.slice, 'directors').filter(
-		(datum) => !seenBefore.has(keyOf(datum))
-	);
+	const fresh = library.directors().filter((datum) => !seenBefore.has(keyOf(datum)));
 	if (fresh.length === 0) return null;
 	const films = [...new Set(fresh.flatMap((datum) => datum.films))];
 	return {
