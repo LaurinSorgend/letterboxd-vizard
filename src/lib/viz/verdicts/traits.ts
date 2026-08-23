@@ -1,10 +1,10 @@
 import { effectiveCountries } from '../countries';
-import { avgRating, byGenre, byPerson, combinedVoteCount, grouped } from '../stats';
+import { avgRating, byGenre, byPerson, grouped, median, obscurityShare } from '../stats';
 import { doubleBills, longestGap, weekdays } from '$lib/wrapped/facts/timing';
 import { filmsPerYear } from '$lib/wrapped/facts/history';
 import { monthOf } from '$lib/wrapped/facts/dates';
-import { entriesIn, viewerLanguage, type Library } from '$lib/wrapped/library';
-import type { EnrichedFilm } from '$lib/types';
+import { rewatchesIn, viewerLanguage, type Library } from '$lib/wrapped/library';
+import { collectionName, type EnrichedFilm } from '$lib/types';
 
 export interface Traits {
 	year: number;
@@ -69,8 +69,6 @@ export interface Traits {
 const share = (part: number, whole: number): number => (whole === 0 ? 0 : part / whole);
 const mean = (values: number[]): number | null =>
 	values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
-const median = (values: number[]): number | null =>
-	values.length === 0 ? null : [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 const releaseYear = (film: EnrichedFilm): number | null => film.tmdb?.year ?? film.year;
 
 function rhythmTraits(library: Library) {
@@ -150,12 +148,7 @@ function tasteTraits(library: Library) {
 		medianVotes: median(votes),
 		lowVoteShare: share(votes.filter((count) => count < 1_000).length, votes.length),
 		highVoteShare: share(votes.filter((count) => count > 10_000).length, votes.length),
-		obscureShare: (() => {
-			const combined = slice.map(combinedVoteCount).filter((count) => count > 0);
-			return combined.length === 0
-				? null
-				: share(combined.filter((count) => count < 1_000).length, combined.length);
-		})(),
+		obscureShare: obscurityShare(slice),
 		medianYear: median(years),
 		releasedThisYearShare: share(years.filter((y) => y === year).length, years.length),
 		preEightiesShare: share(years.filter((y) => y < 1980).length, years.length),
@@ -175,23 +168,20 @@ function tasteTraits(library: Library) {
 			slice.filter((film) => film.tmdb?.mediaType === 'tv').length,
 			slice.length
 		),
-		countries: new Set(slice.flatMap((f) => (f.tmdb ? effectiveCountries(f.tmdb) : []))).size
+		countries: countries.length
 	};
 }
 
 function habitTraits(library: Library) {
 	const { slice, dates, year, watchlist } = library;
 	const collections = grouped(slice, (film) =>
-		film.tmdb?.collection ? [film.tmdb.collection.name.replace(/ Collection$/, '')] : []
+		film.tmdb?.collection ? [collectionName(film.tmdb.collection.name)] : []
 	);
 	const directors = byPerson(slice, 'directors');
 	const cast = byPerson(slice, 'cast');
 	const reviewed = slice.filter((film) => film.review);
 	const tagged = slice.filter((film) => film.tags.length > 0);
-	const rewatched = slice.reduce(
-		(sum, film) => sum + entriesIn(film, year).filter((entry) => entry.rewatch).length,
-		0
-	);
+	const rewatched = rewatchesIn(slice, year);
 	return {
 		rewatchShare: share(rewatched, dates.length),
 		topCollection: collections[0]

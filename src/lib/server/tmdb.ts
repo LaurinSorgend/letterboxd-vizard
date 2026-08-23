@@ -1,5 +1,11 @@
 import { env } from '$env/dynamic/private';
-import type { Collection, CollectionParts, Person, TmdbMovie } from '$lib/types';
+import {
+	collectionName,
+	type Collection,
+	type CollectionParts,
+	type Person,
+	type TmdbMovie
+} from '$lib/types';
 import { normalizeTitle } from '$lib/text';
 import { BudgetExhausted, type FetchBudget } from './budget';
 import { lookupSeriesOnTvdb } from './tvdb';
@@ -234,7 +240,7 @@ export async function fetchCollection(
 	if (!data?.id || !Array.isArray(data.parts)) return null;
 	return {
 		id: data.id,
-		name: (data.name ?? '').replace(/ Collection$/, ''),
+		name: collectionName(data.name ?? ''),
 		total: data.parts.length
 	};
 }

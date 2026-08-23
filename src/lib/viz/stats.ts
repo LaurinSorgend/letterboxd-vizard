@@ -1,7 +1,7 @@
 import { imageUrl } from './images';
 import { getOrCreate } from '$lib/collections';
 import { stripDiacritics } from '$lib/text';
-import type { Collection, EnrichedFilm } from '$lib/types';
+import { collectionName, type Collection, type EnrichedFilm } from '$lib/types';
 
 export interface BarDatum {
 	label: string;
@@ -211,13 +211,24 @@ export function watchLag(films: EnrichedFilm[]): BarDatum[] {
 	return banded(films, LAG_BANDS, daysToFirstWatch);
 }
 
+/** Nearest-rank quantile: `fraction: 0.5` is the upper middle on an even count. */
+export function quantile(values: number[], fraction: number): number | null {
+	if (values.length === 0) return null;
+	const sorted = [...values].sort((a, b) => a - b);
+	return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
+}
+
+/**
+ * Middle value by nearest rank. Every median shown alongside another in the recap uses this
+ * one convention, so the figures stay comparable.
+ */
+export function median(values: number[]): number | null {
+	return quantile(values, 0.5);
+}
+
 /** Median days between release and first watch, or null if no film has both dates. */
 export function medianWatchLag(films: EnrichedFilm[]): number | null {
-	const days = films
-		.map(daysToFirstWatch)
-		.filter((value): value is number => value !== null)
-		.sort((a, b) => a - b);
-	return days.length === 0 ? null : days[Math.floor(days.length / 2)];
+	return median(films.map(daysToFirstWatch).filter((value): value is number => value !== null));
 }
 
 /** A day count as a rough span: "12 days", "5 months", "3.2 years". */
@@ -359,8 +370,7 @@ export function byCollection(films: EnrichedFilm[]): BarDatum[] {
 	return [...groups.values()]
 		.filter((group) => group.films.length > 1)
 		.map(({ collection, films: group }) => ({
-			// TMDB names every franchise "<name> Collection", which reads as noise once they are a list.
-			label: collection.name.replace(/ Collection$/, ''),
+			label: collectionName(collection.name),
 			count: group.length,
 			avg: avgRating(group),
 			image: imageUrl(collection.posterPath, 'w92'),

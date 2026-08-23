@@ -1,8 +1,8 @@
 import { getOrCreate } from '$lib/collections';
-import { byPerson } from '$lib/viz/stats';
-import { datesIn, type Library } from '../library';
+import { byPerson, grouped, median } from '$lib/viz/stats';
+import { datesIn, POSTER_ROW, type Library } from '../library';
 import { daysBetween } from './dates';
-import type { EnrichedFilm, WatchlistEntry } from '$lib/types';
+import { collectionName, type EnrichedFilm, type WatchlistEntry } from '$lib/types';
 
 const MIN_REVIEWS = 3;
 const MIN_WATCHLIST = 25;
@@ -60,8 +60,6 @@ export function watchlistMaths(library: Library): WatchlistMaths | null {
 export interface WatchlistAge {
 	oldest: { name: string; added: string; days: number };
 	medianDays: number;
-	/** How many entries carry a date at all. */
-	sized: number;
 }
 
 export function watchlistAge(library: Library): WatchlistAge | null {
@@ -79,12 +77,9 @@ export function watchlistAge(library: Library): WatchlistAge | null {
 		.map((entry) => ({ entry, days: daysBetween(entry.added, today) }))
 		.sort((a, b) => b.days - a.days);
 	const oldest = ages[0];
-	// Ascending, matching recap.ts's and stats.ts's median convention (upper middle on a tie).
-	const ascending = ages.map((age) => age.days).sort((a, b) => a - b);
 	return {
 		oldest: { name: oldest.entry.name, added: oldest.entry.added, days: oldest.days },
-		medianDays: ascending[Math.floor(ascending.length / 2)],
-		sized: dated.length
+		medianDays: median(ages.map((age) => age.days)) as number
 	};
 }
 
@@ -96,9 +91,9 @@ export interface Breadth {
 }
 
 export function directorBreadth(library: Library): Breadth | null {
-	const people = byPerson(library.slice, 'directors');
 	const directed = library.slice.filter((film) => (film.tmdb?.directors.length ?? 0) > 0);
 	if (directed.length < MIN_DIRECTED) return null;
+	const people = byPerson(library.slice, 'directors');
 	const deep = people.filter((person) => person.count >= 4);
 	if (deep.length === 0) return null;
 	return {
@@ -132,11 +127,10 @@ export function likedNotLoved(library: Library): LikedNotLoved | null {
 }
 
 export interface Worked {
-	id: number;
 	name: string;
 	/** How many of the franchise's films the year actually covered, before the poster cap. */
 	seen: number;
-	/** Capped at six for the poster row; count with `seen`. */
+	/** Capped at `POSTER_ROW`; count with `seen`. */
 	shownFilms: EnrichedFilm[];
 	first: string;
 	last: string;
@@ -157,11 +151,11 @@ export function biggestCollection(library: Library): Worked | null {
 	const dates = films.flatMap((film) => datesIn(film, library.year)).sort();
 	const raw = films[0].tmdb?.collection?.name ?? '';
 	return {
-		id,
-		// TMDB names every franchise "<name> Collection", which reads as noise on a slide.
-		name: library.collections.get(id)?.name ?? raw.replace(/ Collection$/, ''),
+		name: library.collections.get(id)?.name ?? collectionName(raw),
 		seen: films.length,
-		shownFilms: [...films].sort((a, b) => (a.tmdb?.year ?? 0) - (b.tmdb?.year ?? 0)).slice(0, 6),
+		shownFilms: [...films]
+			.sort((a, b) => (a.tmdb?.year ?? 0) - (b.tmdb?.year ?? 0))
+			.slice(0, POSTER_ROW),
 		first: dates[0],
 		last: dates[dates.length - 1],
 		total: library.collections.get(id)?.total ?? null
@@ -176,15 +170,11 @@ export interface TopTag {
 }
 
 export function topTag(library: Library): TopTag | null {
-	const counts = new Map<string, number>();
-	for (const film of library.slice) {
-		for (const tag of new Set(film.tags)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-	}
-	const ranked = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-	if (ranked.length === 0 || ranked[0][1] < MIN_TAG_USES) return null;
+	const ranked = grouped(library.slice, (film) => film.tags);
+	if (ranked.length === 0 || ranked[0].count < MIN_TAG_USES) return null;
 	return {
-		tag: ranked[0][0],
-		count: ranked[0][1],
+		tag: ranked[0].label,
+		count: ranked[0].count,
 		distinct: ranked.length,
 		tagged: library.slice.filter((film) => film.tags.length > 0).length
 	};

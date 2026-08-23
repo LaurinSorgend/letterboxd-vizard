@@ -35,6 +35,24 @@ export function entriesIn(film: EnrichedFilm, year: number): DiaryEntry[] {
 		.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** How many posters a frame's poster row holds. Facts cap their `shownFilms` at this. */
+export const POSTER_ROW = 6;
+
+/** The poster row's default pick: the best-rated films, ties broken by name. */
+export function bestRated(films: EnrichedFilm[], limit = POSTER_ROW): EnrichedFilm[] {
+	return [...films]
+		.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name))
+		.slice(0, limit);
+}
+
+/** Diary entries in `year` marked as rewatches — counted per viewing, not per film. */
+export function rewatchesIn(films: EnrichedFilm[], year: number): number {
+	return films.reduce(
+		(sum, film) => sum + entriesIn(film, year).filter((entry) => entry.rewatch).length,
+		0
+	);
+}
+
 /**
  * The language the viewer watches in, taken to be the one they watched most. A browser locale
  * says where someone is, not what they read subtitles for, and a year spent mostly in Japanese

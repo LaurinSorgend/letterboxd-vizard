@@ -1,3 +1,6 @@
+/** TMDB names every franchise "<name> Collection"; the suffix reads as noise in a list or a sentence. */
+export const collectionName = (raw: string): string => raw.replace(/ Collection$/, '');
+
 /** One diary row. Letterboxd records a rating per viewing, not just a current rating per film. */
 export interface DiaryEntry {
 	date: string;

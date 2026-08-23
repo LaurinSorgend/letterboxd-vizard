@@ -8,7 +8,7 @@ import {
 	type BarDatum,
 	type RatingGap
 } from '$lib/viz/stats';
-import { datesIn, entriesIn } from './library';
+import { datesIn, rewatchesIn } from './library';
 import type { EnrichedFilm } from '$lib/types';
 
 const MONTHS = Array.from({ length: 12 }, (_, month) =>
@@ -124,13 +124,6 @@ function medianReleaseYear(films: EnrichedFilm[]): number | null {
 	return years.length === 0 ? null : years[Math.floor(years.length / 2)];
 }
 
-function countedRewatches(films: EnrichedFilm[], year: number): number {
-	return films.reduce(
-		(sum, film) => sum + entriesIn(film, year).filter((entry) => entry.rewatch).length,
-		0
-	);
-}
-
 function leadingCountries(films: EnrichedFilm[]): CountryStat[] {
 	return [...aggregateCountries(films).values()]
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
@@ -171,7 +164,7 @@ export function buildWrapped(
 		longest: extremeBy(slice, (film) => film.tmdb?.runtime ?? null, 'max'),
 		oldest: extremeBy(slice, (film) => film.tmdb?.year ?? film.year, 'min'),
 		medianYear: medianReleaseYear(slice),
-		rewatches: countedRewatches(slice, year),
+		rewatches: rewatchesIn(slice, year),
 		over: gaps.over[0] ?? null,
 		under: gaps.under[0] ?? null
 	};

@@ -29,7 +29,7 @@ describe('languageShare', () => {
 	it('measures against English for an English-speaking viewer', () => {
 		const films = spoken([...Array(10).fill('en'), ...Array(5).fill('fr')]);
 		const result = languageShare(buildLibrary({ films, year: 2025 }));
-		expect(result).toMatchObject({ language: 'en', label: 'English', count: 5, own: 10 });
+		expect(result).toMatchObject({ label: 'English', count: 5, own: 10 });
 		expect(result?.share).toBeCloseTo(1 / 3);
 		expect(result?.largest?.label).toBe('French');
 	});
@@ -37,7 +37,7 @@ describe('languageShare', () => {
 	it('measures against German for a German-speaking viewer', () => {
 		const films = spoken([...Array(10).fill('de'), ...Array(5).fill('en')]);
 		const result = languageShare(buildLibrary({ films, year: 2025, locale: 'de-DE' }));
-		expect(result).toMatchObject({ language: 'de', label: 'German', count: 5, own: 10 });
+		expect(result).toMatchObject({ label: 'German', count: 5, own: 10 });
 	});
 
 	it('drops out under a tenth of the year', () => {

@@ -1,4 +1,4 @@
-import { byLanguage, type BarDatum } from '$lib/viz/stats';
+import { byLanguage, quantile, type BarDatum } from '$lib/viz/stats';
 import { viewerLanguage, type Library } from '../library';
 
 const MIN_VOTED = 25;
@@ -11,32 +11,23 @@ export interface Obscurity {
 	median: number;
 	lowerQuartile: number;
 	overTenThousand: number;
-	counted: number;
-}
-
-/** Nearest-rank quantile on an ascending array; `fraction: 0.5` is this codebase's median. */
-function quantile(sorted: number[], fraction: number): number {
-	return sorted[Math.floor(sorted.length * fraction)];
 }
 
 /** The whole distribution of how widely seen the year was, in one number and a second below it. */
 export function obscurity(library: Library): Obscurity | null {
 	const votes = library.slice
 		.map((film) => film.tmdb?.voteCount)
-		.filter((count): count is number => typeof count === 'number' && count > 0)
-		.sort((a, b) => a - b);
+		.filter((count): count is number => typeof count === 'number' && count > 0);
 	if (votes.length < MIN_VOTED) return null;
 	return {
-		median: quantile(votes, 0.5),
-		lowerQuartile: quantile(votes, 0.25),
-		overTenThousand: votes.filter((count) => count > 10_000).length,
-		counted: votes.length
+		median: quantile(votes, 0.5) as number,
+		lowerQuartile: quantile(votes, 0.25) as number,
+		overTenThousand: votes.filter((count) => count > 10_000).length
 	};
 }
 
 export interface Languages {
-	/** The viewer's own language, the one the share is measured against. */
-	language: string;
+	/** The viewer's own language in full, the one the share is measured against. */
 	label: string;
 	share: number;
 	count: number;
@@ -61,7 +52,6 @@ export function languageShare(library: Library): Languages | null {
 	const all = byLanguage(spoken);
 	const bars = all.filter((datum) => datum.label !== label);
 	return {
-		language,
 		label,
 		share,
 		count,
