@@ -1,6 +1,6 @@
 import { freshness, longestWait, quickestWatch } from '../facts/release';
 import { fullDate, longDate } from '../facts/dates';
-import { plural, posterOf, type Scene } from './shared';
+import { percent, plural, posterOf, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
 export function longestWaitScene(data: Wrapped): Scene | null {
@@ -34,7 +34,7 @@ export function freshnessScene(data: Wrapped): Scene | null {
 		id: 'new-releases',
 		accent: 'cyan',
 		label: 'What was new',
-		value: `${Math.round(fresh.share * 100)}%`,
+		value: percent(fresh.share),
 		valueKind: 'number',
 		note: `${fresh.thisYear} of your ${data.films.length} films came out in ${data.year}. The rest of the year you spent in the archive.`,
 		stats: [

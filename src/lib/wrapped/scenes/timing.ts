@@ -1,6 +1,6 @@
 import { bestWeek, doubleBills, longestGap, weekdays } from '../facts/timing';
 import { datePair, longDate, weekdayName } from '../facts/dates';
-import { plural, posterOf, type Scene } from './shared';
+import { percent, plural, posterOf, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
 /** Under a fortnight is a busy life, not a gap. */
@@ -48,7 +48,7 @@ export function weekdayScene(data: Wrapped): Scene | null {
 		note: `${plural(peak, 'entry', 'entries')} on ${weekdayName(week.best)}s, ${week.counts[week.worst]} on ${weekdayName(week.worst)}s. The week is not flat.`,
 		stats: [
 			{ label: 'Quietest', value: `${weekdayName(week.worst)}, ${week.counts[week.worst]}` },
-			{ label: 'Weekend share', value: `${Math.round(week.weekendShare * 100)}%` }
+			{ label: 'Weekend share', value: percent(week.weekendShare) }
 		],
 		body: {
 			kind: 'bars',
@@ -89,7 +89,7 @@ export function doubleBillScene(data: Wrapped): Scene | null {
 	if (!bills || bills.days < MIN_DOUBLE_DAYS) return null;
 	const stats = [
 		{ label: 'Triples or more', value: String(bills.triples) },
-		{ label: 'Share of entries', value: `${Math.round(bills.share * 100)}%` }
+		{ label: 'Share of entries', value: percent(bills.share) }
 	];
 	if (bills.heaviest) {
 		stats.push({ label: 'Heaviest', value: longDate(bills.heaviest.date, data.year) });

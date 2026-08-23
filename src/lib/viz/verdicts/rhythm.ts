@@ -1,3 +1,4 @@
+import { percent } from '$lib/format';
 import type { Rule } from './rules';
 
 /** Three years inside a tenth of each other, all substantial: a habit rather than a year. */
@@ -41,8 +42,7 @@ export const RHYTHM: Rule[] = [
 		id: 'weekender',
 		title: 'The Weekender',
 		when: (t) => t.weekendShare >= 0.6 && t.entries >= 25,
-		detail: (t) =>
-			`${Math.round(t.weekendShare * 100)}% of your entries were Saturdays and Sundays.`
+		detail: (t) => `${percent(t.weekendShare)} of your entries were Saturdays and Sundays.`
 	},
 	{
 		id: 'crammer',

@@ -1,6 +1,6 @@
 import { languageShare, obscurity } from '../facts/audience';
 import { widestCriticGap } from '../facts/critics';
-import { barsFrom, count, plural, posterOf, stars, type Scene } from './shared';
+import { barsFrom, count, percent, plural, posterOf, stars, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
 export function obscurityScene(data: Wrapped): Scene | null {
@@ -10,12 +10,12 @@ export function obscurityScene(data: Wrapped): Scene | null {
 		id: 'obscurity',
 		accent: 'magenta',
 		label: 'How obscure, really',
-		value: spread.median.toLocaleString('en'),
+		value: count(spread.median),
 		valueKind: 'number',
-		note: `Half the films you watched had fewer than ${spread.median.toLocaleString('en')} ratings on TMDB. A quarter had fewer than ${spread.lowerQuartile.toLocaleString('en')}.`,
+		note: `Half the films you watched had fewer than ${count(spread.median)} ratings on TMDB. A quarter had fewer than ${count(spread.lowerQuartile)}.`,
 		stats: [
-			{ label: 'Median votes', value: spread.median.toLocaleString('en') },
-			{ label: 'Lower quartile', value: spread.lowerQuartile.toLocaleString('en') },
+			{ label: 'Median votes', value: count(spread.median) },
+			{ label: 'Lower quartile', value: count(spread.lowerQuartile) },
 			{ label: 'Over 10,000', value: count(spread.overTenThousand) }
 		],
 		body: { kind: 'none' }
@@ -29,7 +29,7 @@ export function languageScene(data: Wrapped): Scene | null {
 		id: 'language',
 		accent: 'cyan',
 		label: `Not in ${spoken.label}`,
-		value: `${Math.round(spoken.share * 100)}%`,
+		value: percent(spoken.share),
 		valueKind: 'number',
 		note: `${spoken.count} of ${spoken.count + spoken.own} films were in a language other than ${spoken.label}.${spoken.largest ? ` ${spoken.largest.label} did most of the work, at ${spoken.largest.count}.` : ''}`,
 		stats: [

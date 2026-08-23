@@ -18,7 +18,7 @@ export function titleScene(data: Wrapped): Scene {
 			: `${who}here is ${data.year}, one frame at a time.`,
 		stats: [
 			{ label: 'Films', value: String(data.films.length) },
-			{ label: 'Hours', value: data.hours.toLocaleString('en') },
+			{ label: 'Hours', value: count(data.hours) },
 			{ label: 'Average', value: stars(data.avg) }
 		],
 		body: { kind: 'none' }
@@ -54,9 +54,9 @@ export function hoursScene(data: Wrapped): Scene | null {
 		id: 'hours',
 		accent: 'gold',
 		label: 'Hours in the dark',
-		value: data.hours.toLocaleString('en'),
+		value: count(data.hours),
 		valueKind: 'number',
-		note: `${plural(data.days || data.hours, data.days ? 'day' : 'hour')} end to end, if you never stopped to sleep.`,
+		note: `${data.days > 0 ? plural(data.days, 'day') : plural(data.hours, 'hour')} end to end, if you never stopped to sleep.`,
 		stats: [
 			{ label: 'Per week', value: (data.hours / weeks).toFixed(1) },
 			{ label: 'Days', value: String(data.days) }
@@ -178,7 +178,7 @@ export function directorScene(data: Wrapped): Scene | null {
 		'indigo',
 		'Director of the year',
 		(person) =>
-			`${plural(person.count, 'of their films', 'of their films')} this year${person.avg !== null ? `, averaging ${stars(person.avg)}` : ''}.`,
+			`${count(person.count)} of their films this year${person.avg !== null ? `, averaging ${stars(person.avg)}` : ''}.`,
 		data.topDirectors
 	);
 }
@@ -188,7 +188,7 @@ export function actorScene(data: Wrapped): Scene | null {
 		'actor',
 		'indigo',
 		'On screen most',
-		(person) => `Billed in ${plural(person.count, 'of your films', 'of your films')}.`,
+		(person) => `Billed in ${count(person.count)} of your films.`,
 		data.topActors
 	);
 }
@@ -281,10 +281,10 @@ export function deepCutScene(data: Wrapped): Scene | null {
 		stats: data.mostPopular
 			? [
 					{ label: 'Biggest crowd', value: data.mostPopular.name },
-					{ label: 'Ratings', value: combinedVoteCount(data.mostPopular).toLocaleString('en') }
+					{ label: 'Ratings', value: count(combinedVoteCount(data.mostPopular)) }
 				]
 			: [],
-		body: { kind: 'posters', posters: [posterOf(data.mostObscure, votes.toLocaleString('en'))] }
+		body: { kind: 'posters', posters: [posterOf(data.mostObscure, count(votes))] }
 	};
 }
 

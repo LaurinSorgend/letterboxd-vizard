@@ -1,3 +1,4 @@
+import { count } from '$lib/format';
 import { imageUrl } from '$lib/viz/images';
 import { alsoTrueLine } from '$lib/viz/verdicts';
 import {
@@ -302,8 +303,8 @@ export async function storyCard(
 
 function summaryStats(data: Wrapped): { label: string; value: string }[] {
 	return [
-		{ label: 'FILMS', value: data.films.length.toLocaleString('en') },
-		{ label: 'HOURS', value: data.hours.toLocaleString('en') },
+		{ label: 'FILMS', value: count(data.films.length) },
+		{ label: 'HOURS', value: count(data.hours) },
 		{ label: 'COUNTRIES', value: String(data.countries) },
 		{ label: 'AVERAGE', value: data.avg !== null ? `${data.avg.toFixed(1)}` : '—' },
 		{ label: 'GENRE', value: data.topGenres[0]?.label ?? '—' },

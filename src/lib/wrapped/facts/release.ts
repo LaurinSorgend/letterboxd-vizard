@@ -1,4 +1,4 @@
-import { datesIn, type Library } from '../library';
+import { bestRated, datesIn, type Library } from '../library';
 import { daysBetween } from './dates';
 import type { EnrichedFilm } from '$lib/types';
 
@@ -87,7 +87,7 @@ export interface Freshness {
 	thisYear: number;
 	lastYear: number;
 	preMillennium: number;
-	/** Capped at six for the poster row; count with `thisYear`. */
+	/** Capped at `POSTER_ROW`; count with `thisYear`. */
 	shownFilms: EnrichedFilm[];
 }
 
@@ -106,8 +106,6 @@ export function freshness(library: Library): Freshness | null {
 		thisYear: current.length,
 		lastYear: dated.filter((film) => releaseYearOf(film) === library.year - 1).length,
 		preMillennium: dated.filter((film) => (releaseYearOf(film) ?? 0) < 2000).length,
-		shownFilms: [...current]
-			.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name))
-			.slice(0, 6)
+		shownFilms: bestRated(current)
 	};
 }

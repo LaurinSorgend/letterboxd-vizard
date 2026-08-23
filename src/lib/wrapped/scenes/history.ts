@@ -6,7 +6,7 @@ import {
 	ratingDrift
 } from '../facts/history';
 import { monthName, monthOf } from '../facts/dates';
-import { plural, posterOf, stars, type Scene } from './shared';
+import { count, percent, plural, posterOf, stars, type Scene } from './shared';
 import type { Wrapped } from '../wrapped';
 
 const MIN_YEARS = 2;
@@ -65,9 +65,7 @@ export function mostLoggedScene(data: Wrapped): Scene | null {
 		label: 'The one you keep going back to',
 		value: most.film.name,
 		valueKind: 'name',
-		// "of them" already reads correctly at any count, so the many-form is kept identical to
-		// the one-form rather than letting the default rule tack an "s" onto "them".
-		note: `${plural(most.total, 'time')} since ${monthName(monthOf(first))} ${first.slice(0, 4)}, ${plural(most.thisYear, 'of them', 'of them')} this year.${extra}`,
+		note: `${plural(most.total, 'time')} since ${monthName(monthOf(first))} ${first.slice(0, 4)}, ${count(most.thisYear)} of them this year.${extra}`,
 		stats: [
 			{ label: 'Total logs', value: String(most.total) },
 			{ label: 'First', value: `${monthName(monthOf(first))} ${first.slice(0, 4)}` },
@@ -98,7 +96,7 @@ export function fiveStarScene(data: Wrapped): Scene | null {
 		// a locally recomputed count (e.g. films with a non-null current rating) can diverge from it.
 		note: `${plural(top.count, 'five-star rating')} out of ${plural(top.rated, 'rated film')}.${lastYear}`,
 		stats: [
-			{ label: 'Share', value: `${Math.round(top.share * 100)}%` },
+			{ label: 'Share', value: percent(top.share) },
 			{ label: 'Most-used rating', value: stars(top.modal) },
 			...(top.lastYear === null
 				? []
@@ -114,15 +112,13 @@ export function fiveStarScene(data: Wrapped): Scene | null {
 export function firstTimersScene(data: Wrapped): Scene | null {
 	const fresh = firstTimeDirectors(data.library);
 	if (!fresh) return null;
-	// "of theirs" already reads correctly at any count, so the many-form is kept identical to the
-	// one-form rather than letting the default rule tack an "s" onto "theirs".
 	return {
 		id: 'first-timers',
 		accent: 'indigo',
 		label: 'New to you',
 		value: String(fresh.directors),
 		valueKind: 'number',
-		note: `${plural(fresh.directors, 'director')} you had never logged before. ${fresh.top!.name} arrived this year and you watched ${plural(fresh.top!.count, 'of theirs', 'of theirs')}.`,
+		note: `${plural(fresh.directors, 'director')} you had never logged before. ${fresh.top!.name} arrived this year and you watched ${count(fresh.top!.count)} of theirs.`,
 		stats: [
 			{ label: 'Most watched', value: `${fresh.top!.name}, ${fresh.top!.count}` },
 			{ label: 'Their films', value: String(fresh.byFirstTimers) }

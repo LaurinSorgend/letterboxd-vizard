@@ -1,10 +1,12 @@
+import { count, percent } from '$lib/format';
 import { countryName } from '../countries';
 import type { Rule } from './rules';
 
 /** The US is the modal country for most libraries, so it only counts as a residence at 85%. */
+export const residencyBar = (country: string | null): number => (country === 'US' ? 0.85 : 0.6);
+
 function residency(country: string | null, share: number): boolean {
-	if (country === null) return false;
-	return country === 'US' ? share >= 0.85 : share >= 0.6;
+	return country === null ? false : share >= residencyBar(country);
 }
 
 export const TASTE: Rule[] = [
@@ -12,29 +14,26 @@ export const TASTE: Rule[] = [
 		id: 'populist',
 		title: 'The Populist',
 		when: (t) => (t.medianVotes ?? 0) >= 15_000 && t.films >= 20,
-		detail: (t) =>
-			`The median film in your year had ${(t.medianVotes ?? 0).toLocaleString('en')} TMDB ratings.`
+		detail: (t) => `The median film in your year had ${count(t.medianVotes ?? 0)} TMDB ratings.`
 	},
 	{
 		id: 'omnivore',
 		title: 'The Omnivore',
 		when: (t) => t.lowVoteShare >= 0.15 && t.highVoteShare >= 0.15 && t.films >= 25,
 		detail: (t) =>
-			`${Math.round(t.lowVoteShare * 100)}% of the films TMDB has counted sat under 1,000 votes, and ${Math.round(t.highVoteShare * 100)}% sat over 10,000.`
+			`${percent(t.lowVoteShare)} of the films TMDB has counted sat under 1,000 votes, and ${percent(t.highVoteShare)} sat over 10,000.`
 	},
 	{
 		id: 'frontrunner',
 		title: 'The Frontrunner',
 		when: (t) => t.releasedThisYearShare >= 0.55 && t.films >= 20,
-		detail: (t) =>
-			`${Math.round(t.releasedThisYearShare * 100)}% of what you watched came out in ${t.year}.`
+		detail: (t) => `${percent(t.releasedThisYearShare)} of what you watched came out in ${t.year}.`
 	},
 	{
 		id: 'archivist',
 		title: 'The Archivist',
 		when: (t) => t.preEightiesShare >= 0.9 && t.films >= 15,
-		detail: (t) =>
-			`${Math.round(t.preEightiesShare * 100)}% of what you watched was made before 1980.`
+		detail: (t) => `${percent(t.preEightiesShare)} of what you watched was made before 1980.`
 	},
 	{
 		id: 'settler',
@@ -51,15 +50,14 @@ export const TASTE: Rule[] = [
 		id: 'subtitler',
 		title: 'The Subtitler',
 		when: (t) => t.foreignShare >= 0.65 && t.films >= 20,
-		detail: (t) =>
-			`${Math.round(t.foreignShare * 100)}% of what you watched was not in your own language.`
+		detail: (t) => `${percent(t.foreignShare)} of what you watched was not in your own language.`
 	},
 	{
 		id: 'resident',
 		title: 'The Resident',
 		when: (t) => residency(t.topCountry, t.topCountryShare) && t.films >= 20,
 		detail: (t) =>
-			`${Math.round(t.topCountryShare * 100)}% of your year was produced in ${countryName(t.topCountry ?? '')}.`
+			`${percent(t.topCountryShare)} of your year was produced in ${countryName(t.topCountry ?? '')}.`
 	},
 	{
 		id: 'specialist',

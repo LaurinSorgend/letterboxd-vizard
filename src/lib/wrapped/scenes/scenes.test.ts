@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { film, tmdb, watched } from '$lib/testing/fixtures';
 import { buildWrapped } from '../wrapped';
-import { buildScenes } from './index';
-import type { Accent } from './shared';
+import { assemble, buildDeck } from '../deck';
+import type { Scene, Accent } from './shared';
+import type { Wrapped } from '../wrapped';
+
+/** Every frame the year earned, gate and extras included. */
+const buildScenes = (data: Wrapped): Scene[] => assemble(buildDeck(data), true);
 
 const HUES: Accent[] = [
 	'neutral',

@@ -8,8 +8,12 @@ export interface Gap {
 	to: string;
 	/** Where the silence sat: inside the year, before the first entry, or after the last. */
 	kind: 'between' | 'late-start' | 'early-stop';
+	/** The runner-up gap, so a frame can say how far clear the winner was. */
 	second: number;
 }
+
+/** A gap before the field is ranked and the runner-up is known. */
+type Candidate = Omit<Gap, 'second'>;
 
 /** The last day the year can be judged against: 31 December, or today for a running year. */
 function closingDate(library: Library): string {
@@ -22,20 +26,18 @@ export function longestGap(library: Library): Gap | null {
 	const days = [...new Set(library.dates)].sort();
 	if (days.length === 0) return null;
 
-	const candidates: Gap[] = [
+	const candidates: Candidate[] = [
 		{
 			days: daysBetween(`${library.year}-01-01`, days[0]),
 			from: `${library.year}-01-01`,
 			to: days[0],
-			kind: 'late-start',
-			second: 0
+			kind: 'late-start'
 		},
 		{
 			days: daysBetween(days[days.length - 1], closingDate(library)),
 			from: days[days.length - 1],
 			to: closingDate(library),
-			kind: 'early-stop',
-			second: 0
+			kind: 'early-stop'
 		}
 	];
 	for (let i = 1; i < days.length; i++) {
@@ -43,8 +45,7 @@ export function longestGap(library: Library): Gap | null {
 			days: daysBetween(days[i - 1], days[i]),
 			from: days[i - 1],
 			to: days[i],
-			kind: 'between',
-			second: 0
+			kind: 'between'
 		});
 	}
 
@@ -123,10 +124,15 @@ function isoOf(day: number): string {
 export function bestWeek(library: Library): BestWeek | null {
 	if (library.dates.length === 0) return null;
 	const days = library.dates.map(dayNumber).sort((a, b) => a - b);
-	const windows = [...new Set(days)].map((start) => ({
-		start,
-		count: days.filter((day) => day >= start && day < start + 7).length
-	}));
+	// One pass with a sliding right edge: every window starts on a day that was actually watched,
+	// so the winner is never a window that could be nudged later for a better count.
+	const windows: { start: number; count: number }[] = [];
+	let right = 0;
+	for (let i = 0; i < days.length; i++) {
+		if (i > 0 && days[i] === days[i - 1]) continue;
+		while (right < days.length && days[right] < days[i] + 7) right++;
+		windows.push({ start: days[i], count: right - i });
+	}
 	windows.sort((a, b) => b.count - a.count || a.start - b.start);
 
 	const winner = windows[0];

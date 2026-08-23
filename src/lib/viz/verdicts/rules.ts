@@ -1,3 +1,4 @@
+import { percent } from '$lib/format';
 import { HABIT } from './habit';
 import { RATINGS } from './ratings';
 import { RHYTHM } from './rhythm';
@@ -68,7 +69,7 @@ const EXISTING: Rule[] = [
 		title: 'The Deep Diver',
 		when: (t) => (t.obscureShare ?? 0) >= 0.45,
 		detail: (t) =>
-			`${Math.round((t.obscureShare ?? 0) * 100)}% of what you watched has under 1,000 TMDB ratings.`
+			`${percent(t.obscureShare ?? 0)} of what you watched has under 1,000 TMDB ratings.`
 	},
 	{
 		id: 'time-traveller',

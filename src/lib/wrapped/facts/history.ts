@@ -1,6 +1,6 @@
 import { getOrCreate } from '$lib/collections';
 import { byPerson, type BarDatum } from '$lib/viz/stats';
-import { datesIn, entriesIn, type Library } from '../library';
+import { bestRated, datesIn, entriesIn, POSTER_ROW, type Library } from '../library';
 import type { EnrichedFilm } from '$lib/types';
 
 const MIN_RATED = 20;
@@ -71,7 +71,7 @@ export interface FiveStars {
 	lastYear: number | null;
 	/** The half-star step used most often, so the top rating has something to sit against. */
 	modal: number | null;
-	/** Capped at six for the poster row; count with `count`. */
+	/** Capped at `POSTER_ROW`; count with `count`. */
 	shownFilms: EnrichedFilm[];
 }
 
@@ -95,14 +95,14 @@ export function fiveStars(library: Library): FiveStars | null {
 		rated: ratings.length,
 		lastYear: previous.length > 0 ? previous.filter((rating) => rating === 5).length : null,
 		modal,
-		shownFilms: top.slice(0, 6)
+		shownFilms: top.slice(0, POSTER_ROW)
 	};
 }
 
 export interface FirstTimers {
 	directors: number;
 	top: { name: string; count: number } | null;
-	/** Capped at six for the poster row; count with `byFirstTimers`. */
+	/** Capped at `POSTER_ROW`; count with `byFirstTimers`. */
 	shownFilms: EnrichedFilm[];
 	byFirstTimers: number;
 }
@@ -138,9 +138,7 @@ export function firstTimeDirectors(library: Library): FirstTimers | null {
 	return {
 		directors: fresh.length,
 		top: { name: fresh[0].label, count: fresh[0].count },
-		shownFilms: [...films]
-			.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name))
-			.slice(0, 6),
+		shownFilms: bestRated(films),
 		byFirstTimers: films.length
 	};
 }
@@ -150,10 +148,14 @@ export interface Drift {
 	before: { rating: number; date: string };
 	after: { rating: number; date: string };
 	delta: number;
+	/** How many films moved at all this year, the winner included. */
 	rethought: number;
 }
 
-function driftOf(film: EnrichedFilm, year: number): Drift | null {
+/** One film's swing, before the year-wide count of second thoughts is known. */
+type Swing = Omit<Drift, 'rethought'>;
+
+function driftOf(film: EnrichedFilm, year: number): Swing | null {
 	const rated = [...film.entries]
 		.filter((entry) => entry.rating !== null)
 		.sort((a, b) => a.date.localeCompare(b.date));
@@ -165,8 +167,7 @@ function driftOf(film: EnrichedFilm, year: number): Drift | null {
 		film,
 		before: { rating: first.rating as number, date: first.date },
 		after: { rating: last.rating as number, date: last.date },
-		delta: (last.rating as number) - (first.rating as number),
-		rethought: 0
+		delta: (last.rating as number) - (first.rating as number)
 	};
 }
 
@@ -174,7 +175,7 @@ function driftOf(film: EnrichedFilm, year: number): Drift | null {
 export function ratingDrift(library: Library): Drift | null {
 	const drifts = library.all
 		.map((film) => driftOf(film, library.year))
-		.filter((drift): drift is Drift => drift !== null);
+		.filter((drift): drift is Swing => drift !== null);
 	const rethought = drifts.filter((drift) => drift.delta !== 0).length;
 	const widest = drifts.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
 	if (!widest || Math.abs(widest.delta) < MIN_DRIFT) return null;

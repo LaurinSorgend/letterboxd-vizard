@@ -1,3 +1,4 @@
+import { count } from '$lib/format';
 import type { Rule } from './rules';
 
 /** A face has to recur beyond coincidence: seven films, or a tenth of a heavy year. */
@@ -31,7 +32,7 @@ export const HABIT: Rule[] = [
 		title: 'The Diarist',
 		when: (t) => t.reviewShare >= 0.5 && t.films >= 20,
 		detail: (t) =>
-			`You wrote reviews on ${Math.round(t.reviewShare * t.films)} of ${t.films} films, ${t.reviewWords.toLocaleString('en')} words in all.`
+			`You wrote reviews on ${Math.round(t.reviewShare * t.films)} of ${t.films} films, ${count(t.reviewWords)} words in all.`
 	},
 	{
 		id: 'cataloguer',

@@ -16,8 +16,11 @@ export interface CriticGap {
 	harsher: number;
 }
 
-function scored(library: Library): CriticGap[] {
-	const gaps: CriticGap[] = [];
+/** One film's disagreement, before the year-wide tallies either side of it are known. */
+type Scored = Omit<CriticGap, 'kinder' | 'harsher'>;
+
+function scored(library: Library): Scored[] {
+	const gaps: Scored[] = [];
 	for (const film of library.slice) {
 		if (film.rating === null) continue;
 		const metascore = film.omdb?.metascore;
@@ -30,9 +33,7 @@ function scored(library: Library): CriticGap[] {
 			yours,
 			critics,
 			source: metascore == null ? 'Rotten Tomatoes' : 'Metascore',
-			gap: yours - critics,
-			kinder: 0,
-			harsher: 0
+			gap: yours - critics
 		});
 	}
 	return gaps;

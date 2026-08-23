@@ -1,3 +1,5 @@
+import { count, percent } from '$lib/format';
+import { residencyBar } from './taste';
 import type { Traits } from './traits';
 
 export interface NearMiss {
@@ -17,9 +19,8 @@ interface Probe {
 const barOf = (probe: Probe, traits: Traits): number =>
 	typeof probe.threshold === 'number' ? probe.threshold : probe.threshold(traits);
 
-const percent = (value: number): string => `${Math.round(value * 100)}%`;
-const plainNumber = (value: number): string => Math.round(value).toLocaleString('en');
-const minutes = (value: number): string => `${Math.round(value).toLocaleString('en')} minutes`;
+const plainNumber = (value: number): string => count(Math.round(value));
+const minutes = (value: number): string => `${plainNumber(value)} minutes`;
 
 /**
  * The conditions worth reporting a near miss on: each is a share or a count the viewer would
@@ -29,8 +30,7 @@ const PROBES: Probe[] = [
 	{
 		label: 'country',
 		value: (t) => t.topCountryShare,
-		// The same bar The Resident sets: the US is the modal country for most libraries.
-		threshold: (t) => (t.topCountry === 'US' ? 0.85 : 0.6),
+		threshold: (t) => residencyBar(t.topCountry),
 		format: percent
 	},
 	{ label: 'genre', value: (t) => t.topGenreShare, threshold: 0.5, format: percent },
