@@ -1,4 +1,4 @@
-# Architecture
+# Architecture and design documentation
 
 Letterboxd Vizard is a SvelteKit app. The user's export zip is parsed **in the browser**; only film
 titles and years go to the server, which looks them up on TMDB (plus OMDb and TheTVDB as optional
@@ -175,7 +175,6 @@ classDiagram
     FetchBudget ..> BudgetExhausted : throws
 
     class Cache {
-        <<module cache.ts>>
         +cacheKey(name, year) string
         +getCachedMany(db, keys)
         +putCachedMany(db, entries)
@@ -187,40 +186,32 @@ classDiagram
         +putOmdbCachedMany()
     }
     class Db {
-        <<module db.ts>>
         +getDb(platform) D1Database
     }
     class LocalDb {
-        <<module local-db.ts>>
         +localDb() D1Database
     }
     class Tmdb {
-        <<module tmdb.ts>>
         +tmdbGet(budget, path, params)
         +lookupMovie(budget, name, year)
         +fetchRecord(budget, kind, id)
         +fetchCollection(budget, id)
     }
     class Tvdb {
-        <<module tvdb.ts>>
         +lookupSeriesOnTvdb()
     }
     class Omdb {
-        <<module omdb.ts>>
         +fetchOmdbRatings(budget, imdbId)
     }
     class Related {
-        <<module related.ts>>
         +relatedMoviesMany(db, budget, limit, ids)
     }
     class Session {
-        <<module session.ts>>
         +mintSessionToken(secret)
         +verifySessionToken(secret, token)
         +requireSession(cookies)
     }
     class RateLimit {
-        <<module ratelimit.ts>>
         +checkRateLimit(limiter, key)
     }
 
@@ -317,7 +308,6 @@ classDiagram
         omdb: OmdbRatings?
     }
     class Snapshot {
-        <<localStorage>>
         films: EnrichedFilm[]
         watchlist
         watchlistIds
@@ -483,6 +473,632 @@ flowchart TD
     nd --> nb["No limiter; FETCH_BUDGET<br/>can be raised"]
 
     cfg["Env: TMDB_API_KEY, SESSION_SECRET,<br/>TVDB_API_KEY?, OMDB_API_KEY?, FETCH_BUDGET?"] --> cf & nd
+```
+
+## 13. Use case catalogue
+
+Actors: **Viewer** (a Letterboxd user, anonymous, no accounts), **Operator** (deploys and configures),
+and the external systems **TMDB**, **OMDb**, **TheTVDB** which the server calls on the viewer's behalf.
+
+```mermaid
+flowchart LR
+    viewer([Viewer])
+    operator([Operator])
+    tmdb([TMDB])
+    omdb([OMDb])
+    tvdb([TheTVDB])
+
+    subgraph load["Load data"]
+        UC1(UC1 Upload export zip)
+        UC2(UC2 Try demo library)
+        UC3(UC3 Restore saved snapshot)
+        UC4(UC4 Remember / forget library)
+    end
+    subgraph explore["Explore"]
+        UC5(UC5 Browse stat tiles and sections)
+        UC6(UC6 Toggle metric, scope or view)
+        UC7(UC7 Inspect a country, film or person)
+        UC8(UC8 Compare rating sources)
+    end
+    subgraph discover["Discover and share"]
+        UC9(UC9 Get recommendations)
+        UC10(UC10 Watch year in review)
+        UC11(UC11 Save story card or poster)
+        UC12(UC12 Switch theme)
+    end
+    subgraph ops["Operate"]
+        UC13(UC13 Deploy to Workers or Node)
+        UC14(UC14 Configure keys, limits, budget)
+    end
+
+    viewer --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC7 & UC9 & UC10 & UC11 & UC12
+    operator --- UC13 & UC14
+
+    UC1 -.->|include| ENR(Enrich films with metadata)
+    UC2 -.->|include| UC1
+    UC5 -.->|include| UC6
+    UC5 -.->|include| UC7
+    UC8 -.->|extend| UC5
+    UC11 -.->|extend| UC10
+
+    ENR --- tmdb
+    ENR --- tvdb
+    ENR -.->|include| ENR2(Fetch IMDb / RT / Metacritic)
+    ENR2 --- omdb
+    UC9 --- tmdb
+    UC14 -.->|enables| UC8
+```
+
+### Use case specifications
+
+| ID | Use case | Trigger | Main flow | Alternatives and errors |
+|----|----------|---------|-----------|-------------------------|
+| UC1 | Upload export zip | Drop or pick a `.zip` in `FileDrop` | `parseExport` merges the CSVs, `enrichFilms` resolves titles on `/api/enrich`, `enrichOmdb` adds ratings, `fetchCollections` sizes franchises, page becomes `ready` | No `watched.csv` gives "not a Letterboxd export" and the page stays `idle`. Batches that fail or hit the budget are retried for up to 8 rounds. Watchlist and OMDb failures are swallowed so the main flow still completes |
+| UC2 | Try demo library | `?demo` in dev mode | Fetches `/demo-export.zip` and runs UC1 | Dev only |
+| UC3 | Restore snapshot | Page mount | `loadSnapshot` fills `films`, `watchlist`, `collections`, `profile`, page becomes `ready` | Missing, corrupt or old-generation snapshot is ignored |
+| UC4 | Remember / forget | `RememberToggle` | On: `saveSnapshot` to `localStorage`. Off: `clearSnapshot` | Quota exceeded: toggle reverts and an error says data lasts for this visit only |
+| UC5 | Browse sections | Scroll or `SectionNav` | `+page.svelte` derives each chart's data from `films` | Sections with no data (for example triangulation without OMDb) are hidden |
+| UC6 | Toggle metric / scope | Buttons in a chart | `MetricToggle`, runtime scope, season scale, keyword cloud or bars switch the derived data | none |
+| UC7 | Inspect a country, film or person | Click on map, bar or node | `selectByLabel` and chart state show a `FilmList` or detail | Click again clears the selection |
+| UC8 | Compare rating sources | OMDb key present | Radar, contrarian, Metacritic gap and correlation charts | Without `OMDB_API_KEY` the endpoint returns all-null and the charts are hidden |
+| UC9 | Get recommendations | Section renders | `pickDiverseSeeds` and `pickGenreSeeds` feed `/api/recommend`, with retries `1.5s, 3.5s, 7s` while records are `pending` | `available: false` shows the section as unavailable. Watchlist can be included or excluded |
+| UC10 | Watch year in review | December, or demo | `buildRecap` then `buildWrapped` then `buildDeck`. Frames play on a timer or by keys. Gate frame opens the extras | Years under 10 films are not eligible. The current year is held back until December |
+| UC11 | Save a share card | Share button in the deck | `storyCard` or `summaryCard` draws to canvas, `deliver` uses the Web Share API or downloads a PNG | User cancels the share sheet and nothing is saved. Canvas failure throws "picture could not be rendered" |
+| UC12 | Switch theme | `ThemeSwitch` | Choose Catppuccin flavor and accent, stored in `localStorage` | Falls back to the system theme |
+| UC13 | Deploy | Build with `DEPLOY_TARGET` | Cloudflare: Worker, assets, D1. Node: Docker with local SQLite | none |
+| UC14 | Configure | `.env` / Worker vars | `TMDB_API_KEY`, `SESSION_SECRET`, optional `TVDB_API_KEY`, `OMDB_API_KEY`, `FETCH_BUDGET`, `CACHE_DB_PATH` | Missing `SESSION_SECRET` makes API routes return 500. Missing TMDB key makes lookups fail |
+
+## 14. Class diagram: client ingest, state and persistence
+
+```mermaid
+classDiagram
+    direction LR
+
+    class PageComponent {
+        phase: idle / working / ready
+        stage: films / ratings
+        data: LetterboxdData
+        films: EnrichedFilm[]
+        progress: done, total
+        watchlistIds: number[]
+        collections: CollectionParts[]
+        remember: boolean
+        +handleFile(file)
+        +persist()
+        +toggleRemember(on)
+    }
+    class Parse {
+        +parseExport(zipBytes) LetterboxdData
+    }
+    class EnrichClient {
+        +enrichFilms(items, onProgress)
+        +enrichOmdb(imdbIds, onProgress)
+        +fetchCollections(ids)
+        -runRounds(options)
+        -postBatch(url, body, label)
+    }
+    class RoundsOptions {
+        items: T[]
+        send(batch) BatchResponse
+        keep(index, result)
+        onProgress(done, total)
+        firstRoundSize
+    }
+    class BatchResponse {
+        results: R[]
+        pending: number[]
+    }
+    class Store {
+        +loadSnapshot() Snapshot
+        +saveSnapshot(snapshot) boolean
+        +clearSnapshot()
+    }
+    class Snapshot {
+        films
+        watchlist
+        watchlistIds
+        profile
+        collections
+    }
+    class Collections {
+        +getOrCreate(map, key, make)
+    }
+    class FileDrop {
+        onfile(file)
+    }
+    class RememberToggle {
+        checked
+        error
+        onchange(on)
+    }
+    class ThemeSwitch {
+    }
+
+    FileDrop --> PageComponent : onfile
+    RememberToggle --> PageComponent : onchange
+    PageComponent ..> Parse
+    PageComponent ..> EnrichClient
+    PageComponent ..> Store
+    Parse ..> Collections
+    EnrichClient *-- RoundsOptions
+    EnrichClient ..> BatchResponse
+    Store *-- Snapshot
+```
+
+## 15. Class diagram: visualization data structures
+
+```mermaid
+classDiagram
+    direction TB
+
+    class BarDatum {
+        label
+        count
+        avg
+        films
+    }
+    class HeatmapGrid {
+        rows: HeatCell grid
+        rowLabels
+        colLabels
+        watchtimeThresholds
+        watchtimeLegend
+        period
+        empty
+    }
+    class HeatCell {
+        key
+        label
+        minutes
+        rating
+        ratedCount
+        films
+        watchtimeBin
+    }
+    class NetworkGraph {
+        nodes: NetworkNode[]
+        edges: NetworkEdge[]
+    }
+    class NetworkNode {
+        film
+        degree
+        x
+        y
+        r
+        bin
+    }
+    class NetworkEdge {
+        source
+        target
+        shared: string[]
+    }
+    class NetworkOptions {
+        castDepth
+        minShared
+        maxNodes
+    }
+    class CountryStat {
+        code
+        name
+        films
+        count
+        ratedCount
+        avg
+    }
+    class RatingGap {
+        film
+        gap
+    }
+    class Streak {
+        days
+        start
+        end
+    }
+    class Seed {
+        tmdbId
+        rating
+    }
+    class Recommendation {
+        tmdbId
+        title
+        year
+        posterPath
+        countries
+        pending
+    }
+
+    HeatmapGrid *-- HeatCell
+    NetworkGraph *-- NetworkNode
+    NetworkGraph *-- NetworkEdge
+    NetworkOptions ..> NetworkGraph : buildNetwork
+    EnrichedFilm <.. BarDatum : grouped from
+    EnrichedFilm <.. CountryStat : aggregateCountries
+    EnrichedFilm <.. HeatCell : bucketsByDay
+    EnrichedFilm <.. NetworkNode
+    EnrichedFilm <.. RatingGap : ratingGaps
+    Seed ..> Recommendation : /api/recommend
+```
+
+## 16. Class diagram: Wrapped deck, verdicts and share cards
+
+```mermaid
+classDiagram
+    direction TB
+
+    class LibraryInput {
+        films
+        year
+        watchlist
+        collections
+        locale
+        now
+    }
+    class Library {
+        all: EnrichedFilm[]
+        year
+        slice: EnrichedFilm[]
+        dates: string[]
+        watchlist
+        collections: Map
+        locale
+        now
+        +directors() BarDatum[]
+        +cast() BarDatum[]
+        +genres() BarDatum[]
+    }
+    class Recap {
+        year
+        films
+        watches
+        hours
+        avg
+        top
+        topGenre
+        topDirector
+        topActor
+        mostObscure
+        mostPopular
+        streak
+        gap
+        countries
+        languages
+        library: Library
+        personality: Personality
+        partial
+    }
+    class Wrapped {
+        viewer
+        days
+        perMonth
+        busiestMonth
+        busiestDay
+        first
+        last
+        topGenres
+        topDirectors
+        topActors
+        topCountries
+        topLanguages
+        longest
+        oldest
+        medianYear
+        rewatches
+        over
+        under
+    }
+    class Personality {
+        title
+        detail
+        alsoTrue: string[]
+    }
+    class Traits {
+        films
+        entries
+        activeMonths
+        monthCounts
+        meanRating
+        ratedShare
+        fiveStarShare
+        likedShare
+        medianVotes
+        longestGapDays
+        recentYears
+    }
+    class Rule {
+        id
+        title
+        fallback
+        +when(traits) boolean
+        +detail(traits) string
+    }
+    class NearMiss {
+        label
+        actual
+        threshold
+    }
+    class Deck {
+        main: Scene[]
+        extras: Scene[]
+        closing: Scene[]
+    }
+    class SceneBuilder {
+        rank: number
+        +build(wrapped) Scene
+    }
+    class Scene {
+        id
+        accent
+        label
+        value
+        valueKind
+        note
+        stats: Stat[]
+        footnote
+        backdrop
+        body: SceneBody
+    }
+    class SceneBody {
+        none
+        bars
+        posters
+        summary
+        gate
+    }
+    class Poster {
+        name
+        path
+        href
+        meta
+    }
+    class Bar {
+        label
+        value
+        share
+    }
+    class Stat {
+        label
+        value
+    }
+    class Palette {
+        room
+        screen
+        ink
+        muted
+        line
+        stamp
+        accent
+        cast
+    }
+    class Block {
+        height
+        +draw(y)
+    }
+    class Cards {
+        +storyCard(scene, data, palette)
+        +summaryCard(data, palette)
+    }
+    class Canvas {
+        +paletteFrom(element)
+        +ensureFonts()
+        +deliver(canvas, filename)
+    }
+
+    LibraryInput ..> Library : buildLibrary
+    Recap *-- Library
+    Recap *-- Personality
+    Recap <|-- Wrapped
+    Library ..> Traits : buildTraits
+    Traits ..> Rule : evaluated by
+    Rule ..> Personality : verdictFor
+    Rule ..> NearMiss : fallback case
+    Wrapped ..> SceneBuilder
+    SceneBuilder ..> Scene
+    Deck o-- Scene
+    Scene *-- SceneBody
+    SceneBody o-- Poster
+    SceneBody o-- Bar
+    Scene *-- Stat
+    Cards ..> Scene
+    Cards ..> Palette
+    Cards *-- Block
+    Cards ..> Canvas
+```
+
+## 17. Svelte component hierarchy
+
+```mermaid
+flowchart TD
+    layout["+layout.svelte<br/>global css, theme"] --> page["+page.svelte"]
+
+    page --> FileDrop
+    page --> RememberToggle
+    page --> ThemeSwitch
+    page --> SectionNav
+    page --> StatTiles
+    page --> WrappedEntry
+
+    subgraph sections["Sections"]
+        WorldMap
+        Columns
+        RankedBars
+        FilmList
+        Heatmap
+        MetricToggle
+        Scatter
+        Quadrants
+        KeywordCloud
+        Network
+        Mosaic
+        Milestones
+        PeopleTimeline
+        YearRecap
+        Recommendations
+        CountryRec
+        PickerList
+    end
+
+    subgraph triangulation["Rating triangulation (needs OMDb)"]
+        RatingGaps
+        RatingRadar
+        RatingContrarian
+        MetacriticDisagreement
+        RatingCorrelation
+    end
+
+    page --> sections
+    page --> triangulation
+    Recommendations --> CountryRec
+    WorldMap --> FilmList
+    RankedBars --> FilmList
+
+    WrappedEntry --> Wrapped["Wrapped.svelte<br/>dialog, timer, keyboard"]
+    Wrapped --> Frame["Frame.svelte<br/>renders one Scene"]
+    Wrapped --> rain["rain.ts backdrop"]
+    Wrapped --> cards["cards.ts share card"]
+```
+
+## 18. Activity: parsing and merging the export
+
+```mermaid
+flowchart TD
+    A([zip bytes]) --> B[unzipSync with fflate]
+    B --> C{all paths share one<br/>top-level folder?}
+    C -- yes --> D[prefix = folder/]
+    C -- no --> E[prefix = empty]
+    D --> F
+    E --> F{watched.csv present?}
+    F -- no --> X([throw: not a Letterboxd export])
+    F -- yes --> G[for each watched row:<br/>get or create Film by name + year]
+    G --> H[ratings.csv: set film.rating]
+    H --> I[likes/films.csv: liked = true]
+    I --> J[diary.csv: push date + DiaryEntry,<br/>set rewatch, collect tags]
+    J --> K[reviews.csv: set review text]
+    K --> L[watchlist.csv: map to WatchlistEntry]
+    L --> M[profile.csv: first row to Profile]
+    M --> N([LetterboxdData])
+```
+
+## 19. Activity: how a verdict is chosen
+
+```mermaid
+flowchart TD
+    lib[Library] --> t[buildTraits<br/>rhythm, ratings, taste, habit numbers]
+    t --> r[rulesInOrder<br/>fixed ORDER: archivist ... regular]
+    r --> m[keep rules whose when traits is true]
+    m --> w[winner = first match]
+    w --> f{winner is fallback<br/>The Regular?}
+    f -- no --> o["alsoTrue = next 2 non-fallback matches"]
+    o --> p1([Personality title + detail + alsoTrue])
+    f -- yes --> n[nearestMiss:<br/>probe the rule that came closest]
+    n --> p2([Personality with<br/>widest margin vs threshold])
+```
+
+## 20. Activity: building the deck
+
+```mermaid
+flowchart TD
+    w[Wrapped data] --> s[SEQUENCE of 38 scene builders<br/>in narrative order, each with a rank]
+    s --> b[run every builder]
+    b --> nn[drop builders that returned null<br/>not enough data for that fact]
+    nn --> sort[sort by rank, keep top DECK_CAP = 20 ids]
+    sort --> main[main: kept scenes in narrative order]
+    sort --> extras[extras: scenes the cap pushed out]
+    w --> close[closing: verdictScene + summaryScene]
+    main --> asm[assemble deck, expanded?]
+    extras --> asm
+    close --> asm
+    asm --> g{extras exist?}
+    g -- yes --> gate[insert gate frame after main<br/>expanded: also append extras]
+    g -- no --> out
+    gate --> out([Scene list shown by Wrapped.svelte])
+```
+
+## 21. Sequence: share card
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant W as Wrapped.svelte
+    participant K as cards.ts
+    participant V as canvas.ts
+    participant N as Browser share / download
+
+    U->>W: click Share
+    W->>V: paletteFrom(element)
+    alt last frame
+        W->>K: summaryCard(data, palette)
+    else any other frame
+        W->>K: storyCard(scene, data, palette)
+    end
+    K->>V: ensureFonts()
+    K->>K: measure blocks, centre stack, draw on 1080x1920 canvas
+    K->>V: loadImage(poster urls)
+    K-->>W: HTMLCanvasElement
+    W->>V: deliver(canvas, filename)
+    V->>V: toBlob image/png
+    alt navigator.canShare with files
+        V->>N: navigator.share
+        N-->>V: shared or AbortError (cancelled)
+    else fallback
+        V->>N: anchor download, revoke URL after 1s
+        N-->>V: saved
+    end
+```
+
+## 22. Sequence: session cookie and API protection
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant H as hooks.server.ts
+    participant S as session.ts
+    participant A as /api route
+
+    B->>H: GET / (page load)
+    H->>S: verifySessionToken(secret, cookie)
+    alt missing, expired or bad signature
+        H->>S: mintSessionToken(secret)
+        S-->>H: expiry.hmacSha256
+        H-->>B: Set-Cookie lv_session httpOnly, sameSite lax, 6h
+    end
+    B->>A: POST /api/enrich + cookie
+    A->>S: requireSession(cookies)
+    alt SESSION_SECRET not set
+        S-->>B: 500
+    else cookie invalid
+        S-->>B: 403 reload the page
+    else ok
+        A-->>B: continue to rate limit, validation, lookup
+    end
+```
+
+## 23. Sequence: client retry loop against the fetch budget
+
+```mermaid
+sequenceDiagram
+    participant R as runRounds
+    participant W1 as worker 1
+    participant W2 as worker 2
+    participant API as /api batch endpoint
+
+    Note over R: round 0 uses batches of 50 (35 for collections)
+    R->>W1: batch A
+    R->>W2: batch B
+    par
+        W1->>API: POST A
+        API-->>W1: results + pending [3, 7]
+    and
+        W2->>API: POST B
+        API-->>W2: network error
+    end
+    W1->>R: keep resolved, queue pending 3 and 7
+    W2->>R: queue the whole batch B
+    Note over R: round 1..7 use batches of 15 for the leftovers
+    loop until queue empty or 8 rounds
+        R->>API: POST retry batches
+        API-->>R: results + pending
+    end
+    Note over R: anything still unresolved stays null (shown as unmatched)
 ```
 
 ## How it works, in short
