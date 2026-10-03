@@ -5,21 +5,31 @@ titles and years go to the server, which looks them up on TMDB (plus OMDb and Th
 extras) and caches the answers in SQLite. All charts are computed client-side from the enriched
 library.
 
+Without an export, a viewer can enter a Letterboxd username instead. The server proxies that
+member's public RSS feed (the 50 most recent diary entries) and the client builds a library from it.
+The same feed tops up an export: right after an upload, and on every later visit while a snapshot is
+remembered, so the zip only needs uploading once.
+
 ## 1. System overview
 
 ```mermaid
 flowchart LR
-    user([User]) -->|drops export .zip| browser
+    user([User]) -->|"drops export .zip<br/>or enters a username"| browser
 
     subgraph browser["Browser (SvelteKit client)"]
         direction TB
         page["routes/+page.svelte<br/>state machine: idle / working / ready"]
         parse["ingest/parse.ts<br/>parseExport()"]
+        rss["ingest/rss.ts<br/>mergeFeed(), feedHasGap()"]
+        pipeline["ingest/pipeline.ts<br/>enrichLibrary(), refreshFromFeed()"]
         enrichClient["ingest/enrich.ts<br/>runRounds() batching + retry"]
         store["store.ts<br/>localStorage snapshot"]
         viz["viz/*<br/>pure stats + Svelte charts"]
         wrapped["wrapped/*<br/>year-in-review deck"]
-        page --> parse --> enrichClient
+        page --> parse
+        page --> rss
+        page --> pipeline --> enrichClient
+        pipeline --> rss
         page <--> store
         page --> viz
         page --> wrapped
@@ -29,6 +39,8 @@ flowchart LR
         direction TB
         hooks["hooks.server.ts<br/>mints session cookie"]
         api["routes/api/*<br/>enrich, omdb-enrich,<br/>collections, recommend"]
+        feed["routes/api/feed/[username]<br/>RSS proxy, parseFeed()"]
+        feed --> guard
         guard["session.ts + ratelimit.ts<br/>+ budget.ts"]
         clients["tmdb.ts / tvdb.ts / omdb.ts / related.ts"]
         cache["cache.ts"]
@@ -39,8 +51,10 @@ flowchart LR
     end
 
     enrichClient -->|"POST batches (titles + years only)"| api
+    pipeline -->|"GET username"| feed
     hooks -.->|"lv_session cookie"| page
 
+    feed -->|"HTTPS /username/rss/"| lb[(Letterboxd RSS)]
     clients -->|HTTPS| tmdb[(TMDB)]
     clients -->|HTTPS| omdb[(OMDb)]
     clients -->|HTTPS| tvdb[(TheTVDB)]
@@ -58,6 +72,8 @@ flowchart LR
 
     subgraph app[Letterboxd Vizard]
         uc1(Upload export zip)
+        uc12(Load from a username via RSS)
+        uc13(Top up from the RSS feed on each visit)
         uc2(Explore visualizations)
         uc3(Filter by metric / country / year)
         uc4(Get recommendations)
@@ -70,9 +86,11 @@ flowchart LR
         uc11(Configure API keys + limits)
     end
 
-    viewer --- uc1 & uc2 & uc3 & uc4 & uc5 & uc6 & uc7 & uc9
+    viewer --- uc1 & uc12 & uc2 & uc3 & uc4 & uc5 & uc6 & uc7 & uc9
     uc2 -.->|includes| uc8
     uc1 -.->|includes| enrichuc(Enrich with metadata)
+    uc12 -.->|includes| enrichuc
+    uc7 -.->|includes| uc13
     uc8 -.->|needs OMDB_API_KEY| uc11
     host --- uc10 & uc11
 ```
@@ -85,6 +103,8 @@ sequenceDiagram
     actor U as User
     participant P as +page.svelte
     participant PA as parse.ts
+    participant F as /api/feed
+    participant PI as pipeline.ts
     participant E as enrich.ts (client)
     participant H as hooks.server.ts
     participant A as /api/enrich
@@ -98,7 +118,11 @@ sequenceDiagram
     U->>P: drop zip
     P->>PA: parseExport(bytes)
     PA-->>P: LetterboxdData {films, watchlist, profile}
-    P->>E: enrichFilms(films) and enrichFilms(watchlist)
+    P->>F: fetchFeed(profile.username)
+    F-->>P: FeedEntry[] (empty on any failure)
+    P->>P: mergeFeed(films, feed): viewings logged after the export
+    P->>PI: enrichLibrary(films, watchlist, report)
+    PI->>E: enrichFilms(films) and enrichFilms(watchlist)
     loop runRounds (max 8 rounds, 2 batches in flight)
         E->>A: POST {items: name+year}
         A->>A: requireSession + checkRateLimit
@@ -112,9 +136,11 @@ sequenceDiagram
         A-->>E: {results, pending[]}
         Note over E: pending indices (budget hit) are re-queued next round
     end
-    E-->>P: films with tmdb
-    P->>E: enrichOmdb(imdbIds) via /api/omdb-enrich
-    P->>E: fetchCollections(ids) via /api/collections
+    E-->>PI: films with tmdb
+    PI->>E: enrichOmdb(imdbIds) via /api/omdb-enrich
+    PI-->>P: EnrichedLibrary {films, watchlistIds}
+    P->>PI: collectionsFor(films)
+    PI->>E: fetchCollections(ids) via /api/collections
     P->>P: films = EnrichedFilm[], phase = ready
     P->>P: saveSnapshot() if "remember" is on
 ```
@@ -142,7 +168,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    req[POST /api/*] --> s{valid lv_session<br/>cookie?}
+    req["POST /api/* or<br/>GET /api/feed/username"] --> s{valid lv_session<br/>cookie?}
     s -- no --> r403[403]
     s -- yes --> rl{rate limiter bound<br/>and under limit?}
     rl -- no --> r429[429]
@@ -155,6 +181,11 @@ flowchart LR
     pend --> resp
     put --> resp["200 {results, pending}"]
 ```
+
+`/api/feed/[username]` shares the session check and the `ENRICH_LIMITER` binding, then validates
+the username (`[A-Za-z0-9_]{2,30}`, else 400). It makes one fetch to Letterboxd, so it needs no
+`FetchBudget` or cache. Letterboxd's 404 passes through as 404 ("no member called …"); any other
+failure becomes 502.
 
 ## 6. Server classes and modules
 
@@ -313,8 +344,20 @@ classDiagram
         watchlistIds
         profile
         collections
+        source?: export / feed
+    }
+    class FeedEntry {
+        uri: string
+        name: string
+        year?
+        date?
+        rating?
+        rewatch: boolean
+        liked: boolean
+        review?
     }
 
+    FeedEntry ..> Film : mergeFeed by name + year
     LetterboxdData *-- Film
     LetterboxdData *-- WatchlistEntry
     LetterboxdData o-- Profile
@@ -447,15 +490,18 @@ flowchart LR
 stateDiagram-v2
     [*] --> idle
     idle --> ready : snapshot found in localStorage
-    idle --> working : file dropped / demo
+    idle --> working : file dropped / username entered / demo
     working --> working : stage films → ratings → collections
     working --> ready : enrichment finished
     working --> idle : error (message shown)
     ready --> working : new file dropped
-    ready --> idle : snapshot cleared / reset
+    ready --> ready : syncFeed() adds new diary entries in the background
+    ready --> idle : "Upload an export" (feed-only library or feed gap)
     note right of ready
         "Remember" toggle writes or clears
-        the localStorage Snapshot (key v5)
+        the localStorage Snapshot (key v5).
+        A restored snapshot with a profile
+        username runs syncFeed() once.
     end note
 ```
 
@@ -468,7 +514,7 @@ flowchart TD
     env -- node --> nd["adapter-node<br/>Docker / compose"]
 
     cf --> d1[("D1 binding DB<br/>schema.sql applied via wrangler")]
-    cf --> rl["Rate limit bindings<br/>ENRICH / RECOMMEND / OMDB"]
+    cf --> rl["Rate limit bindings<br/>ENRICH (also /api/feed) / RECOMMEND / OMDB"]
     nd --> sq[("better-sqlite3<br/>CACHE_DB_PATH, WAL")]
     nd --> nb["No limiter; FETCH_BUDGET<br/>can be raised"]
 
@@ -478,7 +524,8 @@ flowchart TD
 ## 13. Use case catalogue
 
 Actors: **Viewer** (a Letterboxd user, anonymous, no accounts), **Operator** (deploys and configures),
-and the external systems **TMDB**, **OMDb**, **TheTVDB** which the server calls on the viewer's behalf.
+and the external systems **TMDB**, **OMDb**, **TheTVDB** and **Letterboxd RSS** which the server
+calls on the viewer's behalf.
 
 ```mermaid
 flowchart LR
@@ -487,12 +534,15 @@ flowchart LR
     tmdb([TMDB])
     omdb([OMDb])
     tvdb([TheTVDB])
+    lbrss([Letterboxd RSS])
 
     subgraph load["Load data"]
         UC1(UC1 Upload export zip)
         UC2(UC2 Try demo library)
         UC3(UC3 Restore saved snapshot)
         UC4(UC4 Remember / forget library)
+        UC15(UC15 Load from a username)
+        UC16(UC16 Top up from the RSS feed)
     end
     subgraph explore["Explore"]
         UC5(UC5 Browse stat tiles and sections)
@@ -511,10 +561,15 @@ flowchart LR
         UC14(UC14 Configure keys, limits, budget)
     end
 
-    viewer --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC7 & UC9 & UC10 & UC11 & UC12
+    viewer --- UC1 & UC2 & UC3 & UC4 & UC5 & UC6 & UC7 & UC9 & UC10 & UC11 & UC12 & UC15
     operator --- UC13 & UC14
 
     UC1 -.->|include| ENR(Enrich films with metadata)
+    UC1 -.->|include| UC16
+    UC3 -.->|include| UC16
+    UC15 -.->|include| ENR
+    UC15 --- lbrss
+    UC16 --- lbrss
     UC2 -.->|include| UC1
     UC5 -.->|include| UC6
     UC5 -.->|include| UC7
@@ -533,9 +588,9 @@ flowchart LR
 
 | ID | Use case | Trigger | Main flow | Alternatives and errors |
 |----|----------|---------|-----------|-------------------------|
-| UC1 | Upload export zip | Drop or pick a `.zip` in `FileDrop` | `parseExport` merges the CSVs, `enrichFilms` resolves titles on `/api/enrich`, `enrichOmdb` adds ratings, `fetchCollections` sizes franchises, page becomes `ready` | No `watched.csv` gives "not a Letterboxd export" and the page stays `idle`. Batches that fail or hit the budget are retried for up to 8 rounds. Watchlist and OMDb failures are swallowed so the main flow still completes |
+| UC1 | Upload export zip | Drop or pick a `.zip` in `FileDrop` | `parseExport` merges the CSVs, UC16 merges in newer feed entries, `enrichLibrary` resolves titles on `/api/enrich` and adds OMDb ratings, `collectionsFor` sizes franchises, page becomes `ready` | No `watched.csv` gives "not a Letterboxd export" and the page stays `idle`. Batches that fail or hit the budget are retried for up to 8 rounds. Watchlist, OMDb and feed failures are swallowed so the main flow still completes |
 | UC2 | Try demo library | `?demo` in dev mode | Fetches `/demo-export.zip` and runs UC1 | Dev only |
-| UC3 | Restore snapshot | Page mount | `loadSnapshot` fills `films`, `watchlist`, `collections`, `profile`, page becomes `ready` | Missing, corrupt or old-generation snapshot is ignored |
+| UC3 | Restore snapshot | Page mount | `loadSnapshot` fills `films`, `watchlist`, `collections`, `profile`, `source`, page becomes `ready`, then UC16 runs in the background | Missing, corrupt or old-generation snapshot is ignored |
 | UC4 | Remember / forget | `RememberToggle` | On: `saveSnapshot` to `localStorage`. Off: `clearSnapshot` | Quota exceeded: toggle reverts and an error says data lasts for this visit only |
 | UC5 | Browse sections | Scroll or `SectionNav` | `+page.svelte` derives each chart's data from `films` | Sections with no data (for example triangulation without OMDb) are hidden |
 | UC6 | Toggle metric / scope | Buttons in a chart | `MetricToggle`, runtime scope, season scale, keyword cloud or bars switch the derived data | none |
@@ -547,6 +602,8 @@ flowchart LR
 | UC12 | Switch theme | `ThemeSwitch` | Choose Catppuccin flavor and accent, stored in `localStorage` | Falls back to the system theme |
 | UC13 | Deploy | Build with `DEPLOY_TARGET` | Cloudflare: Worker, assets, D1. Node: Docker with local SQLite | none |
 | UC14 | Configure | `.env` / Worker vars | `TMDB_API_KEY`, `SESSION_SECRET`, optional `TVDB_API_KEY`, `OMDB_API_KEY`, `FETCH_BUDGET`, `CACHE_DB_PATH` | Missing `SESSION_SECRET` makes API routes return 500. Missing TMDB key makes lookups fail |
+| UC15 | Load from a username | Submit `UsernameForm` | `fetchFeed` calls `/api/feed/[username]`, `mergeFeed([], feed)` builds the films, profile holds only the username, `source = 'feed'`, then the UC1 enrichment steps. The page notes that only recent entries are shown and offers "Upload an export" | Invalid name: 400. Unknown member: 404. Letterboxd unreachable or refusing: 502. A feed with no film items gives "no diary entries". No watchlist, tags or undated watches |
+| UC16 | Top up from the RSS feed | After UC1 parsing, or after UC3 | `fetchFeed(profile.username)`, then `mergeFeed` adds viewings not yet on record. On UC3, `refreshFromFeed` enriches only the films the feed introduced, `collectionsFor` sizes new franchises, and the snapshot is saved again. A status line says how many entries were added | A full feed (50 film items) that starts after the newest saved viewing sets `feedGap` and asks for a fresh export. A failed request leaves the library as it was, with a short note on UC3 |
 
 ## 14. Class diagram: client ingest, state and persistence
 
@@ -563,12 +620,39 @@ classDiagram
         watchlistIds: number[]
         collections: CollectionParts[]
         remember: boolean
+        source: export / feed
+        feedNote: string?
+        feedGap: boolean
         +handleFile(file)
+        +handleUsername(username)
+        -analyse(load)
+        -withFeed(parsed)
+        +syncFeed()
         +persist()
         +toggleRemember(on)
     }
     class Parse {
         +parseExport(zipBytes) LetterboxdData
+    }
+    class Rss {
+        +FEED_FILM_LIMIT = 50
+        +parseFeed(xml) FeedEntry[]
+        +mergeFeed(library, feed, makeFilm) FeedMerge
+        +feedHasGap(library, feed) boolean
+    }
+    class FeedMerge {
+        films: F[]
+        newFilms: F[]
+        addedEntries: number
+    }
+    class Pipeline {
+        +fetchFeed(username) FeedEntry[]
+        +enrichLibrary(films, watchlist, report) EnrichedLibrary
+        +collectionsFor(films, known) CollectionParts[]
+        +refreshFromFeed(library, feed) FeedRefresh
+    }
+    class UsernameForm {
+        onsubmit(username)
     }
     class EnrichClient {
         +enrichFilms(items, onProgress)
@@ -599,6 +683,7 @@ classDiagram
         watchlistIds
         profile
         collections
+        source?
     }
     class Collections {
         +getOrCreate(map, key, make)
@@ -615,10 +700,16 @@ classDiagram
     }
 
     FileDrop --> PageComponent : onfile
+    UsernameForm --> PageComponent : onsubmit
     RememberToggle --> PageComponent : onchange
     PageComponent ..> Parse
-    PageComponent ..> EnrichClient
+    PageComponent ..> Rss
+    PageComponent ..> Pipeline
     PageComponent ..> Store
+    Pipeline ..> EnrichClient
+    Pipeline ..> Rss
+    Rss ..> FeedMerge
+    Rss ..> Collections
     Parse ..> Collections
     EnrichClient *-- RoundsOptions
     EnrichClient ..> BatchResponse
@@ -911,6 +1002,7 @@ flowchart TD
     layout["+layout.svelte<br/>global css, theme"] --> page["+page.svelte"]
 
     page --> FileDrop
+    page --> UsernameForm
     page --> RememberToggle
     page --> ThemeSwitch
     page --> SectionNav
@@ -1101,6 +1193,80 @@ sequenceDiagram
     Note over R: anything still unresolved stays null (shown as unmatched)
 ```
 
+## 24. Sequence: RSS feed, from a username and on a return visit
+
+Letterboxd's official API is closed to visualization projects, and its HTML pages sit behind a
+Cloudflare bot check that answers plain HTTP clients with 403. The profile RSS feed is the one
+public, machine-readable source. It holds the 50 newest film items (diary entries and reviews,
+with watch date, rating, rewatch, like, review text and TMDB id) plus up to 50 list items, which
+are skipped. It cannot be paged back.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant P as +page.svelte
+    participant PI as pipeline.ts
+    participant F as /api/feed
+    participant L as letterboxd.com
+    participant S as store.ts
+
+    alt username entered (UC15)
+        U->>P: submit UsernameForm
+        P->>PI: fetchFeed(username)
+        PI->>F: GET + lv_session cookie
+        F->>L: GET /username/rss/
+        L-->>F: RSS XML
+        F->>F: parseFeed(xml)
+        F-->>PI: {entries: FeedEntry[]}
+        P->>P: mergeFeed([], feed), source = feed
+        P->>PI: enrichLibrary + collectionsFor (as in section 3)
+    else snapshot restored (UC3, then UC16)
+        P->>S: loadSnapshot()
+        S-->>P: films, profile.username, source
+        P->>P: phase = ready (charts render at once)
+        P->>PI: fetchFeed(profile.username)
+        PI->>F: GET
+        F-->>PI: FeedEntry[]
+        P->>PI: refreshFromFeed(films, feed)
+        PI->>PI: feedHasGap, mergeFeed
+        PI->>PI: enrichLibrary(newFilms only)
+        PI-->>P: {films, addedEntries, gap}
+        opt addedEntries > 0
+            P->>PI: collectionsFor(films, collections)
+            P->>S: saveSnapshot() if remembered
+        end
+    end
+```
+
+## 25. Activity: merging a feed into a library
+
+```mermaid
+flowchart TD
+    A([library films, feed entries newest first]) --> G{"feed full (50 film items) and<br/>oldest feed date after<br/>newest saved viewing?"}
+    G -- yes --> GAP[gap = true:<br/>ask for a fresh export]
+    G -- no --> M
+    GAP --> M[copy every film,<br/>key by name + year]
+    M --> R[walk feed oldest first]
+    R --> K{film with this<br/>name + year known?}
+    K -- no --> N[makeFilm: blank Film<br/>with canonical /film/slug/ uri]
+    K -- yes --> E
+    N --> E[liked = true if memberLike,<br/>review text if a review item]
+    E --> RT{entry date at or after<br/>film's latest viewing?}
+    RT -- yes --> SR[film.rating = entry rating]
+    RT -- no --> D
+    SR --> D{date missing or<br/>already on record?}
+    D -- yes --> NEXT
+    D -- no --> P[push date + DiaryEntry,<br/>set rewatch, addedEntries++]
+    P --> NEXT{more entries?}
+    NEXT -- yes --> R
+    NEXT -- no --> OUT([FeedMerge: films, newFilms, addedEntries])
+```
+
+The feed never removes anything. Ratings changed or entries deleted on Letterboxd after the export
+stay as the export had them, and watches without a diary date, tags and the watchlist only ever
+come from an export.
+
 ## How it works, in short
 
 1. **Parse locally.** `parseExport` unzips with `fflate`, reads CSVs with PapaParse, and merges
@@ -1116,5 +1282,9 @@ sequenceDiagram
 5. **Visualize.** `+page.svelte` derives every chart's data from `EnrichedFilm[]` with pure
    functions in `lib/viz`, and feeds the same list into the Wrapped deck.
 6. **Remember (opt-in).** A `Snapshot` in `localStorage` lets repeat visits skip the upload.
-7. **Abuse guard.** `hooks.server.ts` issues an HMAC-signed session cookie on page loads; API routes
+7. **Keep current through RSS.** `/api/feed/[username]` proxies the member's public feed.
+   `mergeFeed` folds its 50 newest entries into the library after an upload and on each return
+   visit, and a username alone is enough to build a small library. `feedHasGap` asks for a fresh
+   export when the feed no longer overlaps what was saved.
+8. **Abuse guard.** `hooks.server.ts` issues an HMAC-signed session cookie on page loads; API routes
    require it, plus an optional Cloudflare rate limiter.
