@@ -60,7 +60,7 @@
 	} from '$lib/viz/stats';
 	import UsernameForm from '$lib/UsernameForm.svelte';
 	import { parseExport } from '$lib/ingest/parse';
-	import { mergeFeed } from '$lib/ingest/rss';
+	import { FEED_FILM_LIMIT, mergeFeed } from '$lib/ingest/rss';
 	import {
 		collectionsFor,
 		enrichLibrary,
@@ -155,11 +155,11 @@
 		}
 	});
 
-	const FEED_ONLY_NOTE =
-		'Built from your RSS feed, so only your most recent diary entries are here. Upload your export for the full history.';
+	const FEED_ONLY_NOTE = `Loaded by username, so this only covers your ${FEED_FILM_LIMIT} latest diary entries: Letterboxd's RSS feed holds no more. Upload your export for the full history.`;
 
 	function entriesNote(count: number): string {
-		return `Added ${count} new diary ${count === 1 ? 'entry' : 'entries'} from your RSS feed.`;
+		const added = `Added ${count} new diary ${count === 1 ? 'entry' : 'entries'} from your RSS feed.`;
+		return source === 'feed' ? `${added} ${FEED_ONLY_NOTE}` : added;
 	}
 
 	/** Tops a remembered library up with whatever the member logged since it was saved. */

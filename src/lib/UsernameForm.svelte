@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { FEED_FILM_LIMIT } from '$lib/ingest/rss';
+
 	let { onsubmit }: { onsubmit: (username: string) => void } = $props();
 	let username = $state('');
 </script>
@@ -26,7 +28,7 @@
 		<button type="submit">Load</button>
 	</div>
 	<p class="hint">
-		Reads your public RSS feed, which only holds your 50 most recent diary entries. With "Remember"
+		Reads your public RSS feed, which only holds your {FEED_FILM_LIMIT} latest diary entries. With "Remember"
 		on, each visit adds whatever you logged since. Upload the export for your full history.
 	</p>
 </form>
