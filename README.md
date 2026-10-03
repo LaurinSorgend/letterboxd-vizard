@@ -17,6 +17,13 @@ is fetched from TMDB at most once no matter how many users analyze it. The cache
 Cloudflare D1 database when deployed to Workers, or a local `better-sqlite3` file when
 self-hosted - the app picks the backend on its own.
 
+No export at hand? Enter a Letterboxd username instead. The app then reads the
+member's public RSS feed, which holds only the 50 most recent diary entries. With
+"Remember my data" on, every later visit pulls the feed again and adds whatever was
+logged since, so an export only needs uploading once. If more than 50 entries pile
+up between visits, the app says so and asks for a fresh export. Watched films without
+a diary entry, tags and the watchlist only come from the export.
+
 ## Setup
 
 ```sh

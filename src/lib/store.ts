@@ -12,6 +12,8 @@ export interface Snapshot {
 	watchlistIds: number[];
 	profile: Profile | null;
 	collections: CollectionParts[];
+	/** Where the library started: a full export, or only the RSS feed. Older snapshots lack it. */
+	source?: 'export' | 'feed';
 }
 
 /** Drops snapshots left by superseded KEY generations; they are dead weight against the quota. */

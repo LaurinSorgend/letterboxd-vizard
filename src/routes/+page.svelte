@@ -58,17 +58,18 @@
 		watchLag,
 		watchesPerYear
 	} from '$lib/viz/stats';
+	import UsernameForm from '$lib/UsernameForm.svelte';
 	import { parseExport } from '$lib/ingest/parse';
-	import { enrichFilms, enrichOmdb, fetchCollections } from '$lib/ingest/enrich';
-	import { watchedTmdbIds } from '$lib/viz/seeds';
-	import { clearSnapshot, loadSnapshot, saveSnapshot } from '$lib/store';
-	import type {
-		CollectionParts,
-		EnrichedFilm,
-		LetterboxdData,
-		OmdbRatings,
-		WatchlistEntry
-	} from '$lib/types';
+	import { mergeFeed } from '$lib/ingest/rss';
+	import {
+		collectionsFor,
+		enrichLibrary,
+		fetchFeed,
+		refreshFromFeed,
+		type Progress
+	} from '$lib/ingest/pipeline';
+	import { clearSnapshot, loadSnapshot, saveSnapshot, type Snapshot } from '$lib/store';
+	import type { CollectionParts, EnrichedFilm, LetterboxdData } from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
 	let phase: Phase = $state('idle');
@@ -82,6 +83,9 @@
 	let includeWatchlist = $state(false);
 	let remember = $state(false);
 	let saveError: string | null = $state(null);
+	let source: NonNullable<Snapshot['source']> = $state('export');
+	let feedNote: string | null = $state(null);
+	let feedGap = $state(false);
 	let mainEl: HTMLElement | null = $state(null);
 
 	const watchlist = $derived(data?.watchlist ?? []);
@@ -144,15 +148,45 @@
 				watchlist: snapshot.watchlist ?? [],
 				profile: snapshot.profile
 			};
+			source = snapshot.source ?? 'export';
 			remember = true;
 			phase = 'ready';
+			void syncFeed();
 		}
 	});
 
+	const FEED_ONLY_NOTE =
+		'Built from your RSS feed, so only your most recent diary entries are here. Upload your export for the full history.';
+
+	function entriesNote(count: number): string {
+		return `Added ${count} new diary ${count === 1 ? 'entry' : 'entries'} from your RSS feed.`;
+	}
+
+	/** Tops a remembered library up with whatever the member logged since it was saved. */
+	async function syncFeed() {
+		const username = data?.profile?.username;
+		if (!username) return;
+		try {
+			const refresh = await refreshFromFeed(films, await fetchFeed(username));
+			feedGap = refresh.gap;
+			feedNote = refresh.gap
+				? 'Your RSS feed no longer reaches back to your last saved entry, so some viewings are missing. Upload a fresh export to fill the gap.'
+				: source === 'feed'
+					? FEED_ONLY_NOTE
+					: null;
+			if (refresh.addedEntries === 0) return;
+			films = refresh.films;
+			collections = await collectionsFor(films, collections);
+			if (!refresh.gap) feedNote = entriesNote(refresh.addedEntries);
+			if (remember) persist();
+		} catch {
+			feedNote = 'Could not check your RSS feed for new diary entries this time.';
+		}
+	}
+
 	function persist() {
-		if (
-			saveSnapshot({ films, watchlist, watchlistIds, profile: data?.profile ?? null, collections })
-		) {
+		const profile = data?.profile ?? null;
+		if (saveSnapshot({ films, watchlist, watchlistIds, profile, collections, source })) {
 			saveError = null;
 		} else {
 			remember = false;
@@ -170,49 +204,68 @@
 		}
 	}
 
-	async function handleFile(file: File) {
+	function report(next: Progress) {
+		stage = next.stage;
+		progress = { done: next.done, total: next.total };
+	}
+
+	/** Loads a library, enriches it, and shows it; any failure lands back on the start screen. */
+	async function analyse(load: () => Promise<LetterboxdData>) {
 		errorMessage = null;
+		feedNote = null;
 		phase = 'working';
-		stage = 'films';
+		report({ stage: 'films', done: 0, total: 0 });
 		try {
-			const parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
+			const parsed = await load();
 			data = parsed;
-			const total = parsed.films.length + parsed.watchlist.length;
-			const done = { films: 0, watchlist: 0 };
-			const report = () => (progress = { done: done.films + done.watchlist, total });
-			report();
-			const [watched, enrichedWatchlist] = await Promise.all([
-				enrichFilms(parsed.films, (n) => ((done.films = n), report())),
-				enrichFilms(parsed.watchlist, (n) => ((done.watchlist = n), report())).catch(() => [])
-			]);
-			watchlistIds = watchedTmdbIds(enrichedWatchlist);
-
-			const imdbIds = [
-				...new Set(watched.map((f) => f.tmdb?.imdbId).filter((id): id is string => !!id))
-			];
-			stage = 'ratings';
-			progress = { done: 0, total: imdbIds.length };
-			const omdb =
-				imdbIds.length === 0
-					? new Map<string, OmdbRatings | null>()
-					: await enrichOmdb(imdbIds, (n, t) => (progress = { done: n, total: t })).catch(
-							() => new Map<string, OmdbRatings | null>()
-						);
-			films = watched.map((f) => ({
-				...f,
-				omdb: f.tmdb?.imdbId ? (omdb.get(f.tmdb.imdbId) ?? null) : null
-			}));
-
-			collections = await fetchCollections(
-				films.map((film) => film.tmdb?.collection?.id).filter((id): id is number => id != null)
-			);
-
+			const library = await enrichLibrary(parsed.films, parsed.watchlist, report);
+			films = library.films;
+			watchlistIds = library.watchlistIds;
+			collections = await collectionsFor(films);
+			if (source === 'feed') feedNote = FEED_ONLY_NOTE;
 			phase = 'ready';
 			if (remember) persist();
 		} catch (cause) {
 			errorMessage = cause instanceof Error ? cause.message : String(cause);
 			phase = 'idle';
 		}
+	}
+
+	/** Adds feed entries logged after the export was made; the export alone still works if this fails. */
+	async function withFeed(parsed: LetterboxdData): Promise<LetterboxdData> {
+		const username = parsed.profile?.username;
+		if (!username) return parsed;
+		const feed = await fetchFeed(username).catch(() => []);
+		return { ...parsed, films: mergeFeed(parsed.films, feed, (film) => film).films };
+	}
+
+	function handleFile(file: File) {
+		return analyse(async () => {
+			let parsed: LetterboxdData;
+			try {
+				parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
+			} catch (cause) {
+				const message = cause instanceof Error ? cause.message : String(cause);
+				throw new Error(
+					`${message}. Make sure you drop the unmodified zip downloaded from Letterboxd.`
+				);
+			}
+			source = 'export';
+			return withFeed(parsed);
+		});
+	}
+
+	function handleUsername(username: string) {
+		return analyse(async () => {
+			const feed = await fetchFeed(username);
+			if (feed.length === 0) throw new Error(`${username} has no diary entries in their RSS feed.`);
+			source = 'feed';
+			return {
+				films: mergeFeed([], feed, (film) => film).films,
+				watchlist: [],
+				profile: { username, givenName: '', dateJoined: '', location: '' }
+			};
+		});
 	}
 </script>
 
@@ -238,11 +291,10 @@
 
 	{#if phase === 'idle'}
 		{#if errorMessage}
-			<p class="error" role="alert">
-				{errorMessage}. Make sure you drop the unmodified zip downloaded from Letterboxd.
-			</p>
+			<p class="error" role="alert">{errorMessage}</p>
 		{/if}
 		<FileDrop onfile={handleFile} />
+		<UsernameForm onsubmit={handleUsername} />
 	{:else if phase === 'working'}
 		<div class="progress" role="status">
 			{#if progress.total === 0}
@@ -268,6 +320,15 @@
 		/>
 
 		<RememberToggle checked={remember} error={saveError} onchange={toggleRemember} />
+
+		{#if feedNote}
+			<p class="feed-note" role="status">
+				{feedNote}
+				{#if source === 'feed' || feedGap}
+					<button type="button" onclick={() => (phase = 'idle')}>Upload an export</button>
+				{/if}
+			</p>
+		{/if}
 
 		<SectionNav container={mainEl} />
 
@@ -617,6 +678,22 @@
 	}
 	.chart-note {
 		margin-bottom: 16px;
+	}
+	.feed-note {
+		color: var(--fg-secondary);
+		margin: 0 0 24px;
+	}
+	.feed-note button {
+		font: inherit;
+		margin-left: 8px;
+		padding: 2px 8px;
+		color: var(--fg);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-strong);
+		cursor: pointer;
+	}
+	.feed-note button:hover {
+		background: var(--surface);
 	}
 	.error {
 		padding: 8px 12px;
