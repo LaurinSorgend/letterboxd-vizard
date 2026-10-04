@@ -101,8 +101,19 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 	});
 }
 
+/**
+ * The CDN only sends CORS headers when asked, so a poster the wall already showed sits in the
+ * HTTP cache without them and a CORS load of it fails. Refetching past the cache gets a copy
+ * the canvas may read.
+ */
+async function refetchImage(url: string): Promise<ImageBitmap> {
+	const response = await fetch(url, { mode: 'cors', cache: 'reload' });
+	if (!response.ok) throw new Error(`could not load ${url}`);
+	return createImageBitmap(await response.blob());
+}
+
 async function readSwatch(url: string): Promise<Swatch> {
-	const image = await loadImage(url);
+	const image = await loadImage(url).catch(() => refetchImage(url));
 	const ctx = context();
 	ctx.clearRect(0, 0, SAMPLE, SAMPLE);
 	ctx.drawImage(image, 0, 0, SAMPLE, SAMPLE);
