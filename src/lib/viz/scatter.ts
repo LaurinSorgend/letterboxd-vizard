@@ -1,4 +1,5 @@
 import type { EnrichedFilm } from '$lib/types';
+import { hashString } from './seeded';
 
 export interface Point {
 	film: EnrichedFilm;
@@ -22,9 +23,7 @@ const JITTER = 0.18;
 
 /** A stable offset hashed from the URI, so a point never jumps between renders. */
 export function jitterFor(uri: string): number {
-	let hash = 0;
-	for (let i = 0; i < uri.length; i++) hash = (hash * 31 + uri.charCodeAt(i)) | 0;
-	return ((hash >>> 0) / 0xffffffff) * 2 * JITTER - JITTER;
+	return ((hashString(uri) >>> 0) / 0xffffffff) * 2 * JITTER - JITTER;
 }
 
 /**

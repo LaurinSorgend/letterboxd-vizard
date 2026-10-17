@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchCollections } from './enrich';
+import { fetchCollections, fetchProviders } from './enrich';
 import type { CollectionParts } from '$lib/types';
 
 function jsonResponse(body: unknown): Response {
@@ -65,5 +65,47 @@ describe('fetchCollections', () => {
 		const found = await fetchCollections([1]);
 
 		expect(found).toEqual([]);
+	});
+});
+
+describe('fetchProviders', () => {
+	const items = [
+		{ tmdbId: 1, mediaType: 'movie' as const },
+		{ tmdbId: 2, mediaType: 'tv' as const }
+	];
+
+	it('counts titles still missing after every round failed as unresolved', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('slow down', { status: 429 })));
+
+		const { offers, unresolved } = await fetchProviders(items, 'GB');
+
+		expect(offers.size).toBe(0);
+		expect(unresolved).toBe(2);
+	});
+
+	it('sends nothing once aborted and reports every title unresolved', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+		const controller = new AbortController();
+		controller.abort();
+
+		const { unresolved } = await fetchProviders(items, 'GB', undefined, controller.signal);
+
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(unresolved).toBe(2);
+	});
+
+	it('keys offers by media type and id, with null for titles offered nowhere', async () => {
+		const offer = { link: null, flatrate: [], free: [], ads: [], rent: [], buy: [] };
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue(jsonResponse({ results: [offer, null], pending: [] }))
+		);
+
+		const { offers, unresolved } = await fetchProviders(items, 'GB');
+
+		expect(unresolved).toBe(0);
+		expect(offers.get('movie:1')).toEqual(offer);
+		expect(offers.get('tv:2')).toBeNull();
 	});
 });

@@ -1,5 +1,5 @@
 import { effectiveCountries } from '$lib/viz/countries';
-import { seeded } from '$lib/viz/seeded';
+import { hashString, seeded } from '$lib/viz/seeded';
 import type { OfferKind, Provider, RegionOffers, WatchlistFilm } from '$lib/types';
 
 /** What a film's offers in the chosen country must include to stay in view. */
@@ -172,14 +172,8 @@ function comparator(sort: WatchSort, seed: number) {
 		case 'title':
 			return () => 0;
 		case 'shuffle':
-			return byNumber((f) => seeded(hash(f.uri) + seed), false);
+			return byNumber((f) => seeded(hashString(f.uri) + seed), false);
 	}
-}
-
-function hash(text: string): number {
-	let h = 0;
-	for (const char of text) h = (h * 31 + char.charCodeAt(0)) | 0;
-	return h;
 }
 
 /** Sorted copy; ties, and the title sort itself, fall back to the film's name. */

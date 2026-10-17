@@ -127,9 +127,9 @@ export interface EnrichedFilm extends Film {
 	omdb: OmdbRatings | null;
 }
 
-/** A watchlist row joined with its TMDB record; `undefined` on snapshots saved before lookup. */
+/** A watchlist row joined with its TMDB record, or null when TMDB has no match. */
 export interface WatchlistFilm extends WatchlistEntry {
-	tmdb?: TmdbMovie | null;
+	tmdb: TmdbMovie | null;
 }
 
 /** How a service offers a title, in TMDB's (JustWatch's) terms. */
@@ -156,3 +156,6 @@ export interface ProviderRequestItem {
 	tmdbId: number;
 	mediaType: 'movie' | 'tv';
 }
+
+/** Key a title's offers are stored under, client and server; TMDB numbers films and series separately. */
+export const offersKey = (item: ProviderRequestItem): string => `${item.mediaType}:${item.tmdbId}`;

@@ -4,9 +4,12 @@
 
 	let {
 		counts,
+		loading = false,
 		selected = $bindable()
 	}: {
 		counts: ServiceCount[];
+		/** True while offers are still arriving, so an empty list is not yet an answer. */
+		loading?: boolean;
 		selected: number[];
 	} = $props();
 
@@ -33,7 +36,11 @@
 		{/if}
 	</legend>
 	{#if counts.length === 0}
-		<p class="note">None of your watchlist streams in this country right now.</p>
+		<p class="note">
+			{loading
+				? 'Checking which services stream your watchlist…'
+				: 'None of your watchlist streams in this country right now.'}
+		</p>
 	{:else}
 		<div class="services">
 			{#each visible as { provider, films } (provider.id)}

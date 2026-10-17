@@ -1,5 +1,18 @@
+<script lang="ts" module>
+	import type { RegionOffers } from '$lib/types';
+
+	/** Offers per region, kept across mounts so switching views or countries back costs no requests. */
+	const offerCache = new Map<string, Map<string, RegionOffers | null>>();
+
+	function cacheFor(region: string): Map<string, RegionOffers | null> {
+		let cached = offerCache.get(region);
+		if (!cached) offerCache.set(region, (cached = new Map()));
+		return cached;
+	}
+</script>
+
 <script lang="ts">
-	import { fetchProviders, offersKey } from '$lib/ingest/enrich';
+	import { fetchProviders } from '$lib/ingest/enrich';
 	import {
 		filterWatchlist,
 		NO_FILTERS,
@@ -15,24 +28,15 @@
 	import ServicePicker from './ServicePicker.svelte';
 	import PosterWall from './PosterWall.svelte';
 	import RandomPick from './RandomPick.svelte';
-	import type { RegionOffers, WatchlistFilm } from '$lib/types';
+	import { offersKey, type WatchlistFilm } from '$lib/types';
 
-	let {
-		watchlist,
-		looking = false,
-		onupload
-	}: {
-		watchlist: WatchlistFilm[];
-		/** True while the watchlist's own TMDB records are still being fetched. */
-		looking?: boolean;
-		onupload: () => void;
-	} = $props();
+	let { watchlist, onupload }: { watchlist: WatchlistFilm[]; onupload: () => void } = $props();
 
 	const startRegion = initialRegion();
 	let region = $state(startRegion);
 	let offers = $state(new Map<string, RegionOffers | null>());
 	let loaded = $state({ done: 0, total: 0 });
-	let failed = $state(false);
+	let unresolved = $state(0);
 	let filters: WatchFilters = $state({ ...NO_FILTERS, services: loadServices(startRegion) });
 	let sort: WatchSort = $state('added-desc');
 	let seed = $state(0);
@@ -50,28 +54,32 @@
 	const shown = $derived(sortWatchlist(filterWatchlist(watchlist, filters, offersOf), sort, seed));
 
 	$effect(() => {
-		void loadOffers(region, titles);
+		const controller = new AbortController();
+		void loadOffers(region, titles, controller.signal);
+		return () => controller.abort();
 	});
 
-	/** Bumped per load, so a slow answer for a country the viewer already left is dropped. */
-	let generation = 0;
-
-	async function loadOffers(forRegion: string, items: typeof titles) {
-		const mine = ++generation;
-		const current = () => mine === generation;
-		failed = false;
-		loaded = { done: 0, total: items.length };
-		offers = new Map();
-		try {
-			const found = await fetchProviders(items, forRegion, (done, total) => {
-				if (current()) loaded = { done, total };
-			});
-			if (current()) offers = found;
-		} catch {
-			if (current()) failed = true;
-		} finally {
-			if (current()) loaded = { done: items.length, total: items.length };
-		}
+	/** Fetches only the titles this region's cache lacks; an aborted load leaves the state alone. */
+	async function loadOffers(forRegion: string, items: typeof titles, signal: AbortSignal) {
+		const cached = cacheFor(forRegion);
+		const missing = items.filter((item) => !cached.has(offersKey(item)));
+		offers = new Map(cached);
+		unresolved = 0;
+		loaded = { done: 0, total: missing.length };
+		if (missing.length === 0) return;
+		const found = await fetchProviders(
+			missing,
+			forRegion,
+			(done, total) => {
+				if (!signal.aborted) loaded = { done, total };
+			},
+			signal
+		);
+		for (const [key, value] of found.offers) cached.set(key, value);
+		if (signal.aborted) return;
+		offers = new Map(cached);
+		unresolved = found.unresolved;
+		loaded = { done: missing.length, total: missing.length };
 	}
 
 	function changeRegion(next: string) {
@@ -106,22 +114,23 @@
 			onshuffle={() => ((sort = 'shuffle'), (seed += 1))}
 			onreset={reset}
 		/>
-		<ServicePicker {counts} bind:selected={filters.services} />
+		<ServicePicker {counts} {loading} bind:selected={filters.services} />
 		<WatchlistFacets films={watchlist} bind:filters />
 
 		<p class="summary" role="status">
-			{#if looking}
-				Looking up your watchlist on TMDB…
-			{:else if loading}
+			{#if loading}
 				Checking where your watchlist streams… {loaded.done} / {loaded.total}
-			{:else if failed}
-				Could not load streaming availability this time; the other filters still work.
 			{:else}
 				<span class="num">{shown.length}</span> of <span class="num">{watchlist.length}</span> films
+				{#if unresolved > 0}
+					· Could not check where <span class="num">{unresolved}</span>
+					{unresolved === 1 ? 'film streams' : 'films stream'}, so the availability filters leave
+					{unresolved === 1 ? 'it' : 'them'} out.
+				{/if}
 			{/if}
 		</p>
 
-		<RandomPick films={shown} {offersOf} />
+		<RandomPick films={shown} {offersOf} {loading} />
 		<PosterWall films={shown} {offersOf} services={filters.services} {showLogos} />
 
 		<p class="credit">

@@ -6,13 +6,11 @@ import { getDb } from '$lib/server/db';
 import { fetchAvailability, regionOffers, type WatchAvailability } from '$lib/server/providers';
 import { checkRateLimit } from '$lib/server/ratelimit';
 import { requireSession } from '$lib/server/session';
-import type { ProviderRequestItem } from '$lib/types';
+import { offersKey, type ProviderRequestItem } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 const MAX_BATCH = 100;
 const CONCURRENCY = 5;
-
-const mediaKey = (item: ProviderRequestItem) => `${item.mediaType}:${item.tmdbId}`;
 
 function isItem(item: unknown): item is ProviderRequestItem {
 	const candidate = item as ProviderRequestItem | null;
@@ -40,7 +38,7 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 
 	const db = await getDb(platform);
 	// Negative ids are TheTVDB records, which TMDB has no availability for.
-	const keys = items.map((item) => (item.tmdbId > 0 ? mediaKey(item) : null));
+	const keys = items.map((item) => (item.tmdbId > 0 ? offersKey(item) : null));
 	const known = await getProvidersCachedMany(db, [
 		...new Set(keys.filter((key): key is string => key !== null))
 	]);
@@ -49,6 +47,8 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	const limit = pLimit(CONCURRENCY);
 	const resolved = new Map<string, WatchAvailability>();
 	const deferred = new Set<string>();
+	// tmdbGet already retried a 429/5xx once, so anything but the budget running out
+	// is final for this request and answers null rather than asking the client to retry.
 	const lookups = new Map<string, Promise<void>>();
 	for (const [index, item] of items.entries()) {
 		const key = keys[index];
@@ -62,10 +62,8 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 						await limit(() => fetchAvailability(budget, item.mediaType, item.tmdbId))
 					);
 				} catch (cause) {
-					deferred.add(key);
-					if (!(cause instanceof BudgetExhausted)) {
-						console.error(`tmdb providers failed: ${key}`, cause);
-					}
+					if (cause instanceof BudgetExhausted) deferred.add(key);
+					else console.error(`tmdb providers failed: ${key}`, cause);
 				}
 			})()
 		);

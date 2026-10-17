@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 import type { CollectionParts, EnrichedFilm, Profile, WatchlistFilm } from '$lib/types';
 
 /** Bump when the snapshot shape changes so stale data is ignored, not misread. */
-const KEY = 'letterboxd-vizard:snapshot:v5';
+const KEY = 'letterboxd-vizard:snapshot:v6';
 const PREFIX = 'letterboxd-vizard:snapshot:';
 
 /** The analysed result kept on the user's device so repeat visits skip re-uploading. */
@@ -12,8 +12,8 @@ export interface Snapshot {
 	watchlistIds: number[];
 	profile: Profile | null;
 	collections: CollectionParts[];
-	/** Where the library started: a full export, or only the RSS feed. Older snapshots lack it. */
-	source?: 'export' | 'feed';
+	/** Where the library started: a full export, or only the RSS feed. */
+	source: 'export' | 'feed';
 }
 
 /** Drops snapshots left by superseded KEY generations; they are dead weight against the quota. */

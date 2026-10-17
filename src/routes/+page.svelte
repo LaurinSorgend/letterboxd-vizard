@@ -64,7 +64,6 @@
 	import {
 		collectionsFor,
 		enrichLibrary,
-		enrichWatchlist,
 		fetchFeed,
 		refreshFromFeed,
 		type Progress
@@ -90,7 +89,6 @@
 	let feedGap = $state(false);
 	let mainEl: HTMLElement | null = $state(null);
 	let watchlist: WatchlistFilm[] = $state([]);
-	let lookingUpWatchlist = $state(false);
 	let view: 'stats' | 'watchlist' = $state(
 		page.url.searchParams.get('view') === 'watchlist' ? 'watchlist' : 'stats'
 	);
@@ -147,30 +145,16 @@
 		const snapshot = loadSnapshot();
 		if (snapshot) {
 			films = snapshot.films;
-			watchlist = snapshot.watchlist ?? [];
+			watchlist = snapshot.watchlist;
 			watchlistIds = snapshot.watchlistIds;
-			collections = snapshot.collections ?? [];
-			data = {
-				films: snapshot.films,
-				watchlist: snapshot.watchlist ?? [],
-				profile: snapshot.profile
-			};
-			source = snapshot.source ?? 'export';
+			collections = snapshot.collections;
+			data = { films: snapshot.films, watchlist: snapshot.watchlist, profile: snapshot.profile };
+			source = snapshot.source;
 			remember = true;
 			phase = 'ready';
 			void syncFeed();
-			void lookUpWatchlist();
 		}
 	});
-
-	/** Snapshots saved before the watchlist view kept only the watchlist's CSV rows. */
-	async function lookUpWatchlist() {
-		if (watchlist.every((film) => film.tmdb !== undefined)) return;
-		lookingUpWatchlist = true;
-		watchlist = await enrichWatchlist(watchlist);
-		lookingUpWatchlist = false;
-		if (remember) persist();
-	}
 
 	const FEED_ONLY_NOTE = `Loaded by username, so this only covers your ${FEED_FILM_LIMIT} latest diary entries: Letterboxd's RSS feed holds no more. Upload your export for the full history.`;
 
@@ -206,6 +190,7 @@
 		if (saveSnapshot({ films, watchlist, watchlistIds, profile, collections, source })) {
 			saveError = null;
 		} else {
+			clearSnapshot();
 			remember = false;
 			saveError =
 				'Could not save: your library is too large for this browser. Data stays for this visit only.';
@@ -361,7 +346,7 @@
 		{#if view === 'watchlist'}
 			<section id="watchlist">
 				<h2>Your watchlist</h2>
-				<Watchlist {watchlist} looking={lookingUpWatchlist} onupload={() => (phase = 'idle')} />
+				<Watchlist {watchlist} onupload={() => (phase = 'idle')} />
 			</section>
 		{:else}
 			<SectionNav container={mainEl} />

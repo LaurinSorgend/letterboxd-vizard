@@ -2,9 +2,13 @@
 	import { imageUrl } from '$lib/viz/images';
 	import { webHref } from '$lib/viz/href';
 	import { providersOf, STREAM_KINDS, type OffersOf } from './filter';
-	import type { WatchlistFilm } from '$lib/types';
+	import type { RegionOffers, WatchlistFilm } from '$lib/types';
 
-	let { films, offersOf }: { films: WatchlistFilm[]; offersOf: OffersOf } = $props();
+	let {
+		films,
+		offersOf,
+		loading = false
+	}: { films: WatchlistFilm[]; offersOf: OffersOf; loading?: boolean } = $props();
 
 	let pickedUri: string | null = $state(null);
 	/** Drops the pick once the filters no longer let it through, rather than showing a stray. */
@@ -24,6 +28,15 @@
 		];
 		return parts.filter(Boolean).join(' · ');
 	}
+
+	function availability(offers: RegionOffers | null | undefined): string {
+		if (offers === undefined)
+			return loading ? 'Checking where it streams…' : 'Could not check where it streams';
+		const streaming = providersOf(offers, STREAM_KINDS);
+		return streaming.length > 0
+			? `Streaming on ${streaming.map((p) => p.name).join(', ')}`
+			: 'Not streaming in your country';
+	}
 </script>
 
 <div class="pick">
@@ -32,7 +45,6 @@
 	</button>
 	{#if picked}
 		{@const offers = offersOf(picked)}
-		{@const streaming = providersOf(offers, STREAM_KINDS)}
 		{@const poster = imageUrl(picked.tmdb?.posterPath ?? null, 'w185')}
 		{@const href = webHref(picked.uri)}
 		<div class="card" aria-live="polite">
@@ -40,11 +52,7 @@
 			<div>
 				<p class="title">{picked.name}</p>
 				<p class="meta">{details(picked)}</p>
-				<p class="meta">
-					{streaming.length > 0
-						? `Streaming on ${streaming.map((p) => p.name).join(', ')}`
-						: 'Not streaming in your country'}
-				</p>
+				<p class="meta">{availability(offers)}</p>
 				<p class="links">
 					{#if href}<a {href} target="_blank" rel="noopener">On Letterboxd</a>{/if}
 					{#if offers?.link}

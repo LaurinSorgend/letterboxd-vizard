@@ -6,6 +6,7 @@ import type {
 	RegionOffers,
 	TmdbMovie
 } from '$lib/types';
+import { offersKey } from '$lib/types';
 
 const BATCH_SIZE = 50;
 /**
@@ -26,11 +27,17 @@ interface BatchResponse<R> {
 	pending?: number[];
 }
 
-async function postBatch<R>(url: string, body: unknown, label: string): Promise<BatchResponse<R>> {
+async function postBatch<R>(
+	url: string,
+	body: unknown,
+	label: string,
+	signal?: AbortSignal
+): Promise<BatchResponse<R>> {
 	const response = await fetch(url, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(body)
+		body: JSON.stringify(body),
+		signal
 	});
 	if (!response.ok) {
 		throw new Error(`${label} failed (${response.status}): ${await response.text()}`);
@@ -45,24 +52,28 @@ interface RoundsOptions<T, R> {
 	keep: (index: number, result: R | null) => void;
 	onProgress?: (done: number, total: number) => void;
 	firstRoundSize?: number;
+	/** Stops sending further batches once aborted; the items left count as unresolved. */
+	signal?: AbortSignal;
 }
 
 /**
  * Runs a batched lookup to completion: chunks the queue, keeps `MAX_IN_FLIGHT` batches in
  * the air, and re-queues whatever the server deferred under its fetch budget or a failed
  * request left behind, so a large library still resolves in one visit.
+ * @returns how many items were still unresolved when the rounds ran out
  */
 async function runRounds<T, R>({
 	items,
 	send,
 	keep,
 	onProgress,
-	firstRoundSize = BATCH_SIZE
-}: RoundsOptions<T, R>): Promise<void> {
+	firstRoundSize = BATCH_SIZE,
+	signal
+}: RoundsOptions<T, R>): Promise<number> {
 	let queue = items.map((_, index) => index);
 	let done = 0;
 
-	for (let round = 0; round < MAX_ROUNDS && queue.length > 0; round++) {
+	for (let round = 0; round < MAX_ROUNDS && queue.length > 0 && !signal?.aborted; round++) {
 		const size = round === 0 ? firstRoundSize : RETRY_BATCH_SIZE;
 		const batches: number[][] = [];
 		for (let start = 0; start < queue.length; start += size) {
@@ -72,7 +83,7 @@ async function runRounds<T, R>({
 		const retry: number[] = [];
 		let next = 0;
 		const worker = async () => {
-			while (next < batches.length) {
+			while (next < batches.length && !signal?.aborted) {
 				const batch = batches[next++];
 				try {
 					const { results, pending } = await send(batch.map((i) => items[i]));
@@ -95,6 +106,7 @@ async function runRounds<T, R>({
 		await Promise.all(Array.from({ length: Math.min(MAX_IN_FLIGHT, batches.length) }, worker));
 		queue = retry;
 	}
+	return items.length - done;
 }
 
 /** Resolves name+year items against /api/enrich in batches, reporting progress after each batch. */
@@ -139,27 +151,34 @@ export async function enrichOmdb(
 	return ratings;
 }
 
-/** Key a title's offers are stored under; TMDB numbers films and series separately. */
-export const offersKey = (item: ProviderRequestItem): string => `${item.mediaType}:${item.tmdbId}`;
+export interface ProviderLookup {
+	/** Keyed by `offersKey`; null means the title is offered nowhere in the region. */
+	offers: Map<string, RegionOffers | null>;
+	/** Titles still missing when the retry rounds ran out or the lookup was aborted. */
+	unresolved: number;
+}
 
-/** Where each title can be watched in `region`, keyed by `offersKey`; null means nowhere. */
+/** Where each title can be watched in `region`. */
 export async function fetchProviders(
 	items: ProviderRequestItem[],
 	region: string,
-	onProgress?: (done: number, total: number) => void
-): Promise<Map<string, RegionOffers | null>> {
+	onProgress?: (done: number, total: number) => void,
+	signal?: AbortSignal
+): Promise<ProviderLookup> {
 	const unique = [...new Map(items.map((item) => [offersKey(item), item])).values()];
 	const offers = new Map<string, RegionOffers | null>();
 
-	await runRounds<ProviderRequestItem, RegionOffers>({
+	const unresolved = await runRounds<ProviderRequestItem, RegionOffers>({
 		items: unique,
-		send: (batch) => postBatch('/api/providers', { region, items: batch }, 'Provider lookup'),
+		send: (batch) =>
+			postBatch('/api/providers', { region, items: batch }, 'Provider lookup', signal),
 		keep: (index, found) => offers.set(offersKey(unique[index]), found),
 		onProgress,
-		firstRoundSize: COLLECTIONS_BATCH_SIZE
+		firstRoundSize: COLLECTIONS_BATCH_SIZE,
+		signal
 	});
 
-	return offers;
+	return { offers, unresolved };
 }
 
 /** Collection sizes for the franchises in a library, keeping only ids TMDB knows a collection for. */

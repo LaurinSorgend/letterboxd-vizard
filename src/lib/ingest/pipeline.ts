@@ -80,10 +80,8 @@ const WATCHLIST_CAST = 5;
 export async function enrichWatchlist(
 	watchlist: WatchlistEntry[],
 	onProgress: (done: number) => void = () => {}
-): Promise<(WatchlistFilm & { tmdb: TmdbMovie | null })[]> {
-	const enriched = await enrichFilms(watchlist, onProgress).catch(() =>
-		watchlist.map((entry) => ({ ...entry, tmdb: null }))
-	);
+): Promise<WatchlistFilm[]> {
+	const enriched = await enrichFilms(watchlist, onProgress);
 	return enriched.map((film) => ({
 		...film,
 		tmdb: film.tmdb
