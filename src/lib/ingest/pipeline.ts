@@ -1,7 +1,15 @@
 import { enrichFilms, enrichOmdb, fetchCollections } from '$lib/ingest/enrich';
 import { feedHasGap, mergeFeed, type FeedEntry } from '$lib/ingest/rss';
 import { watchedTmdbIds } from '$lib/viz/seeds';
-import type { CollectionParts, EnrichedFilm, Film, OmdbRatings, WatchlistEntry } from '$lib/types';
+import type {
+	CollectionParts,
+	EnrichedFilm,
+	Film,
+	OmdbRatings,
+	TmdbMovie,
+	WatchlistEntry,
+	WatchlistFilm
+} from '$lib/types';
 
 export interface Progress {
 	stage: 'films' | 'ratings';
@@ -11,6 +19,7 @@ export interface Progress {
 
 export interface EnrichedLibrary {
 	films: EnrichedFilm[];
+	watchlist: WatchlistFilm[];
 	watchlistIds: number[];
 }
 
@@ -48,7 +57,7 @@ export async function enrichLibrary(
 	tick();
 	const [watched, enrichedWatchlist] = await Promise.all([
 		enrichFilms(films, (n) => ((done.films = n), tick())),
-		enrichFilms(watchlist, (n) => ((done.watchlist = n), tick())).catch(() => [])
+		enrichWatchlist(watchlist, (n) => ((done.watchlist = n), tick()))
 	]);
 	const omdb = await ratingsFor(watched, report);
 	return {
@@ -56,8 +65,31 @@ export async function enrichLibrary(
 			...f,
 			omdb: f.tmdb?.imdbId ? (omdb.get(f.tmdb.imdbId) ?? null) : null
 		})),
+		watchlist: enrichedWatchlist,
 		watchlistIds: watchedTmdbIds(enrichedWatchlist)
 	};
+}
+
+/** Billed cast kept per watchlist film: enough to search by, light enough for the snapshot. */
+const WATCHLIST_CAST = 5;
+
+/**
+ * TMDB records for the watchlist, trimmed of what the watchlist view never reads so a long
+ * watchlist doesn't crowd the watched library out of the browser's storage quota.
+ */
+export async function enrichWatchlist(
+	watchlist: WatchlistEntry[],
+	onProgress: (done: number) => void = () => {}
+): Promise<(WatchlistFilm & { tmdb: TmdbMovie | null })[]> {
+	const enriched = await enrichFilms(watchlist, onProgress).catch(() =>
+		watchlist.map((entry) => ({ ...entry, tmdb: null }))
+	);
+	return enriched.map((film) => ({
+		...film,
+		tmdb: film.tmdb
+			? { ...film.tmdb, cast: film.tmdb.cast.slice(0, WATCHLIST_CAST), keywords: [] }
+			: null
+	}));
 }
 
 /** Franchise sizes for every collection in the library that `known` does not already cover. */

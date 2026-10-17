@@ -1,10 +1,13 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import type { CollectionParts, OmdbRatings, TmdbMovie } from '$lib/types';
 import type { FetchBudget } from './budget';
+import type { WatchAvailability } from './providers';
 
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** TMDB's recommendations shift slowly, so a related list stays useful far longer than a week. */
 const RELATED_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+/** Streaming catalogues change weekly, so availability goes stale within days. */
+const PROVIDERS_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 /** D1 allows at most 100 bound parameters per query. */
 const MAX_PARAMS = 100;
@@ -162,14 +165,15 @@ export interface RelatedMovie {
  * a warm phase costs a subrequest per chunk rather than one per key. Table and column names are
  * literals from this module, never request data. Stale and unknown keys are absent.
  */
-async function getJsonCachedMany<T>(
+async function getJsonCachedMany<T, K extends number | string = number>(
 	db: D1Database,
 	table: string,
 	key: string,
-	ids: number[]
-): Promise<Map<number, T>> {
-	const known = new Map<number, T>();
-	const cutoff = Date.now() - RELATED_TTL_MS;
+	ids: K[],
+	ttl = RELATED_TTL_MS
+): Promise<Map<K, T>> {
+	const known = new Map<K, T>();
+	const cutoff = Date.now() - ttl;
 	for (const chunk of chunks(ids, MAX_PARAMS - 1)) {
 		const marks = chunk.map(() => '?').join(',');
 		const { results } = await db
@@ -177,18 +181,18 @@ async function getJsonCachedMany<T>(
 				`SELECT ${key} AS id, data FROM ${table} WHERE ${key} IN (${marks}) AND fetched_at > ?`
 			)
 			.bind(...chunk, cutoff)
-			.all<{ id: number; data: string }>();
+			.all<{ id: K; data: string }>();
 		for (const row of results) known.set(row.id, JSON.parse(row.data) as T);
 	}
 	return known;
 }
 
 /** Multi-row upsert so a cold phase spends a couple of subrequests, not one per key. */
-async function putJsonCachedMany<T>(
+async function putJsonCachedMany<T, K extends number | string = number>(
 	db: D1Database,
 	table: string,
 	key: string,
-	entries: [number, T][]
+	entries: [K, T][]
 ): Promise<void> {
 	const now = Date.now();
 	for (const chunk of chunks(entries, Math.floor(MAX_PARAMS / 3))) {
@@ -228,6 +232,27 @@ export function putCollectionsCachedMany(
 ): Promise<void> {
 	const hits = entries.filter((entry): entry is [number, CollectionParts] => entry[1] !== null);
 	return putJsonCachedMany(db, 'collections', 'collection_id', hits);
+}
+
+/** Watch availability keyed `movie:<id>` / `tv:<id>`, since TMDB numbers the two separately. */
+export function getProvidersCachedMany(
+	db: D1Database,
+	mediaKeys: string[]
+): Promise<Map<string, WatchAvailability>> {
+	return getJsonCachedMany<WatchAvailability, string>(
+		db,
+		'providers',
+		'media_key',
+		mediaKeys,
+		PROVIDERS_TTL_MS
+	);
+}
+
+export function putProvidersCachedMany(
+	db: D1Database,
+	entries: [string, WatchAvailability][]
+): Promise<void> {
+	return putJsonCachedMany(db, 'providers', 'media_key', entries);
 }
 
 /**

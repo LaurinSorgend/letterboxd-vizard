@@ -14,6 +14,7 @@ declare global {
 				ENRICH_LIMITER: RateLimit;
 				RECOMMEND_LIMITER: RateLimit;
 				OMDB_LIMITER: RateLimit;
+				PROVIDERS_LIMITER: RateLimit;
 			};
 		}
 	}

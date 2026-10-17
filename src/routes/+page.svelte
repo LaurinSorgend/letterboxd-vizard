@@ -64,12 +64,14 @@
 	import {
 		collectionsFor,
 		enrichLibrary,
+		enrichWatchlist,
 		fetchFeed,
 		refreshFromFeed,
 		type Progress
 	} from '$lib/ingest/pipeline';
 	import { clearSnapshot, loadSnapshot, saveSnapshot, type Snapshot } from '$lib/store';
-	import type { CollectionParts, EnrichedFilm, LetterboxdData } from '$lib/types';
+	import Watchlist from '$lib/watchlist/Watchlist.svelte';
+	import type { CollectionParts, EnrichedFilm, LetterboxdData, WatchlistFilm } from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
 	let phase: Phase = $state('idle');
@@ -87,8 +89,12 @@
 	let feedNote: string | null = $state(null);
 	let feedGap = $state(false);
 	let mainEl: HTMLElement | null = $state(null);
+	let watchlist: WatchlistFilm[] = $state([]);
+	let lookingUpWatchlist = $state(false);
+	let view: 'stats' | 'watchlist' = $state(
+		page.url.searchParams.get('view') === 'watchlist' ? 'watchlist' : 'stats'
+	);
 
-	const watchlist = $derived(data?.watchlist ?? []);
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
 	const hasOmdb = $derived(films.some((f) => f.omdb));
 	const watchlistExclude = $derived(includeWatchlist ? [] : watchlistIds);
@@ -141,6 +147,7 @@
 		const snapshot = loadSnapshot();
 		if (snapshot) {
 			films = snapshot.films;
+			watchlist = snapshot.watchlist ?? [];
 			watchlistIds = snapshot.watchlistIds;
 			collections = snapshot.collections ?? [];
 			data = {
@@ -152,8 +159,18 @@
 			remember = true;
 			phase = 'ready';
 			void syncFeed();
+			void lookUpWatchlist();
 		}
 	});
+
+	/** Snapshots saved before the watchlist view kept only the watchlist's CSV rows. */
+	async function lookUpWatchlist() {
+		if (watchlist.every((film) => film.tmdb !== undefined)) return;
+		lookingUpWatchlist = true;
+		watchlist = await enrichWatchlist(watchlist);
+		lookingUpWatchlist = false;
+		if (remember) persist();
+	}
 
 	const FEED_ONLY_NOTE = `Loaded by username, so this only covers your ${FEED_FILM_LIMIT} latest diary entries: Letterboxd's RSS feed holds no more. Upload your export for the full history.`;
 
@@ -220,6 +237,7 @@
 			data = parsed;
 			const library = await enrichLibrary(parsed.films, parsed.watchlist, report);
 			films = library.films;
+			watchlist = library.watchlist;
 			watchlistIds = library.watchlistIds;
 			collections = await collectionsFor(films);
 			if (source === 'feed') feedNote = FEED_ONLY_NOTE;
@@ -330,300 +348,321 @@
 			</p>
 		{/if}
 
-		<SectionNav container={mainEl} />
+		<MetricToggle
+			name="view"
+			label="View"
+			options={[
+				{ value: 'stats', label: 'Your stats' },
+				{ value: 'watchlist', label: `Your watchlist (${watchlist.length})` }
+			]}
+			bind:value={view}
+		/>
 
-		<StatTiles {tiles} />
-
-		<section id="world">
-			<h2>Your films around the world</h2>
-			<WorldMap {films} {initialMetric} {presetCountry} {watchlistExclude} />
-		</section>
-
-		<section id="ratings">
-			<h2>Rating habits</h2>
-			<div class="pair">
-				<div>
-					<h3>How you rate, and what you heart</h3>
-					<Columns
-						data={ratingHistogram(films)}
-						highlightLabel="Hearted"
-						restLabel="Not hearted"
-						description="Films per rating step, split by whether you hearted them"
-					/>
-					<p class="sub chart-note">
-						{likes.liked} of your {films.length} films hearted.
-						{#if likes.unrated > 0}
-							{likes.unrated} of those carry no rating and sit outside these bars.
-						{/if}
-					</p>
-				</div>
-				<RatingGaps {films} />
-			</div>
-		</section>
-
-		{#if hasOmdb}
-			<section id="triangulation">
-				<h2>Critical consensus &amp; rating triangulation</h2>
-
-				<h3>Where you diverge, film by film</h3>
-				<RatingRadar {films} />
-
-				<h3 class="spaced">Critics vs. crowds</h3>
-				<RatingContrarian {films} />
-
-				<h3 class="spaced">Biggest disagreements with Metacritic</h3>
-				<MetacriticDisagreement {films} />
-
-				<h3 class="spaced">Which source best predicts your taste</h3>
-				<RatingCorrelation {films} />
+		{#if view === 'watchlist'}
+			<section id="watchlist">
+				<h2>Your watchlist</h2>
+				<Watchlist {watchlist} looking={lookingUpWatchlist} onupload={() => (phase = 'idle')} />
 			</section>
-		{/if}
+		{:else}
+			<SectionNav container={mainEl} />
 
-		<section id="years">
-			<h2>Through the years</h2>
-			<div class="pair">
-				<div>
-					<h3>Watches per year (diary)</h3>
-					<Columns data={watchesPerYear(films)} description="Diary entries per year" />
-				</div>
-				<div>
-					<h3>Films by release decade</h3>
-					<Columns data={releaseDecades(films)} description="Films per release decade" />
-				</div>
-			</div>
-		</section>
+			<StatTiles {tiles} />
 
-		<section id="lag">
-			<h2>From release to watch</h2>
-			<p class="sub chart-note">
-				{#if medianLag !== null}
-					Median gap: {formatDays(medianLag)} from release to first watch.
-				{/if}
-				Films without a diary entry are left out.
-			</p>
-			<RankedBars
-				data={watchLag(films)}
-				showAvg
-				description="Films and average rating per gap between release and first watch"
-			/>
-		</section>
-
-		<section id="when">
-			<h2>When you watch</h2>
-			<MetricToggle
-				name="heat-metric"
-				label="Heatmap metric"
-				options={[
-					{ value: 'watchtime', label: 'Watchtime' },
-					{ value: 'rating', label: 'Average rating' }
-				]}
-				bind:value={heatMetric}
-			/>
-			<h3>This year, day by day</h3>
-			<Heatmap grid={dailyHeatmap} metric={heatMetric} />
-			<h3 class="spaced">Every week, year over year</h3>
-			<Heatmap grid={weeklyHeatmap} metric={heatMetric} />
-			<h3 class="spaced">Genres by month, every year pooled</h3>
-			{#if heatMetric === 'watchtime'}
-				<MetricToggle
-					name="season-scale"
-					label="Genre heatmap scale"
-					options={[
-						{ value: 'genre', label: 'Each genre on its own scale' },
-						{ value: 'global', label: 'One scale for all genres' }
-					]}
-					bind:value={seasonScale}
-				/>
-			{/if}
-			<Heatmap grid={seasonalHeatmap} metric={heatMetric} cellSize={26} fitWidth />
-		</section>
-
-		<section id="runtime">
-			<h2>How long you watch</h2>
-			{#if hasSeries}
-				<MetricToggle
-					name="runtime-scope"
-					label="Runtime scope"
-					options={[
-						{ value: 'films', label: 'Films only' },
-						{ value: 'all', label: 'With series' }
-					]}
-					bind:value={runtimeScope}
-				/>
-			{/if}
-			<RankedBars data={runtimes} showAvg description="Films and average rating per runtime band" />
-		</section>
-
-		<section id="length">
-			<h2>Does length buy quality?</h2>
-			<Scatter {films} />
-		</section>
-
-		{#if rewatched.length > 0}
-			<section id="rewatches">
-				<h2>Films you return to</h2>
-				<RankedBars data={rewatched} showAvg description="Diary entries per rewatched film" />
+			<section id="world">
+				<h2>Your films around the world</h2>
+				<WorldMap {films} {initialMetric} {presetCountry} {watchlistExclude} />
 			</section>
-		{/if}
 
-		<section id="genres">
-			<h2>Genres &amp; languages</h2>
-			<div class="pair">
-				<div>
-					<h3>Genres</h3>
-					<RankedBars
-						data={byGenre(films)}
-						showAvg
-						description="Films and average rating per genre"
-					/>
+			<section id="ratings">
+				<h2>Rating habits</h2>
+				<div class="pair">
+					<div>
+						<h3>How you rate, and what you heart</h3>
+						<Columns
+							data={ratingHistogram(films)}
+							highlightLabel="Hearted"
+							restLabel="Not hearted"
+							description="Films per rating step, split by whether you hearted them"
+						/>
+						<p class="sub chart-note">
+							{likes.liked} of your {films.length} films hearted.
+							{#if likes.unrated > 0}
+								{likes.unrated} of those carry no rating and sit outside these bars.
+							{/if}
+						</p>
+					</div>
+					<RatingGaps {films} />
 				</div>
-				<div>
-					<h3>Original language</h3>
-					<RankedBars
-						data={byLanguage(films)}
-						showAvg
-						description="Films and average rating per language"
-					/>
-				</div>
-			</div>
-		</section>
+			</section>
 
-		{#if franchises.length > 0}
-			<section id="franchises">
-				<h2>Franchises you follow</h2>
+			{#if hasOmdb}
+				<section id="triangulation">
+					<h2>Critical consensus &amp; rating triangulation</h2>
+
+					<h3>Where you diverge, film by film</h3>
+					<RatingRadar {films} />
+
+					<h3 class="spaced">Critics vs. crowds</h3>
+					<RatingContrarian {films} />
+
+					<h3 class="spaced">Biggest disagreements with Metacritic</h3>
+					<MetacriticDisagreement {films} />
+
+					<h3 class="spaced">Which source best predicts your taste</h3>
+					<RatingCorrelation {films} />
+				</section>
+			{/if}
+
+			<section id="years">
+				<h2>Through the years</h2>
+				<div class="pair">
+					<div>
+						<h3>Watches per year (diary)</h3>
+						<Columns data={watchesPerYear(films)} description="Diary entries per year" />
+					</div>
+					<div>
+						<h3>Films by release decade</h3>
+						<Columns data={releaseDecades(films)} description="Films per release decade" />
+					</div>
+				</div>
+			</section>
+
+			<section id="lag">
+				<h2>From release to watch</h2>
 				<p class="sub chart-note">
-					{franchiseShare.inCollection} of your {franchiseShare.total} matched films belong to a TMDB
-					franchise. One-film franchises are left out.
+					{#if medianLag !== null}
+						Median gap: {formatDays(medianLag)} from release to first watch.
+					{/if}
+					Films without a diary entry are left out.
 				</p>
 				<RankedBars
-					data={franchises}
+					data={watchLag(films)}
 					showAvg
-					description="Films and average rating per franchise"
+					description="Films and average rating per gap between release and first watch"
 				/>
 			</section>
-		{/if}
 
-		{#if themes.length > 0}
-			<section id="keywords">
-				<h2>Themes you return to</h2>
-				<p class="sub chart-note">
-					A partial picture: TMDB keywords cover {themeCoverage.withKeywords} of your {themeCoverage.total}
-					matched films. Shown from two shared films up, sized by count on a square-root scale.
-				</p>
+			<section id="when">
+				<h2>When you watch</h2>
 				<MetricToggle
-					name="keyword-view"
-					label="Keyword view"
+					name="heat-metric"
+					label="Heatmap metric"
 					options={[
-						{ value: 'cloud', label: 'Cloud' },
-						{ value: 'bars', label: 'Bars' }
+						{ value: 'watchtime', label: 'Watchtime' },
+						{ value: 'rating', label: 'Average rating' }
 					]}
-					bind:value={keywordView}
+					bind:value={heatMetric}
 				/>
-				{#if keywordView === 'cloud'}
-					<KeywordCloud
-						data={themes}
-						description="Your most common TMDB keywords, sized by film count"
-					/>
-				{:else}
-					<RankedBars
-						data={themes}
-						showAvg
-						limit={20}
-						description="Films and average rating per TMDB keyword"
+				<h3>This year, day by day</h3>
+				<Heatmap grid={dailyHeatmap} metric={heatMetric} />
+				<h3 class="spaced">Every week, year over year</h3>
+				<Heatmap grid={weeklyHeatmap} metric={heatMetric} />
+				<h3 class="spaced">Genres by month, every year pooled</h3>
+				{#if heatMetric === 'watchtime'}
+					<MetricToggle
+						name="season-scale"
+						label="Genre heatmap scale"
+						options={[
+							{ value: 'genre', label: 'Each genre on its own scale' },
+							{ value: 'global', label: 'One scale for all genres' }
+						]}
+						bind:value={seasonScale}
 					/>
 				{/if}
+				<Heatmap grid={seasonalHeatmap} metric={heatMetric} cellSize={26} fitWidth />
 			</section>
-		{/if}
 
-		<section id="obscurity">
-			<h2>Crowds &amp; deep cuts</h2>
-			<p class="sub chart-note">
-				TMDB and IMDb rating counts combined, as a stand-in for how widely seen each film is.
-				{#if obscure !== null}
-					{Math.round(obscure * 100)}% of yours: fewer than 1,000 ratings.
+			<section id="runtime">
+				<h2>How long you watch</h2>
+				{#if hasSeries}
+					<MetricToggle
+						name="runtime-scope"
+						label="Runtime scope"
+						options={[
+							{ value: 'films', label: 'Films only' },
+							{ value: 'all', label: 'With series' }
+						]}
+						bind:value={runtimeScope}
+					/>
 				{/if}
-			</p>
-			<RankedBars
-				data={audienceBands(films)}
-				showAvg
-				description="Films and average rating per combined TMDB + IMDb vote-count band"
-			/>
-		</section>
-
-		<section id="quadrants">
-			<h2>Popularity vs. your rating</h2>
-			<p class="sub chart-note">
-				Every rated film split into four quadrants: popularity above or below your library's own
-				median for combined TMDB + IMDb vote count.
-			</p>
-			<Quadrants {films} />
-		</section>
-
-		<section id="people">
-			<h2>People</h2>
-			<div class="pair">
-				<div>
-					<h3>Most-watched directors</h3>
-					<RankedBars
-						data={byPerson(films, 'directors')}
-						showAvg
-						description="Films and average rating per director"
-					/>
-				</div>
-				<div>
-					<h3>Most-watched actors</h3>
-					<RankedBars
-						data={byPerson(films, 'cast')}
-						showAvg
-						description="Films and average rating per actor"
-					/>
-				</div>
-			</div>
-		</section>
-
-		<section id="people-timeline">
-			<h2>Watching them over time</h2>
-			<p class="sub chart-note">
-				Cumulative hours watched of each selected person's films, across every diary date.
-			</p>
-			<PeopleTimeline {films} />
-		</section>
-
-		<section id="network">
-			<h2>How your films connect</h2>
-			<p class="sub chart-note">
-				Films joined by shared billed cast or a director. Clusters are the corners of cinema you
-				keep returning to. Pick a film to see its links.
-			</p>
-			<Network {films} />
-		</section>
-
-		<section id="mosaic">
-			<h2>Every film you have watched</h2>
-			<p class="sub chart-note">Your whole library as a wall of posters.</p>
-			<Mosaic {films} />
-		</section>
-
-		{#if milestones.length > 0}
-			<section id="milestones">
-				<h2>Milestones</h2>
-				<Milestones {milestones} />
+				<RankedBars
+					data={runtimes}
+					showAvg
+					description="Films and average rating per runtime band"
+				/>
 			</section>
-		{/if}
 
-		<YearRecap {films} {watchlist} {collections} />
+			<section id="length">
+				<h2>Does length buy quality?</h2>
+				<Scatter {films} />
+			</section>
 
-		<Recommendations {films} {watchlistIds} bind:includeWatchlist />
+			{#if rewatched.length > 0}
+				<section id="rewatches">
+					<h2>Films you return to</h2>
+					<RankedBars data={rewatched} showAvg description="Diary entries per rewatched film" />
+				</section>
+			{/if}
 
-		{#if unmatched.length > 0}
-			<details class="unmatched">
-				<summary>{unmatched.length} films could not be matched on TMDB</summary>
-				<ul>
-					{#each unmatched as film (film.uri)}
-						<li>{film.name} ({film.year ?? 'unknown year'})</li>
-					{/each}
-				</ul>
-			</details>
+			<section id="genres">
+				<h2>Genres &amp; languages</h2>
+				<div class="pair">
+					<div>
+						<h3>Genres</h3>
+						<RankedBars
+							data={byGenre(films)}
+							showAvg
+							description="Films and average rating per genre"
+						/>
+					</div>
+					<div>
+						<h3>Original language</h3>
+						<RankedBars
+							data={byLanguage(films)}
+							showAvg
+							description="Films and average rating per language"
+						/>
+					</div>
+				</div>
+			</section>
+
+			{#if franchises.length > 0}
+				<section id="franchises">
+					<h2>Franchises you follow</h2>
+					<p class="sub chart-note">
+						{franchiseShare.inCollection} of your {franchiseShare.total} matched films belong to a TMDB
+						franchise. One-film franchises are left out.
+					</p>
+					<RankedBars
+						data={franchises}
+						showAvg
+						description="Films and average rating per franchise"
+					/>
+				</section>
+			{/if}
+
+			{#if themes.length > 0}
+				<section id="keywords">
+					<h2>Themes you return to</h2>
+					<p class="sub chart-note">
+						A partial picture: TMDB keywords cover {themeCoverage.withKeywords} of your {themeCoverage.total}
+						matched films. Shown from two shared films up, sized by count on a square-root scale.
+					</p>
+					<MetricToggle
+						name="keyword-view"
+						label="Keyword view"
+						options={[
+							{ value: 'cloud', label: 'Cloud' },
+							{ value: 'bars', label: 'Bars' }
+						]}
+						bind:value={keywordView}
+					/>
+					{#if keywordView === 'cloud'}
+						<KeywordCloud
+							data={themes}
+							description="Your most common TMDB keywords, sized by film count"
+						/>
+					{:else}
+						<RankedBars
+							data={themes}
+							showAvg
+							limit={20}
+							description="Films and average rating per TMDB keyword"
+						/>
+					{/if}
+				</section>
+			{/if}
+
+			<section id="obscurity">
+				<h2>Crowds &amp; deep cuts</h2>
+				<p class="sub chart-note">
+					TMDB and IMDb rating counts combined, as a stand-in for how widely seen each film is.
+					{#if obscure !== null}
+						{Math.round(obscure * 100)}% of yours: fewer than 1,000 ratings.
+					{/if}
+				</p>
+				<RankedBars
+					data={audienceBands(films)}
+					showAvg
+					description="Films and average rating per combined TMDB + IMDb vote-count band"
+				/>
+			</section>
+
+			<section id="quadrants">
+				<h2>Popularity vs. your rating</h2>
+				<p class="sub chart-note">
+					Every rated film split into four quadrants: popularity above or below your library's own
+					median for combined TMDB + IMDb vote count.
+				</p>
+				<Quadrants {films} />
+			</section>
+
+			<section id="people">
+				<h2>People</h2>
+				<div class="pair">
+					<div>
+						<h3>Most-watched directors</h3>
+						<RankedBars
+							data={byPerson(films, 'directors')}
+							showAvg
+							description="Films and average rating per director"
+						/>
+					</div>
+					<div>
+						<h3>Most-watched actors</h3>
+						<RankedBars
+							data={byPerson(films, 'cast')}
+							showAvg
+							description="Films and average rating per actor"
+						/>
+					</div>
+				</div>
+			</section>
+
+			<section id="people-timeline">
+				<h2>Watching them over time</h2>
+				<p class="sub chart-note">
+					Cumulative hours watched of each selected person's films, across every diary date.
+				</p>
+				<PeopleTimeline {films} />
+			</section>
+
+			<section id="network">
+				<h2>How your films connect</h2>
+				<p class="sub chart-note">
+					Films joined by shared billed cast or a director. Clusters are the corners of cinema you
+					keep returning to. Pick a film to see its links.
+				</p>
+				<Network {films} />
+			</section>
+
+			<section id="mosaic">
+				<h2>Every film you have watched</h2>
+				<p class="sub chart-note">Your whole library as a wall of posters.</p>
+				<Mosaic {films} />
+			</section>
+
+			{#if milestones.length > 0}
+				<section id="milestones">
+					<h2>Milestones</h2>
+					<Milestones {milestones} />
+				</section>
+			{/if}
+
+			<YearRecap {films} {watchlist} {collections} />
+
+			<Recommendations {films} {watchlistIds} bind:includeWatchlist />
+
+			{#if unmatched.length > 0}
+				<details class="unmatched">
+					<summary>{unmatched.length} films could not be matched on TMDB</summary>
+					<ul>
+						{#each unmatched as film (film.uri)}
+							<li>{film.name} ({film.year ?? 'unknown year'})</li>
+						{/each}
+					</ul>
+				</details>
+			{/if}
 		{/if}
 	{/if}
 </main>
@@ -641,7 +680,8 @@
 		<a href="https://letterboxd.com">Letterboxd</a>. Film metadata and recommendations from
 		<a href="https://www.themoviedb.org">TMDB</a>. This product uses the TMDB API but is not
 		endorsed or certified by TMDB. Some series data from
-		<a href="https://thetvdb.com">TheTVDB</a>.
+		<a href="https://thetvdb.com">TheTVDB</a>. Streaming availability from
+		<a href="https://www.justwatch.com">JustWatch</a>.
 	</p>
 </footer>
 

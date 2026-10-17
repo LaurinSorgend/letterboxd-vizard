@@ -396,6 +396,11 @@ erDiagram
         TEXT data "JSON CollectionParts"
         INTEGER fetched_at
     }
+    providers {
+        TEXT media_key PK "movie:id or tv:id"
+        TEXT data "JSON WatchAvailability, every country"
+        INTEGER fetched_at "TTL 3d"
+    }
     omdb {
         TEXT imdb_id PK
         TEXT data "JSON OmdbRatings"

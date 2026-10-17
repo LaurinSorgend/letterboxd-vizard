@@ -126,3 +126,33 @@ export interface EnrichedFilm extends Film {
 	/** OMDb ratings keyed by tmdb.imdbId; null when unmatched, unconfigured, or OMDb had nothing. */
 	omdb: OmdbRatings | null;
 }
+
+/** A watchlist row joined with its TMDB record; `undefined` on snapshots saved before lookup. */
+export interface WatchlistFilm extends WatchlistEntry {
+	tmdb?: TmdbMovie | null;
+}
+
+/** How a service offers a title, in TMDB's (JustWatch's) terms. */
+export type OfferKind = 'flatrate' | 'free' | 'ads' | 'rent' | 'buy';
+
+export const OFFER_KINDS: OfferKind[] = ['flatrate', 'free', 'ads', 'rent', 'buy'];
+
+/** A streaming or rental service, e.g. Netflix or Apple TV. */
+export interface Provider {
+	id: number;
+	name: string;
+	/** TMDB image path of the service logo. */
+	logoPath: string | null;
+}
+
+/** Where one title can be watched in one country, by kind of offer. */
+export type RegionOffers = Record<OfferKind, Provider[]> & {
+	/** TMDB's watch page for the title in that country, which links out to the services. */
+	link: string | null;
+};
+
+/** One title sent to /api/providers. */
+export interface ProviderRequestItem {
+	tmdbId: number;
+	mediaType: 'movie' | 'tv';
+}

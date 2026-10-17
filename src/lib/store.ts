@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import type { CollectionParts, EnrichedFilm, Profile, WatchlistEntry } from '$lib/types';
+import type { CollectionParts, EnrichedFilm, Profile, WatchlistFilm } from '$lib/types';
 
 /** Bump when the snapshot shape changes so stale data is ignored, not misread. */
 const KEY = 'letterboxd-vizard:snapshot:v5';
@@ -8,7 +8,7 @@ const PREFIX = 'letterboxd-vizard:snapshot:';
 /** The analysed result kept on the user's device so repeat visits skip re-uploading. */
 export interface Snapshot {
 	films: EnrichedFilm[];
-	watchlist: WatchlistEntry[];
+	watchlist: WatchlistFilm[];
 	watchlistIds: number[];
 	profile: Profile | null;
 	collections: CollectionParts[];

@@ -28,3 +28,8 @@ CREATE TABLE IF NOT EXISTS omdb_misses (
 	fetched_at INTEGER NOT NULL
 );
 DROP TABLE IF EXISTS trakt_related;
+CREATE TABLE IF NOT EXISTS providers (
+	media_key TEXT PRIMARY KEY,
+	data TEXT NOT NULL,
+	fetched_at INTEGER NOT NULL
+);

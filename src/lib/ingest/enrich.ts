@@ -1,8 +1,15 @@
-import type { CollectionParts, EnrichRequestItem, OmdbRatings, TmdbMovie } from '$lib/types';
+import type {
+	CollectionParts,
+	EnrichRequestItem,
+	OmdbRatings,
+	ProviderRequestItem,
+	RegionOffers,
+	TmdbMovie
+} from '$lib/types';
 
 const BATCH_SIZE = 50;
 /**
- * Collections spend one subrequest per uncached id, so a full 50 would always overrun the
+ * Collections and providers spend one subrequest per uncached id, so a full 50 would always overrun the
  * server's per-request fetch budget and defer the tail into a retry round.
  */
 const COLLECTIONS_BATCH_SIZE = 35;
@@ -130,6 +137,29 @@ export async function enrichOmdb(
 	});
 
 	return ratings;
+}
+
+/** Key a title's offers are stored under; TMDB numbers films and series separately. */
+export const offersKey = (item: ProviderRequestItem): string => `${item.mediaType}:${item.tmdbId}`;
+
+/** Where each title can be watched in `region`, keyed by `offersKey`; null means nowhere. */
+export async function fetchProviders(
+	items: ProviderRequestItem[],
+	region: string,
+	onProgress?: (done: number, total: number) => void
+): Promise<Map<string, RegionOffers | null>> {
+	const unique = [...new Map(items.map((item) => [offersKey(item), item])).values()];
+	const offers = new Map<string, RegionOffers | null>();
+
+	await runRounds<ProviderRequestItem, RegionOffers>({
+		items: unique,
+		send: (batch) => postBatch('/api/providers', { region, items: batch }, 'Provider lookup'),
+		keep: (index, found) => offers.set(offersKey(unique[index]), found),
+		onProgress,
+		firstRoundSize: COLLECTIONS_BATCH_SIZE
+	});
+
+	return offers;
 }
 
 /** Collection sizes for the franchises in a library, keeping only ids TMDB knows a collection for. */
