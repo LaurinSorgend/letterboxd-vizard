@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { imageUrl } from '$lib/viz/images';
 	import { webHref } from '$lib/viz/href';
-	import { providersOf, STREAM_KINDS, type OffersOf } from './filter';
+	import { posterUrl, providersOf, STREAM_KINDS, type OffersOf } from './filter';
 	import type { Provider, WatchlistFilm } from '$lib/types';
 
 	let {
@@ -40,7 +40,7 @@
 <ul class="wall">
 	{#each shown as film (film.uri)}
 		{@const href = webHref(film.uri)}
-		{@const src = imageUrl(film.tmdb?.posterPath ?? null, 'w185')}
+		{@const src = posterUrl(film)}
 		{@const on = streamers(film)}
 		<li>
 			<svelte:element

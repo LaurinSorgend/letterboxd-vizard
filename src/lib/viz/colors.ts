@@ -17,6 +17,19 @@ const SAT_FLOOR = 0.05;
 /** Thrown when the browser refuses to hand back pixels, i.e. the image arrived without CORS. */
 export class TaintedCanvasError extends Error {}
 
+/** Greyscale and unread posters have no meaningful hue, so they gather at the end rather than at red. */
+function spectrumKey(swatch: Swatch | undefined): [number, number] {
+	if (!swatch || swatch.sat === 0) return [1, swatch?.light ?? 0];
+	return [0, swatch.hue];
+}
+
+/** Orders swatches around the colour wheel, greys last from dark to light. */
+export function compareSpectrum(a: Swatch | undefined, b: Swatch | undefined): number {
+	const [groupA, keyA] = spectrumKey(a);
+	const [groupB, keyB] = spectrumKey(b);
+	return groupA - groupB || keyA - keyB;
+}
+
 const swatches = new Map<string, Swatch | null>();
 
 let scratch: CanvasRenderingContext2D | null = null;

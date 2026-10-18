@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { tmdb } from '$lib/testing/fixtures';
 import type { Provider, RegionOffers, TmdbMovie, WatchlistFilm } from '$lib/types';
+import type { Swatch } from '$lib/viz/colors';
 import {
 	filterWatchlist,
 	NO_FILTERS,
@@ -115,6 +116,15 @@ describe('sortWatchlist', () => {
 
 	it('shuffles the same way for the same seed', () => {
 		expect(sortWatchlist(all, 'shuffle', 3)).toEqual(sortWatchlist(all, 'shuffle', 3));
+	});
+
+	it('orders by poster hue, greys and unread posters last', () => {
+		const swatches: Record<string, Swatch> = {
+			Heat: { hue: 220, sat: 0.6, light: 0.4 },
+			Stalker: { hue: 30, sat: 0.5, light: 0.3 }
+		};
+		const sorted = sortWatchlist(all, 'colour', 0, (film) => swatches[film.name]);
+		expect(names(sorted)).toEqual(['Stalker', 'Heat', 'Paddington']);
 	});
 });
 

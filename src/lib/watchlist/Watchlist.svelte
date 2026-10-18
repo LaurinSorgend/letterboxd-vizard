@@ -16,12 +16,15 @@
 	import {
 		filterWatchlist,
 		NO_FILTERS,
+		posterUrl,
 		serviceCounts,
 		sortWatchlist,
 		type OffersOf,
+		type SwatchOf,
 		type WatchFilters,
 		type WatchSort
 	} from './filter';
+	import { extractPalette, type Swatch } from '$lib/viz/colors';
 	import { initialRegion, loadServices, saveRegion, saveServices } from './region';
 	import WatchlistControls from './WatchlistControls.svelte';
 	import WatchlistFacets from './WatchlistFacets.svelte';
@@ -41,6 +44,8 @@
 	let sort: WatchSort = $state('added-desc');
 	let seed = $state(0);
 	let showLogos = $state(true);
+	let palette: Map<string, Swatch> = $state(new Map());
+	let colours = $state({ reading: false, progress: 0, refused: false });
 
 	const titles = $derived(
 		watchlist.flatMap((f) =>
@@ -51,7 +56,30 @@
 
 	const loading = $derived(loaded.done < loaded.total);
 	const counts = $derived(serviceCounts(watchlist, offersOf));
-	const shown = $derived(sortWatchlist(filterWatchlist(watchlist, filters, offersOf), sort, seed));
+	const filtered = $derived(filterWatchlist(watchlist, filters, offersOf));
+	const swatchOf: SwatchOf = (film) => {
+		const url = posterUrl(film);
+		return url ? palette.get(url) : undefined;
+	};
+	const shown = $derived(sortWatchlist(filtered, sort, seed, swatchOf));
+	const unread = $derived(
+		[...new Set(filtered.map(posterUrl).filter((url): url is string => url !== null))].filter(
+			(url) => !palette.has(url)
+		)
+	);
+
+	async function readColours() {
+		colours.reading = true;
+		colours.progress = 0;
+		const found = await extractPalette(unread, (done) => (colours.progress = done));
+		colours.reading = false;
+		if (!found) {
+			colours.refused = true;
+			return;
+		}
+		palette = new Map([...palette, ...found]);
+		sort = 'colour';
+	}
 
 	$effect(() => {
 		const controller = new AbortController();
@@ -113,6 +141,8 @@
 			bind:showLogos
 			onshuffle={() => ((sort = 'shuffle'), (seed += 1))}
 			onreset={reset}
+			colours={{ ...colours, ready: palette.size > 0, unread: unread.length }}
+			oncolours={readColours}
 		/>
 		<ServicePicker {counts} {loading} bind:selected={filters.services} />
 		<WatchlistFacets films={watchlist} bind:filters />

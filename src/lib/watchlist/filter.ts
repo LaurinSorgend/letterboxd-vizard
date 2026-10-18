@@ -1,5 +1,7 @@
 import { effectiveCountries } from '$lib/viz/countries';
 import { hashString, seeded } from '$lib/viz/seeded';
+import { compareSpectrum, type Swatch } from '$lib/viz/colors';
+import { imageUrl } from '$lib/viz/images';
 import type { OfferKind, Provider, RegionOffers, WatchlistFilm } from '$lib/types';
 
 /** What a film's offers in the chosen country must include to stay in view. */
@@ -15,7 +17,16 @@ export type WatchSort =
 	| 'runtime-asc'
 	| 'runtime-desc'
 	| 'title'
-	| 'shuffle';
+	| 'shuffle'
+	| 'colour';
+
+/** A film's dominant poster colour, or undefined while it has not been read. */
+export type SwatchOf = (film: WatchlistFilm) => Swatch | undefined;
+
+/** The poster the wall shows, which is also the image the colour sort reads. */
+export function posterUrl(film: WatchlistFilm): string | null {
+	return imageUrl(film.tmdb?.posterPath ?? null, 'w185');
+}
 
 export interface WatchFilters {
 	query: string;
@@ -151,7 +162,7 @@ function addedKey(film: WatchlistFilm): number | null {
 	return film.added ? Date.parse(film.added) : null;
 }
 
-function comparator(sort: WatchSort, seed: number) {
+function comparator(sort: WatchSort, seed: number, swatchOf: SwatchOf) {
 	switch (sort) {
 		case 'added-desc':
 			return byNumber(addedKey, true);
@@ -173,12 +184,19 @@ function comparator(sort: WatchSort, seed: number) {
 			return () => 0;
 		case 'shuffle':
 			return byNumber((f) => seeded(hashString(f.uri) + seed), false);
+		case 'colour':
+			return (a: WatchlistFilm, b: WatchlistFilm) => compareSpectrum(swatchOf(a), swatchOf(b));
 	}
 }
 
 /** Sorted copy; ties, and the title sort itself, fall back to the film's name. */
-export function sortWatchlist(films: WatchlistFilm[], sort: WatchSort, seed = 0): WatchlistFilm[] {
-	const compare = comparator(sort, seed);
+export function sortWatchlist(
+	films: WatchlistFilm[],
+	sort: WatchSort,
+	seed = 0,
+	swatchOf: SwatchOf = () => undefined
+): WatchlistFilm[] {
+	const compare = comparator(sort, seed, swatchOf);
 	return [...films].sort((a, b) => compare(a, b) || a.name.localeCompare(b.name));
 }
 

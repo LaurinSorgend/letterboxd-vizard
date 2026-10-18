@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { imageUrl } from './images';
 	import { webHref } from './href';
-	import { extractPalette, type Swatch } from './colors';
+	import { compareSpectrum, extractPalette, type Swatch } from './colors';
 	import type { EnrichedFilm } from '$lib/types';
 
 	let { films }: { films: EnrichedFilm[] } = $props();
@@ -25,21 +25,16 @@
 		return film.watchedDates.length > 0 ? film.watchedDates[film.watchedDates.length - 1] : '';
 	}
 
-	/** Greyscale posters have no meaningful hue, so they gather at the end rather than at red. */
-	function colourKey(film: EnrichedFilm): [number, number] {
+	function swatchOf(film: EnrichedFilm): Swatch | undefined {
 		const url = poster(film);
-		const swatch = url ? palette.get(url) : undefined;
-		if (!swatch || swatch.sat === 0) return [1, swatch?.light ?? 0];
-		return [0, swatch.hue];
+		return url ? palette.get(url) : undefined;
 	}
 
 	function compare(a: EnrichedFilm, b: EnrichedFilm): number {
 		if (sort === 'rating') return (b.rating ?? -1) - (a.rating ?? -1);
 		if (sort === 'watched') return lastWatch(b).localeCompare(lastWatch(a));
 		if (sort === 'year') return (b.tmdb?.year ?? b.year ?? 0) - (a.tmdb?.year ?? a.year ?? 0);
-		const [groupA, keyA] = colourKey(a);
-		const [groupB, keyB] = colourKey(b);
-		return groupA - groupB || keyA - keyB;
+		return compareSpectrum(swatchOf(a), swatchOf(b));
 	}
 
 	const ordered = $derived(

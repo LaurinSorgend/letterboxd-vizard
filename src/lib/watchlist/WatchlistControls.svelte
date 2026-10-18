@@ -9,7 +9,9 @@
 		sort = $bindable(),
 		showLogos = $bindable(),
 		onshuffle,
-		onreset
+		onreset,
+		colours,
+		oncolours
 	}: {
 		region: string;
 		onregion: (region: string) => void;
@@ -18,6 +20,15 @@
 		showLogos: boolean;
 		onshuffle: () => void;
 		onreset: () => void;
+		/** Colour sort state: whether any swatches exist, how many posters are left to read. */
+		colours: {
+			ready: boolean;
+			unread: number;
+			reading: boolean;
+			progress: number;
+			refused: boolean;
+		};
+		oncolours: () => void;
 	} = $props();
 
 	const SORTS: { value: WatchSort; label: string }[] = [
@@ -63,16 +74,32 @@
 			{#each SORTS as option (option.value)}
 				<option value={option.value}>{option.label}</option>
 			{/each}
+			<option value="colour" disabled={!colours.ready}>Colour spectrum</option>
 		</select>
 	</label>
 	<div class="actions">
 		<button type="button" onclick={onshuffle}>Shuffle</button>
 		<button type="button" onclick={onreset}>Reset filters</button>
+		{#if !colours.refused && colours.unread > 0}
+			<button type="button" onclick={oncolours} disabled={colours.reading}>
+				{colours.reading ? 'Reading colours…' : 'Sort by colour'}
+			</button>
+		{/if}
+		{#if colours.reading}
+			<progress value={colours.progress} max={colours.unread} aria-label="Reading poster colours"
+			></progress>
+		{/if}
 		<label class="inline">
 			<input type="checkbox" bind:checked={showLogos} />
 			Logos on posters
 		</label>
 	</div>
+	{#if colours.refused}
+		<p class="note">
+			Colour sorting needs pixel access to the posters, which this browser blocks for TMDB images.
+			The other orderings still work.
+		</p>
+	{/if}
 </div>
 
 <style>
@@ -107,5 +134,15 @@
 	label.inline input {
 		accent-color: var(--accent);
 		margin: 0;
+	}
+	progress {
+		width: 160px;
+		accent-color: var(--accent);
+	}
+	.note {
+		grid-column: 1 / -1;
+		margin: 0;
+		font-size: var(--text-2xs);
+		color: var(--fg-muted);
 	}
 </style>
