@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareSpectrum, swatchFromPixels, type Swatch } from './colors';
+import { compareSpectrum, swatchFromPixels, type Swatch } from '$lib/viz/colors';
 
 type Rgb = [number, number, number];
 
@@ -54,7 +54,17 @@ describe('compareSpectrum', () => {
 		return Object.keys(items).sort((a, b) => compareSpectrum(items[a], items[b]));
 	}
 
-	it('separates the same accent by background tier, dark first', () => {
+	it('groups by hue bucket before background tier', () => {
+		expect(
+			sorted({
+				'blue-dark': swatch(0.1, 260),
+				'red-light': swatch(0.95, 30),
+				'red-dark': swatch(0.1, 30)
+			})
+		).toEqual(['red-dark', 'red-light', 'blue-dark']);
+	});
+
+	it('separates the same accent by background tier, dark first on an even bucket', () => {
 		expect(
 			sorted({
 				light: swatch(0.95, 30),
@@ -62,6 +72,17 @@ describe('compareSpectrum', () => {
 				dark: swatch(0.1, 30)
 			})
 		).toEqual(['dark', 'mid', 'light']);
+	});
+
+	it('reverses tier and lightness on an odd bucket', () => {
+		expect(
+			sorted({
+				'dark-dim': swatch(0.1, 60, 0.2),
+				'light-dim': swatch(0.95, 60, 0.2),
+				'dark-bright': swatch(0.1, 60, 0.8),
+				'light-bright': swatch(0.95, 60, 0.8)
+			})
+		).toEqual(['light-bright', 'light-dim', 'dark-bright', 'dark-dim']);
 	});
 
 	it('flips the lightness direction between neighbouring hue buckets', () => {
@@ -79,14 +100,15 @@ describe('compareSpectrum', () => {
 		expect(sorted({ pink: swatch(0.1, 5), red: swatch(0.1, 29) })).toEqual(['red', 'pink']);
 	});
 
-	it('closes each tier with greys and the whole order with unread posters', () => {
+	it('puts greys after every hue and unread posters last', () => {
 		expect(
 			sorted({
 				unread: undefined,
+				'light-grey': swatch(0.95, null, 0.95),
 				'light-colour': swatch(0.95, 200),
-				'dark-grey': swatch(0.1, null),
+				'dark-grey': swatch(0.1, null, 0.1),
 				'dark-colour': swatch(0.1, 200)
 			})
-		).toEqual(['dark-colour', 'dark-grey', 'light-colour', 'unread']);
+		).toEqual(['dark-colour', 'light-colour', 'dark-grey', 'light-grey', 'unread']);
 	});
 });

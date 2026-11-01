@@ -41,23 +41,24 @@ const ACCENT_MIN_WEIGHT = 0.02;
 export class TaintedCanvasError extends Error {}
 
 /**
- * Background tier, then accent hue bucket, then accent lightness. The direction of lightness
- * flips per bucket so that neighbouring buckets meet at a similar tone. Greyscale posters close
- * each tier and unread posters close the whole order.
+ * Accent hue bucket, then background tier, then accent lightness. Tier and lightness run in
+ * reverse on every other bucket so that neighbouring buckets meet at a similar tone. Greyscale
+ * posters follow the last bucket and unread posters close the whole order.
  */
 function spectrumKey(swatch: Swatch | undefined): [number, number, number] {
-	if (!swatch) return [TIER_LIMITS.length + 1, 0, 0];
+	if (!swatch) return [HUE_BUCKETS + 1, 0, 0];
 	const tier = TIER_LIMITS.filter((limit) => swatch.background > limit).length;
-	if (swatch.hue === null) return [tier, HUE_BUCKETS, swatch.light];
+	if (swatch.hue === null) return [HUE_BUCKETS, tier, swatch.light];
 	const bucket = Math.floor((((swatch.hue - HUE_START + 360) % 360) / 360) * HUE_BUCKETS);
-	return [tier, bucket, bucket % 2 === 0 ? swatch.light : -swatch.light];
+	const direction = bucket % 2 === 0 ? 1 : -1;
+	return [bucket, direction * tier, direction * swatch.light];
 }
 
-/** Orders swatches dark background to light, and within that in steps around the colour wheel. */
+/** Orders swatches in steps around the colour wheel, and within each step by tone. */
 export function compareSpectrum(a: Swatch | undefined, b: Swatch | undefined): number {
-	const [tierA, bucketA, lightA] = spectrumKey(a);
-	const [tierB, bucketB, lightB] = spectrumKey(b);
-	return tierA - tierB || bucketA - bucketB || lightA - lightB;
+	const [bucketA, tierA, lightA] = spectrumKey(a);
+	const [bucketB, tierB, lightB] = spectrumKey(b);
+	return bucketA - bucketB || tierA - tierB || lightA - lightB;
 }
 
 const swatches = new Map<string, Swatch | null>();
