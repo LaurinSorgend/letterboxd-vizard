@@ -1,33 +1,63 @@
 import pLimit from 'p-limit';
 
+/** A poster reduced to its background tone and accent colour, in OKLab terms. */
 export interface Swatch {
-	/** 0–360, and meaningless when `sat` is 0. */
-	hue: number;
-	sat: number;
+	/** Lightness of the largest colour cluster, 0–1. */
+	background: number;
+	/** Accent hue in degrees, or null when the poster is effectively greyscale. */
+	hue: number | null;
+	/** Lightness of the accent, or of the background on a greyscale poster. */
 	light: number;
 }
 
-/** Posters are read at 8×8: enough for a dominant colour, cheap enough to run over hundreds. */
-const SAMPLE = 8;
+interface Lab {
+	l: number;
+	a: number;
+	b: number;
+}
+
+interface Cluster extends Lab {
+	/** Share of the poster's pixels, 0–1. */
+	weight: number;
+}
+
+/** 2:3 like the posters themselves, and fine enough that a title or small accent survives. */
+const SAMPLE_WIDTH = 16;
+const SAMPLE_HEIGHT = 24;
 const CONCURRENCY = 8;
-const HUE_BINS = 12;
-/** Under this much colour the poster is effectively greyscale and any hue would be noise. */
-const SAT_FLOOR = 0.05;
+const CLUSTERS = 5;
+const ITERATIONS = 8;
+const HUE_BUCKETS = 12;
+/** Starts the first bucket at OKLab red, so the wheel opens there and red stays in one bucket. */
+const HUE_START = 15;
+/** Upper lightness limits of the dark and mid background tiers. */
+const TIER_LIMITS = [0.45, 0.75];
+/** Under this much chroma a cluster reads as grey and its hue would be noise. */
+const CHROMA_FLOOR = 0.04;
+/** Below this share of the poster a cluster is a stray pixel or two, not an accent. */
+const ACCENT_MIN_WEIGHT = 0.02;
 
 /** Thrown when the browser refuses to hand back pixels, i.e. the image arrived without CORS. */
 export class TaintedCanvasError extends Error {}
 
-/** Greyscale and unread posters have no meaningful hue, so they gather at the end rather than at red. */
-function spectrumKey(swatch: Swatch | undefined): [number, number] {
-	if (!swatch || swatch.sat === 0) return [1, swatch?.light ?? 0];
-	return [0, swatch.hue];
+/**
+ * Background tier, then accent hue bucket, then accent lightness. The direction of lightness
+ * flips per bucket so that neighbouring buckets meet at a similar tone. Greyscale posters close
+ * each tier and unread posters close the whole order.
+ */
+function spectrumKey(swatch: Swatch | undefined): [number, number, number] {
+	if (!swatch) return [TIER_LIMITS.length + 1, 0, 0];
+	const tier = TIER_LIMITS.filter((limit) => swatch.background > limit).length;
+	if (swatch.hue === null) return [tier, HUE_BUCKETS, swatch.light];
+	const bucket = Math.floor((((swatch.hue - HUE_START + 360) % 360) / 360) * HUE_BUCKETS);
+	return [tier, bucket, bucket % 2 === 0 ? swatch.light : -swatch.light];
 }
 
-/** Orders swatches around the colour wheel, greys last from dark to light. */
+/** Orders swatches dark background to light, and within that in steps around the colour wheel. */
 export function compareSpectrum(a: Swatch | undefined, b: Swatch | undefined): number {
-	const [groupA, keyA] = spectrumKey(a);
-	const [groupB, keyB] = spectrumKey(b);
-	return groupA - groupB || keyA - keyB;
+	const [tierA, bucketA, lightA] = spectrumKey(a);
+	const [tierB, bucketB, lightB] = spectrumKey(b);
+	return tierA - tierB || bucketA - bucketB || lightA - lightB;
 }
 
 const swatches = new Map<string, Swatch | null>();
@@ -37,71 +67,109 @@ let scratch: CanvasRenderingContext2D | null = null;
 function context(): CanvasRenderingContext2D {
 	if (scratch) return scratch;
 	const canvas = document.createElement('canvas');
-	canvas.width = SAMPLE;
-	canvas.height = SAMPLE;
+	canvas.width = SAMPLE_WIDTH;
+	canvas.height = SAMPLE_HEIGHT;
 	const ctx = canvas.getContext('2d', { willReadFrequently: true });
 	if (!ctx) throw new TaintedCanvasError('no 2d context');
 	scratch = ctx;
 	return ctx;
 }
 
-function toHsl(r: number, g: number, b: number): Swatch {
-	const red = r / 255;
-	const green = g / 255;
-	const blue = b / 255;
-	const max = Math.max(red, green, blue);
-	const min = Math.min(red, green, blue);
-	const light = (max + min) / 2;
-	const span = max - min;
-	if (span === 0) return { hue: 0, sat: 0, light };
-	const sat = span / (1 - Math.abs(2 * light - 1));
-	let hue: number;
-	if (max === red) hue = ((green - blue) / span) % 6;
-	else if (max === green) hue = (blue - red) / span + 2;
-	else hue = (red - green) / span + 4;
-	return { hue: (hue * 60 + 360) % 360, sat, light };
+function toLinear(channel: number): number {
+	const value = channel / 255;
+	return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 }
 
-interface Bin {
-	weight: number;
-	hue: number;
-	sat: number;
-	light: number;
+function toOklab(red: number, green: number, blue: number): Lab {
+	const r = toLinear(red);
+	const g = toLinear(green);
+	const b = toLinear(blue);
+	const long = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+	const medium = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+	const short = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+	return {
+		l: 0.2104542553 * long + 0.793617785 * medium - 0.0040720468 * short,
+		a: 1.9779984951 * long - 2.428592205 * medium + 0.4505937099 * short,
+		b: 0.0259040371 * long + 0.7827717662 * medium - 0.808675766 * short
+	};
+}
+
+function distance(p: Lab, q: Lab): number {
+	return (p.l - q.l) ** 2 + (p.a - q.a) ** 2 + (p.b - q.b) ** 2;
+}
+
+function mean(points: Lab[]): Lab {
+	const sum = { l: 0, a: 0, b: 0 };
+	for (const point of points) {
+		sum.l += point.l;
+		sum.a += point.a;
+		sum.b += point.b;
+	}
+	return { l: sum.l / points.length, a: sum.a / points.length, b: sum.b / points.length };
+}
+
+function nearest(point: Lab, centroids: Lab[]): number {
+	let best = 0;
+	for (let i = 1; i < centroids.length; i++) {
+		if (distance(point, centroids[i]) < distance(point, centroids[best])) best = i;
+	}
+	return best;
 }
 
 /**
- * The most present colour in a poster. Pixels are weighted by saturation and against the
- * extremes of lightness, so the black bars and white borders that edge so many posters
- * cannot win the vote on area alone.
+ * Seeds from the mean and then always the pixel farthest from every seed so far. That keeps the
+ * sort stable between runs, and gives a small accent its own cluster where random seeds may not.
  */
-function dominant(pixels: Uint8ClampedArray): Swatch {
-	const bins: Bin[] = Array.from({ length: HUE_BINS }, () => ({
-		weight: 0,
-		hue: 0,
-		sat: 0,
-		light: 0
-	}));
-	let total = 0;
-	let meanLight = 0;
-	for (let i = 0; i < pixels.length; i += 4) {
-		const { hue, sat, light } = toHsl(pixels[i], pixels[i + 1], pixels[i + 2]);
-		meanLight += light / (pixels.length / 4);
-		const weight = sat * Math.max(0, 1 - Math.abs(light - 0.5) * 1.2);
-		if (weight <= 0) continue;
-		const bin = bins[Math.min(HUE_BINS - 1, Math.floor((hue / 360) * HUE_BINS))];
-		bin.weight += weight;
-		bin.hue += hue * weight;
-		bin.sat += sat * weight;
-		bin.light += light * weight;
-		total += weight;
+function seedCentroids(points: Lab[]): Lab[] {
+	const centroids = [mean(points)];
+	while (centroids.length < CLUSTERS) {
+		let farthest = points[0];
+		let reach = 0;
+		for (const point of points) {
+			const gap = distance(point, centroids[nearest(point, centroids)]);
+			if (gap > reach) {
+				farthest = point;
+				reach = gap;
+			}
+		}
+		if (reach === 0) break;
+		centroids.push(farthest);
 	}
-	if (total < SAMPLE * SAMPLE * SAT_FLOOR) return { hue: 0, sat: 0, light: meanLight };
-	const best = bins.reduce((a, b) => (b.weight > a.weight ? b : a));
-	return {
-		hue: best.hue / best.weight,
-		sat: best.sat / best.weight,
-		light: best.light / best.weight
-	};
+	return centroids;
+}
+
+function kMeans(points: Lab[]): Cluster[] {
+	let centroids = seedCentroids(points);
+	let members: Lab[][] = [];
+	for (let round = 0; round < ITERATIONS; round++) {
+		members = centroids.map(() => []);
+		for (const point of points) members[nearest(point, centroids)].push(point);
+		centroids = members.map((group, i) => (group.length > 0 ? mean(group) : centroids[i]));
+	}
+	return centroids
+		.map((centroid, i) => ({ ...centroid, weight: members[i].length / points.length }))
+		.filter((cluster) => cluster.weight > 0);
+}
+
+function chroma(colour: Lab): number {
+	return Math.hypot(colour.a, colour.b);
+}
+
+/** Summarises RGBA pixels as a swatch: the largest cluster's tone and the strongest accent. */
+export function swatchFromPixels(pixels: Uint8ClampedArray): Swatch {
+	const points: Lab[] = [];
+	for (let i = 0; i < pixels.length; i += 4) {
+		points.push(toOklab(pixels[i], pixels[i + 1], pixels[i + 2]));
+	}
+	const clusters = kMeans(points);
+	const largest = clusters.reduce((a, b) => (b.weight > a.weight ? b : a));
+	const accents = clusters.filter(
+		(cluster) => chroma(cluster) >= CHROMA_FLOOR && cluster.weight >= ACCENT_MIN_WEIGHT
+	);
+	if (accents.length === 0) return { background: largest.l, hue: null, light: largest.l };
+	const accent = accents.reduce((a, b) => (chroma(b) * b.weight > chroma(a) * a.weight ? b : a));
+	const hue = (Math.atan2(accent.b, accent.a) * 180) / Math.PI;
+	return { background: largest.l, hue: (hue + 360) % 360, light: accent.l };
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -128,17 +196,17 @@ async function refetchImage(url: string): Promise<ImageBitmap> {
 async function readSwatch(url: string): Promise<Swatch> {
 	const image = await loadImage(url).catch(() => refetchImage(url));
 	const ctx = context();
-	ctx.clearRect(0, 0, SAMPLE, SAMPLE);
-	ctx.drawImage(image, 0, 0, SAMPLE, SAMPLE);
+	ctx.clearRect(0, 0, SAMPLE_WIDTH, SAMPLE_HEIGHT);
+	ctx.drawImage(image, 0, 0, SAMPLE_WIDTH, SAMPLE_HEIGHT);
 	try {
-		return dominant(ctx.getImageData(0, 0, SAMPLE, SAMPLE).data);
+		return swatchFromPixels(ctx.getImageData(0, 0, SAMPLE_WIDTH, SAMPLE_HEIGHT).data);
 	} catch {
 		throw new TaintedCanvasError(url);
 	}
 }
 
 /**
- * Dominant colours for a batch of poster URLs, reporting progress as it goes. Returns null if
+ * Colour swatches for a batch of poster URLs, reporting progress as it goes. Returns null if
  * the browser will not let the page read the pixels back, which is the whole reason this runs
  * on request rather than on load. Results are memoised, so re-sorting costs nothing.
  */

@@ -118,10 +118,10 @@ describe('sortWatchlist', () => {
 		expect(sortWatchlist(all, 'shuffle', 3)).toEqual(sortWatchlist(all, 'shuffle', 3));
 	});
 
-	it('orders by poster hue, greys and unread posters last', () => {
+	it('orders by poster hue, unread posters last', () => {
 		const swatches: Record<string, Swatch> = {
-			Heat: { hue: 220, sat: 0.6, light: 0.4 },
-			Stalker: { hue: 30, sat: 0.5, light: 0.3 }
+			Heat: { background: 0.2, hue: 220, light: 0.4 },
+			Stalker: { background: 0.2, hue: 30, light: 0.3 }
 		};
 		const sorted = sortWatchlist(all, 'colour', 0, (film) => swatches[film.name]);
 		expect(names(sorted)).toEqual(['Stalker', 'Heat', 'Paddington']);

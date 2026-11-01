@@ -20,7 +20,7 @@ export type WatchSort =
 	| 'shuffle'
 	| 'colour';
 
-/** A film's dominant poster colour, or undefined while it has not been read. */
+/** A film's poster swatch, or undefined while it has not been read. */
 export type SwatchOf = (film: WatchlistFilm) => Swatch | undefined;
 
 /** The poster the wall shows, which is also the image the colour sort reads. */
