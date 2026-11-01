@@ -1,7 +1,7 @@
 import { imageUrl } from './images';
 import { getOrCreate } from '$lib/collections';
 import { stripDiacritics } from '$lib/text';
-import { collectionName, type Collection, type EnrichedFilm } from '$lib/types';
+import { collectionName, type Collection, type DiaryEntry, type EnrichedFilm } from '$lib/types';
 
 export interface BarDatum {
 	label: string;
@@ -93,6 +93,26 @@ export function mostRewatched(films: EnrichedFilm[]): BarDatum[] {
 			films: [film]
 		}))
 		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+export interface RecentWatch {
+	film: EnrichedFilm;
+	date: string;
+	rating: number | null;
+}
+
+/** Each diary-logged film at its latest watch, newest first. */
+export function recentWatches(films: EnrichedFilm[], limit = 10): RecentWatch[] {
+	return films
+		.flatMap((film) => {
+			const latest = film.entries.reduce<DiaryEntry | null>(
+				(newest, entry) => (!newest || entry.date > newest.date ? entry : newest),
+				null
+			);
+			return latest ? [{ film, date: latest.date, rating: latest.rating ?? film.rating }] : [];
+		})
+		.sort((a, b) => b.date.localeCompare(a.date) || a.film.name.localeCompare(b.film.name))
+		.slice(0, limit);
 }
 
 /** Films per release decade. */

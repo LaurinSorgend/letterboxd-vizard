@@ -24,6 +24,7 @@
 	import Mosaic from '$lib/viz/Mosaic.svelte';
 	import Milestones from '$lib/viz/Milestones.svelte';
 	import PeopleTimeline from '$lib/viz/PeopleTimeline.svelte';
+	import RecentWatches from '$lib/viz/RecentWatches.svelte';
 	import YearRecap from '$lib/viz/YearRecap.svelte';
 	import WrappedEntry from '$lib/wrapped/WrappedEntry.svelte';
 	import { byKeyword, keywordCoverage } from '$lib/viz/keywords';
@@ -52,6 +53,7 @@
 		mostRewatched,
 		obscurityShare,
 		ratingHistogram,
+		recentWatches,
 		releaseDecades,
 		runtimeBuckets,
 		totalRuntimeMinutes,
@@ -108,6 +110,7 @@
 	let seasonScale: SeasonScale = $state('genre');
 	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
 
+	const recent = $derived(recentWatches(films));
 	const rewatched = $derived(mostRewatched(films));
 	const milestones = $derived(buildMilestones(films));
 	const franchises = $derived(byCollection(films));
@@ -357,6 +360,13 @@
 				<h2>Your films around the world</h2>
 				<WorldMap {films} {initialMetric} {presetCountry} {watchlistExclude} />
 			</section>
+
+			{#if recent.length > 0}
+				<section id="recent">
+					<h2>Recently watched</h2>
+					<RecentWatches watches={recent} />
+				</section>
+			{/if}
 
 			<section id="ratings">
 				<h2>Rating habits</h2>
