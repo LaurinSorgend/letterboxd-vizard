@@ -1,10 +1,9 @@
 import { env } from '$env/dynamic/private';
 import type { OmdbRatings } from '$lib/types';
-import { BudgetExhausted, type FetchBudget } from './budget';
+import type { FetchBudget } from './budget';
+import { budgetedFetch } from './http';
 
 const BASE = 'https://www.omdbapi.com/';
-const RETRY_WAIT_MS = 500;
-const MAX_RETRY_WAIT_MS = 2000;
 
 interface OmdbResponse {
 	Response: 'True' | 'False';
@@ -39,25 +38,13 @@ export async function fetchOmdbRatings(
 	url.searchParams.set('apikey', key);
 	url.searchParams.set('i', imdbId);
 
-	for (let attempt = 0; ; attempt++) {
-		budget.take();
-		const response = await fetch(url);
-		if (response.ok) {
-			const body = (await response.json()) as OmdbResponse;
-			if (body.Response === 'False') return null;
-			return {
-				imdbRating: toNumber(body.imdbRating),
-				imdbVotes: toNumber(body.imdbVotes),
-				rottenTomatoes: rottenTomatoes(body.Ratings),
-				metascore: toNumber(body.Metascore)
-			};
-		}
-		const detail = await response.text();
-		const canRetry = (response.status === 429 || response.status >= 500) && attempt === 0;
-		if (!canRetry) throw new Error(`OMDb ${imdbId} failed: ${response.status} ${detail}`);
-		if (budget.exhausted) throw new BudgetExhausted();
-		const after = Number(response.headers.get('Retry-After')) * 1000;
-		const wait = after > 0 ? Math.min(after, MAX_RETRY_WAIT_MS) : RETRY_WAIT_MS;
-		await new Promise((resolve) => setTimeout(resolve, wait));
-	}
+	const response = await budgetedFetch(budget, url, {}, `OMDb ${imdbId}`);
+	const body = (await response.json()) as OmdbResponse;
+	if (body.Response === 'False') return null;
+	return {
+		imdbRating: toNumber(body.imdbRating),
+		imdbVotes: toNumber(body.imdbVotes),
+		rottenTomatoes: rottenTomatoes(body.Ratings),
+		metascore: toNumber(body.Metascore)
+	};
 }

@@ -1,17 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import pLimit from 'p-limit';
-import { MAX_BATCH } from '$lib/server/batch';
-import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
+import { MAX_BATCH, resolveBatch } from '$lib/server/batch';
 import { getOmdbCachedMany, putOmdbCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
 import { fetchOmdbRatings } from '$lib/server/omdb';
 import { checkRateLimit } from '$lib/server/ratelimit';
 import { requireSession } from '$lib/server/session';
-import type { OmdbRatings } from '$lib/types';
 import type { RequestHandler } from './$types';
-
-const CONCURRENCY = 5;
 
 export const POST: RequestHandler = async ({ request, platform, cookies, getClientAddress }) => {
 	await requireSession(cookies);
@@ -31,33 +26,12 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	}
 
 	const db = await getDb(platform);
-	const known = await getOmdbCachedMany(db, [...new Set(imdbIds)]);
-
-	const budget = new FetchBudget(FETCHES_PER_REQUEST);
-	const limit = pLimit(CONCURRENCY);
-	const resolved = new Map<string, OmdbRatings | null>();
-	const deferred = new Set<string>();
-	const lookups = new Map<string, Promise<void>>();
-	for (const id of imdbIds) {
-		if (known.has(id) || lookups.has(id)) continue;
-		lookups.set(
-			id,
-			(async () => {
-				try {
-					resolved.set(id, await limit(() => fetchOmdbRatings(budget, id)));
-				} catch (cause) {
-					deferred.add(id);
-					if (!(cause instanceof BudgetExhausted)) {
-						console.error(`omdb lookup failed: ${id}`, cause);
-					}
-				}
-			})()
-		);
-	}
-	await Promise.all(lookups.values());
-	await putOmdbCachedMany(db, [...resolved]);
-
-	const results = imdbIds.map((id) => known.get(id) ?? resolved.get(id) ?? null);
-	const pending = [...imdbIds.entries()].filter(([, id]) => deferred.has(id)).map(([i]) => i);
-	return json({ results, pending });
+	const answer = await resolveBatch(imdbIds, {
+		keyOf: (id) => id,
+		getCached: (ids) => getOmdbCachedMany(db, ids),
+		fetchOne: fetchOmdbRatings,
+		putCached: (entries) => putOmdbCachedMany(db, entries),
+		label: 'omdb lookup'
+	});
+	return json(answer);
 };

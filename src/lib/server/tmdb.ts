@@ -7,12 +7,11 @@ import {
 	type TmdbMovie
 } from '$lib/types';
 import { normalizeTitle } from '$lib/text';
-import { BudgetExhausted, RetryLater, type FetchBudget } from './budget';
+import { RetryLater, type FetchBudget } from './budget';
+import { budgetedFetch } from './http';
 import { lookupSeriesOnTvdb } from './tvdb';
 
 const BASE = 'https://api.themoviedb.org/3';
-const RETRY_WAIT_MS = 500;
-const MAX_RETRY_WAIT_MS = 2000;
 
 interface SearchResult {
 	id: number;
@@ -40,23 +39,7 @@ export async function tmdbGet(
 	for (const [name, value] of Object.entries(params)) url.searchParams.set(name, value);
 	if (!isBearer) url.searchParams.set('api_key', key);
 	const headers: Record<string, string> = isBearer ? { Authorization: `Bearer ${key}` } : {};
-
-	for (let attempt = 0; ; attempt++) {
-		budget.take();
-		const response = await fetch(url, { headers }).catch((cause: unknown) => {
-			throw new RetryLater(`TMDB ${path} unreachable`, { cause });
-		});
-		if (response.ok) return response.json();
-		const detail = await response.text();
-		const failure = `TMDB ${path} failed: ${response.status} ${detail}`;
-		const transient = response.status === 429 || response.status >= 500;
-		if (!transient) throw new Error(failure);
-		if (attempt > 0) throw new RetryLater(failure);
-		if (budget.exhausted) throw new BudgetExhausted();
-		const after = Number(response.headers.get('Retry-After')) * 1000;
-		const wait = after > 0 ? Math.min(after, MAX_RETRY_WAIT_MS) : RETRY_WAIT_MS;
-		await new Promise((resolve) => setTimeout(resolve, wait));
-	}
+	return (await budgetedFetch(budget, url, { headers }, `TMDB ${path}`)).json();
 }
 
 /** TMDB leaves the date an empty string when it has none, so fall through on falsy, not nullish. */
