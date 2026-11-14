@@ -109,9 +109,6 @@
 		{/if}
 	</nav>
 
-	{#if !lookup.loading && inMonth === 0}
-		<p class="summary">No releases of the picked types in {monthName}.</p>
-	{/if}
 	<CalendarMonth {month} {entries} {today} />
 
 	<p class="credit">
