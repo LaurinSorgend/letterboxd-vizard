@@ -169,6 +169,7 @@
 		border-left-style: dashed;
 	}
 	.rec {
+		margin-left: 0.5ch;
 		font-family: var(--font-mono);
 		color: var(--ctp-blue);
 	}
