@@ -143,10 +143,7 @@
 </div>
 
 {#if graph.nodes.length === 0}
-	<p class="empty">
-		No two of your films share that many billed people. Lower the threshold, or widen the cast
-		depth, to find the links.
-	</p>
+	<p class="empty">No links at this threshold.</p>
 {:else}
 	<div class="frame" bind:this={container}>
 		<svg
@@ -232,24 +229,6 @@
 			<span><i class="swatch unrated"></i>unrated</span>
 		{/if}
 	</div>
-
-	<p class="note">
-		{#if selectedIndex !== null}
-			Dot colour: how many hops from the film you picked, up to the {DEGREE_LABELS.length}th degree;
-			anything further fades out. Line strength: how many billed people two films share.
-		{:else}
-			Line strength: how many billed people two films share. Dot size: connections; dot colour: your
-			rating. People in more than 40 of your films are skipped; they would link nearly everything to
-			everything.
-		{/if}
-		{#if graph.omitted > 0}
-			Showing the {graph.nodes.length} most connected of
-			{graph.nodes.length + graph.omitted} linked films.
-		{/if}
-		{#if graph.isolated > 0}
-			{graph.isolated} films share nobody with the rest and sit outside the graph.
-		{/if}
-	</p>
 
 	{#if selectedIndex !== null}
 		<div class="connections">

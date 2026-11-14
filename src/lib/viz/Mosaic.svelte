@@ -88,13 +88,6 @@
 	{/if}
 </div>
 
-{#if refused}
-	<p class="note">
-		Colour sorting needs pixel access to the posters, which this browser blocks for TMDB images. The
-		other orderings still work.
-	</p>
-{/if}
-
 <ul class="wall">
 	{#each shown as film (film.uri)}
 		{@const href = webHref(film.uri)}
@@ -207,10 +200,5 @@
 		margin-top: 12px;
 		padding: 4px 12px;
 		cursor: pointer;
-	}
-	.note {
-		margin: 0 0 12px;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
 	}
 </style>

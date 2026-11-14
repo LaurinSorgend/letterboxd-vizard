@@ -120,12 +120,6 @@
 
 <div class="chart" role="img" aria-label={description} bind:this={container}></div>
 
-{#if data.length > limit}
-	<p class="note">
-		The {limit} most common of {data.length} keywords. Bars view: the full list, with ratings.
-	</p>
-{/if}
-
 {#if selection.selected}
 	{@const selected = selection.selected}
 	<FilmList title={selected.label} films={selected.films} />
@@ -154,12 +148,6 @@
 		width: 100%;
 		height: 420px;
 		margin-top: 8px;
-	}
-
-	.note {
-		margin: 12px 0 0;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
 	}
 
 	details {

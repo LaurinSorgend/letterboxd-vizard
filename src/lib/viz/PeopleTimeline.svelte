@@ -55,7 +55,6 @@
 	);
 	const series = $derived(selected.map((option) => buildSeries(option)));
 	const atCap = $derived(selectedKeys.length >= MAX_SELECTED);
-	const excludedTotal = $derived(series.reduce((sum, s) => sum + s.excluded, 0));
 
 	function toggle(key: string) {
 		selectedKeys = toggleSelection(selectedKeys, key, atCap);
@@ -228,8 +227,6 @@
 	{listRows}
 	{listOverflow}
 	{atCap}
-	maxSelected={MAX_SELECTED}
-	capNoun="people"
 	optionsAriaLabel="Actors and directors"
 	isSelected={(key) => selectedKeys.includes(key)}
 	{toggle}
@@ -341,13 +338,6 @@
 		{/if}
 	</div>
 
-	<p class="note">
-		Cumulative hours watched of each person's films, across every diary date. Rewatches count again.
-		{#if excludedTotal > 0}
-			{excludedTotal} diary entries left out for want of a known runtime.
-		{/if}
-	</p>
-
 	<details>
 		<summary>View as table</summary>
 		<table>
@@ -391,11 +381,6 @@
 		color: var(--fg-muted);
 		font-size: var(--text-2xs);
 		white-space: nowrap;
-	}
-	.note {
-		margin: 6px 0 0;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
 	}
 	.empty-chart {
 		color: var(--fg-secondary);

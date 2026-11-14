@@ -40,11 +40,6 @@ function eligible(
 	return rows;
 }
 
-/** How many rated films the chart leaves out for want of a TMDB vote count. */
-export function excludedCount(films: EnrichedFilm[]): number {
-	return films.filter((f) => f.rating !== null).length - eligible(films).length;
-}
-
 function median(values: number[]): number {
 	const sorted = [...values].sort((a, b) => a - b);
 	const mid = Math.floor(sorted.length / 2);

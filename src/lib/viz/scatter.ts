@@ -41,12 +41,6 @@ export function runtimeRatingPoints(films: EnrichedFilm[]): Point[] {
 	return points;
 }
 
-/** How many rated films the scatter leaves out, so the chart can say so rather than quietly drop them. */
-export function excludedCount(films: EnrichedFilm[]): number {
-	const rated = films.filter((film) => film.rating !== null && film.tmdb?.runtime);
-	return rated.length - runtimeRatingPoints(films).length;
-}
-
 /** Least-squares line of rating on runtime, plus Pearson r; null when there is nothing to fit. */
 export function linearFit(points: Point[]): Fit | null {
 	const n = points.length;

@@ -21,7 +21,7 @@
 		upcomingCandidates,
 		type CalendarFilm
 	} from './calendar';
-	import { FALLBACK_REGION, RELEASE_KINDS, type ReleaseKind } from './dates';
+	import { RELEASE_KINDS, type ReleaseKind } from './dates';
 	import { KINDS } from './kinds';
 	import CalendarMonth from './CalendarMonth.svelte';
 	import RecommendControls from './RecommendControls.svelte';
@@ -137,9 +137,7 @@
 	<CalendarMonth {month} {entries} {today} />
 
 	<p class="credit">
-		Release dates from <a href="https://www.themoviedb.org">TMDB</a>. Films without dates for the
-		chosen country show their {FALLBACK_REGION} dates, marked ({FALLBACK_REGION}). Recommendations
-		compare directors, cast and keywords with your favourites.
+		Release dates from <a href="https://www.themoviedb.org">TMDB</a>.
 	</p>
 </div>
 

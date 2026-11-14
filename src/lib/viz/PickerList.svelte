@@ -10,8 +10,6 @@
 		listRows,
 		listOverflow,
 		atCap,
-		maxSelected,
-		capNoun,
 		optionsAriaLabel,
 		isSelected,
 		toggle,
@@ -27,8 +25,6 @@
 		listRows: T[];
 		listOverflow: number;
 		atCap: boolean;
-		maxSelected: number;
-		capNoun: string;
 		optionsAriaLabel: string;
 		isSelected: (key: string) => boolean;
 		toggle: (key: string) => void;
@@ -60,10 +56,6 @@
 		</ul>
 	{/if}
 
-	{#if atCap}
-		<p class="note">Up to {maxSelected} {capNoun} at a time: remove one to add another.</p>
-	{/if}
-
 	<ul class="options" role="group" aria-label={optionsAriaLabel}>
 		{#each listRows as option (option.key)}
 			<li>
@@ -83,7 +75,7 @@
 		{/each}
 	</ul>
 	{#if listOverflow > 0}
-		<p class="note">{listOverflow} more. Refine your search.</p>
+		<p class="note">+{listOverflow} more</p>
 	{/if}
 </div>
 

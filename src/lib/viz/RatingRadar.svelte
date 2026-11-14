@@ -31,7 +31,6 @@
 
 	const height = 340;
 	const rows = $derived(radarRows(films));
-	const dropped = $derived(films.filter((f) => f.rating !== null).length - rows.length);
 	const selectedSet = $derived(new Set(selectedKeys));
 	const atCap = $derived(selectedKeys.length >= MAX_SELECTED);
 
@@ -116,8 +115,6 @@
 	{listRows}
 	{listOverflow}
 	{atCap}
-	maxSelected={MAX_SELECTED}
-	capNoun="films"
 	optionsAriaLabel="Films"
 	isSelected={(key) => selectedSet.has(key)}
 	{toggle}
@@ -190,13 +187,6 @@
 		<p class="empty">Not enough rated films with an external rating to plot.</p>
 	{/if}
 </div>
-<p class="note">
-	Every axis on a 0-100 scale: your stars ×20, TMDB and IMDb ×10, Rotten Tomatoes and Metacritic as
-	given. A line skips straight past any axis that film has no rating for.
-	{#if dropped > 0}
-		{dropped} rated films left out for lacking every external source.
-	{/if}
-</p>
 
 <details>
 	<summary>View as table</summary>
@@ -290,11 +280,6 @@
 		color: var(--fg-secondary);
 	}
 	.empty {
-		color: var(--fg-muted);
-	}
-	.note {
-		margin: 4px 0 0;
-		font-size: var(--text-2xs);
 		color: var(--fg-muted);
 	}
 	details {

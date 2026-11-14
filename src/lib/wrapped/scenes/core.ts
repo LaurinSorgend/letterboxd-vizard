@@ -123,7 +123,7 @@ export function topFilmsScene(data: Wrapped): Scene | null {
 		label: 'Your five best',
 		value: data.top[0].name,
 		valueKind: 'name',
-		note: 'Ranked by the stars you gave them, ties broken by the ones you hearted.',
+		note: '',
 		stats: [{ label: 'Your average', value: stars(data.avg) }],
 		body: {
 			kind: 'posters',
@@ -141,7 +141,7 @@ export function genreScene(data: Wrapped): Scene | null {
 		label: 'Genre of the year',
 		value: top.label,
 		valueKind: 'name',
-		note: `${plural(top.count, 'film')}${top.avg !== null ? `, averaging ${stars(top.avg)}` : ''}. A film counts once per genre it carries.`,
+		note: `${plural(top.count, 'film')}${top.avg !== null ? `, averaging ${stars(top.avg)}` : ''}.`,
 		stats: [],
 		body: { kind: 'bars', bars: barsFrom(data.topGenres) }
 	};

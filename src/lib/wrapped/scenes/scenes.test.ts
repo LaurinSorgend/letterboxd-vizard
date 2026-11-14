@@ -96,7 +96,7 @@ describe('buildScenes', () => {
 			label: 'Genre of the year',
 			value: 'Drama',
 			valueKind: 'name',
-			note: '12 films, averaging ★ 3.5. A film counts once per genre it carries.',
+			note: '12 films, averaging ★ 3.5.',
 			stats: [],
 			body: { kind: 'bars', bars: [{ label: 'Drama', value: '12', share: 1 }] }
 		});

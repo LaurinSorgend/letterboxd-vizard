@@ -30,7 +30,6 @@
 		<p class="headline">
 			<span class="num" data-numeric>{score.toFixed(1)}</span> point contrarianism score
 		</p>
-		<p class="sub">Mean absolute gap between your rating and each source, on a 0-100 scale.</p>
 	{:else}
 		<p class="sub">Not enough overlap with either source yet.</p>
 	{/if}

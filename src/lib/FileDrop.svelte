@@ -28,10 +28,7 @@
 	/>
 	<strong>Drop your Letterboxd export zip here</strong>
 	<span>or click to choose the file</span>
-	<span class="hint">
-		Get it from letterboxd.com → Settings → Data → Export your data. Everything is analyzed in your
-		browser; only titles and years go out, to look up TMDB metadata.
-	</span>
+	<a href="https://letterboxd.com/settings/data/" target="_blank" rel="noopener">Get your export</a>
 </label>
 
 <style>
@@ -62,10 +59,5 @@
 	}
 	span {
 		color: var(--fg-secondary);
-	}
-	.hint {
-		font-size: var(--text-base);
-		color: var(--fg-muted);
-		max-width: 48ch;
 	}
 </style>

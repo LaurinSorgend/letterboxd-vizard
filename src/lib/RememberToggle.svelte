@@ -13,12 +13,6 @@
 	</label>
 	{#if error}
 		<p class="error" role="alert">{error}</p>
-	{:else}
-		<p class="hint">
-			{checked
-				? 'Saved in this browser only, never uploaded. Untick to forget it.'
-				: 'Keeps your analysed data in this browser; next visit skips the upload.'}
-		</p>
 	{/if}
 </div>
 
@@ -42,13 +36,6 @@
 	input:focus-visible {
 		outline: 2px solid var(--focus);
 		outline-offset: 2px;
-	}
-	/* Sentence-length help text, so it stays at the 16px floor and takes its
-	 * secondary rank from colour rather than size. */
-	.hint {
-		margin: 4px 0 0;
-		font-size: var(--text-base);
-		color: var(--fg-muted);
 	}
 	.error {
 		margin: 4px 0 0;

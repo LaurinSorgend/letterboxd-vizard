@@ -14,15 +14,6 @@ export function byKeyword(films: EnrichedFilm[]): BarDatum[] {
 	).filter((datum) => datum.count > 1);
 }
 
-/** How many matched films carry any keyword at all; TMDB coverage is patchy and the chart says so. */
-export function keywordCoverage(films: EnrichedFilm[]): { withKeywords: number; total: number } {
-	const matched = films.filter((film) => film.tmdb);
-	return {
-		withKeywords: matched.filter((film) => (film.tmdb?.keywords.length ?? 0) > 0).length,
-		total: matched.length
-	};
-}
-
 /** Six discriminable size/colour steps, darkest and largest at step 5. */
 export const CLOUD_STEPS = 6;
 

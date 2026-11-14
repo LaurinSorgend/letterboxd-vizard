@@ -120,7 +120,6 @@
 				</label>
 			{/if}
 		</div>
-		<p class="note">Based on what TMDB users also rated highly alongside your favourite films.</p>
 		{#if general.length > 0}
 			{@render posterGrid(general)}
 		{/if}
@@ -134,11 +133,6 @@
 <style>
 	section {
 		margin: 32px 0;
-	}
-	.note {
-		font-size: var(--text-sm);
-		color: var(--fg-muted);
-		margin: 0 0 12px;
 	}
 	h3 {
 		margin: 24px 0 12px;

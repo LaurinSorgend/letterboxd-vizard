@@ -87,12 +87,6 @@
 			Logos on posters
 		</label>
 	</div>
-	{#if colours.refused}
-		<p class="note">
-			Colour sorting needs pixel access to the posters, which this browser blocks for TMDB images.
-			The other orderings still work.
-		</p>
-	{/if}
 </div>
 
 <style>
@@ -131,11 +125,5 @@
 	progress {
 		width: 160px;
 		accent-color: var(--accent);
-	}
-	.note {
-		grid-column: 1 / -1;
-		margin: 0;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
 	}
 </style>

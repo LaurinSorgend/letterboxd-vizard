@@ -27,7 +27,7 @@
 	import RecentWatches from '$lib/viz/RecentWatches.svelte';
 	import YearRecap from '$lib/viz/YearRecap.svelte';
 	import WrappedEntry from '$lib/wrapped/WrappedEntry.svelte';
-	import { byKeyword, keywordCoverage } from '$lib/viz/keywords';
+	import { byKeyword } from '$lib/viz/keywords';
 	import MetricToggle from '$lib/viz/MetricToggle.svelte';
 	import {
 		bucketsByDay,
@@ -118,7 +118,6 @@
 	const franchises = $derived(byCollection(films));
 	const franchiseShare = $derived(collectionShare(films));
 	const themes = $derived(byKeyword(films));
-	const themeCoverage = $derived(keywordCoverage(films));
 	let keywordView = $state<'cloud' | 'bars'>('cloud');
 	const likes = $derived(likeTotals(films));
 	const medianLag = $derived(medianWatchLag(films));
@@ -161,10 +160,10 @@
 		}
 	});
 
-	const FEED_ONLY_NOTE = `Loaded by username, so this only covers your ${FEED_FILM_LIMIT} latest diary entries: Letterboxd's RSS feed holds no more. Upload your export for the full history.`;
+	const FEED_ONLY_NOTE = `Only your ${FEED_FILM_LIMIT} latest diary entries.`;
 
 	function entriesNote(count: number): string {
-		const added = `Added ${count} new diary ${count === 1 ? 'entry' : 'entries'} from your RSS feed.`;
+		const added = `${count} new diary ${count === 1 ? 'entry' : 'entries'}.`;
 		return source === 'feed' ? `${added} ${FEED_ONLY_NOTE}` : added;
 	}
 
@@ -176,7 +175,7 @@
 			const refresh = await refreshFromFeed(films, await fetchFeed(username));
 			feedGap = refresh.gap;
 			feedNote = refresh.gap
-				? 'Your RSS feed no longer reaches back to your last saved entry, so some viewings are missing. Upload a fresh export to fill the gap.'
+				? 'Some diary entries are missing.'
 				: source === 'feed'
 					? FEED_ONLY_NOTE
 					: null;
@@ -186,7 +185,7 @@
 			if (!refresh.gap) feedNote = entriesNote(refresh.addedEntries);
 			if (remember) persist();
 		} catch {
-			feedNote = 'Could not check your RSS feed for new diary entries this time.';
+			feedNote = 'Could not check for new diary entries.';
 		}
 	}
 
@@ -311,12 +310,10 @@
 				<p>Looking up ratings… {progress.done} / {progress.total}</p>
 				<progress value={progress.done} max={progress.total} aria-label="Ratings lookup progress"
 				></progress>
-				<p class="sub">First run only; lookups are cached, so next time is instant.</p>
 			{:else}
 				<p>Looking up film data… {progress.done} / {progress.total}</p>
 				<progress value={progress.done} max={progress.total} aria-label="Film lookup progress"
 				></progress>
-				<p class="sub">First run only; lookups are cached, so next time is instant.</p>
 			{/if}
 		</div>
 	{:else}
@@ -354,10 +351,7 @@
 				<h2>{view === 'releases' ? 'Upcoming releases' : 'Your watchlist'}</h2>
 				{#if watchlist.length === 0 && (view === 'watchlist' || films.length === 0)}
 					<div class="empty-watchlist form-controls">
-						<p>
-							The watchlist comes from the <code>watchlist.csv</code> in your Letterboxd export. A library
-							loaded by username has none, since Letterboxd's RSS feed leaves the watchlist out.
-						</p>
+						<p>No watchlist yet.</p>
 						<button type="button" onclick={() => (phase = 'idle')}>Upload an export</button>
 					</div>
 				{:else if view === 'releases'}
@@ -396,9 +390,6 @@
 						/>
 						<p class="sub chart-note">
 							{likes.liked} of your {films.length} films hearted.
-							{#if likes.unrated > 0}
-								{likes.unrated} of those carry no rating and sit outside these bars.
-							{/if}
 						</p>
 					</div>
 					<RatingGaps {films} />
@@ -439,12 +430,11 @@
 
 			<section id="lag">
 				<h2>From release to watch</h2>
-				<p class="sub chart-note">
-					{#if medianLag !== null}
+				{#if medianLag !== null}
+					<p class="sub chart-note">
 						Median gap: {formatDays(medianLag)} from release to first watch.
-					{/if}
-					Films without a diary entry are left out.
-				</p>
+					</p>
+				{/if}
 				<RankedBars
 					data={watchLag(films)}
 					showAvg
@@ -540,8 +530,7 @@
 				<section id="franchises">
 					<h2>Franchises you follow</h2>
 					<p class="sub chart-note">
-						{franchiseShare.inCollection} of your {franchiseShare.total} matched films belong to a TMDB
-						franchise. One-film franchises are left out.
+						{franchiseShare.inCollection} of your {franchiseShare.total} films are part of a franchise.
 					</p>
 					<RankedBars
 						data={franchises}
@@ -554,10 +543,6 @@
 			{#if themes.length > 0}
 				<section id="keywords">
 					<h2>Themes you return to</h2>
-					<p class="sub chart-note">
-						A partial picture: TMDB keywords cover {themeCoverage.withKeywords} of your {themeCoverage.total}
-						matched films. Shown from two shared films up, sized by count on a square-root scale.
-					</p>
 					<MetricToggle
 						name="keyword-view"
 						label="Keyword view"
@@ -585,12 +570,11 @@
 
 			<section id="obscurity">
 				<h2>Crowds &amp; deep cuts</h2>
-				<p class="sub chart-note">
-					TMDB and IMDb rating counts combined, as a stand-in for how widely seen each film is.
-					{#if obscure !== null}
-						{Math.round(obscure * 100)}% of yours: fewer than 1,000 ratings.
-					{/if}
-				</p>
+				{#if obscure !== null}
+					<p class="sub chart-note">
+						{Math.round(obscure * 100)}% of your films have fewer than 1,000 ratings.
+					</p>
+				{/if}
 				<RankedBars
 					data={audienceBands(films)}
 					showAvg
@@ -600,10 +584,6 @@
 
 			<section id="quadrants">
 				<h2>Popularity vs. your rating</h2>
-				<p class="sub chart-note">
-					Every rated film split into four quadrants: popularity above or below your library's own
-					median for combined TMDB + IMDb vote count.
-				</p>
 				<Quadrants {films} />
 			</section>
 
@@ -631,24 +611,16 @@
 
 			<section id="people-timeline">
 				<h2>Watching them over time</h2>
-				<p class="sub chart-note">
-					Cumulative hours watched of each selected person's films, across every diary date.
-				</p>
 				<PeopleTimeline {films} />
 			</section>
 
 			<section id="network">
 				<h2>How your films connect</h2>
-				<p class="sub chart-note">
-					Films joined by shared billed cast or a director. Clusters are the corners of cinema you
-					keep returning to. Pick a film to see its links.
-				</p>
 				<Network {films} />
 			</section>
 
 			<section id="mosaic">
 				<h2>Every film you have watched</h2>
-				<p class="sub chart-note">Your whole library as a wall of posters.</p>
 				<Mosaic {films} />
 			</section>
 

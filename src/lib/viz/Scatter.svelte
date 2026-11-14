@@ -1,12 +1,6 @@
 <script lang="ts">
 	import { runtimeBuckets } from './stats';
-	import {
-		describeFit,
-		excludedCount,
-		linearFit,
-		runtimeRatingPoints,
-		type Point
-	} from './scatter';
+	import { describeFit, linearFit, runtimeRatingPoints, type Point } from './scatter';
 	import type { EnrichedFilm } from '$lib/types';
 
 	let { films }: { films: EnrichedFilm[] } = $props();
@@ -27,7 +21,6 @@
 	const height = $derived(Math.min(420, Math.max(260, width * 0.5)));
 	const points = $derived(runtimeRatingPoints(films));
 	const fit = $derived(linearFit(points));
-	const dropped = $derived(excludedCount(films));
 
 	/* Spread as a loop, not Math.max(...points): a large library would overflow the argument list. */
 	const extent = $derived.by(() => {
@@ -209,14 +202,6 @@
 		{describeFit(fit)}.
 	</p>
 {/if}
-<p class="note">
-	Feature films only; series carry a whole-run length, and shorts under 40 minutes play by different
-	rules.
-	{#if dropped > 0}
-		{dropped} rated films left out for that reason.
-	{/if}
-	Points are nudged vertically so equal ratings stay countable.
-</p>
 
 <details>
 	<summary>View as table</summary>
@@ -288,11 +273,6 @@
 	.readout {
 		margin: 8px 0 0;
 		font-size: var(--text-md);
-	}
-	.note {
-		margin: 4px 0 0;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
 	}
 	details {
 		margin-top: 12px;

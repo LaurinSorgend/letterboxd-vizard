@@ -347,11 +347,6 @@
 		{/if}
 		<span><i class="swatch nodata"></i>no films</span>
 	</div>
-	<p class="note">
-		Films with several production countries count once for each. Zoom by pinch or buttons, drag to
-		pan; on a mouse, hold Ctrl and scroll.
-	</p>
-
 	{#if selected}
 		{#key selected.code}
 			<CountryRec stat={selected} exclude={excludeIds} />

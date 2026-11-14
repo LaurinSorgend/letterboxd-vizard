@@ -1,11 +1,5 @@
 <script lang="ts">
-	import {
-		excludedCount,
-		hiddenGems,
-		quadrantPoints,
-		quadrantSummaries,
-		type QuadrantPoint
-	} from './quadrants';
+	import { hiddenGems, quadrantPoints, quadrantSummaries, type QuadrantPoint } from './quadrants';
 	import { webHref } from './href';
 	import type { EnrichedFilm } from '$lib/types';
 
@@ -26,7 +20,6 @@
 	const result = $derived(quadrantPoints(films));
 	const points = $derived(result.points);
 	const axes = $derived(result.axes);
-	const dropped = $derived(excludedCount(films));
 	const gems = $derived(hiddenGems(points));
 	const summaries = $derived(quadrantSummaries(points));
 
@@ -216,21 +209,10 @@
 </div>
 
 <p class="readout">{summary}</p>
-<p class="note">
-	Popularity is TMDB's vote count plus IMDb's, a stand-in for how widely a film has been seen; rated
-	films without either are left out.
-	{#if dropped > 0}
-		{dropped} rated films left out for that reason.
-	{/if}
-	Points are nudged vertically so equal ratings stay countable.
-</p>
 
 {#if gems.length > 0}
 	<div class="gems">
 		<h3>Your hidden gems</h3>
-		<p class="sub">
-			Rated {axes.ratingThreshold}★ or higher, seen by fewer people than most of your library.
-		</p>
 		<ul>
 			{#each gems as gem (gem.film.uri)}
 				<li>
@@ -328,21 +310,11 @@
 		margin: 8px 0 0;
 		font-size: var(--text-md);
 	}
-	.note {
-		margin: 4px 0 0;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
-	}
 	.gems {
 		margin-top: 16px;
 	}
 	.gems h3 {
 		margin: 0 0 4px;
-	}
-	.gems .sub {
-		margin: 0 0 8px;
-		color: var(--fg-secondary);
-		font-size: var(--text-sm);
 	}
 	.gems ul {
 		margin: 0;

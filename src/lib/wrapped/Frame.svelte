@@ -41,7 +41,7 @@
 <article class="frame" aria-label={scene.label}>
 	<p class="value" data-kind={scene.valueKind}>{scene.value}</p>
 	<h2 class="label">{scene.label}</h2>
-	<p class="note">{scene.note}</p>
+	{#if scene.note}<p class="note">{scene.note}</p>{/if}
 	{#if scene.footnote}
 		<p class="footnote">{scene.footnote}</p>
 	{/if}
