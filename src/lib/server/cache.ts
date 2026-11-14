@@ -2,12 +2,14 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { CollectionParts, OmdbRatings, TmdbMovie } from '$lib/types';
 import type { FetchBudget } from './budget';
 import type { WatchAvailability } from './providers';
+import type { FilmReleases } from './releases';
 
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** TMDB's recommendations shift slowly, so a related list stays useful far longer than a week. */
 const RELATED_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 /** Streaming catalogues change weekly, so availability goes stale within days. */
 const PROVIDERS_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+const RELEASES_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** D1 allows at most 100 bound parameters per query. */
 const MAX_PARAMS = 100;
@@ -253,6 +255,21 @@ export function putProvidersCachedMany(
 	entries: [string, WatchAvailability][]
 ): Promise<void> {
 	return putJsonCachedMany(db, 'providers', 'media_key', entries);
+}
+
+/** Release dates per TMDB movie id; studios move and add dates often enough to refetch weekly. */
+export function getReleasesCachedMany(
+	db: D1Database,
+	tmdbIds: number[]
+): Promise<Map<number, FilmReleases>> {
+	return getJsonCachedMany<FilmReleases>(db, 'releases', 'tmdb_id', tmdbIds, RELEASES_TTL_MS);
+}
+
+export function putReleasesCachedMany(
+	db: D1Database,
+	entries: [number, FilmReleases][]
+): Promise<void> {
+	return putJsonCachedMany(db, 'releases', 'tmdb_id', entries);
 }
 
 /**

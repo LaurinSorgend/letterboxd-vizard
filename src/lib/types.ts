@@ -159,3 +159,17 @@ export interface ProviderRequestItem {
 
 /** Key a title's offers are stored under, client and server; TMDB numbers films and series separately. */
 export const offersKey = (item: ProviderRequestItem): string => `${item.mediaType}:${item.tmdbId}`;
+
+/** The release channels the calendar can filter by. */
+export type ReleaseKind = 'theatrical' | 'digital' | 'physical';
+
+export const RELEASE_KINDS: ReleaseKind[] = ['theatrical', 'digital', 'physical'];
+
+/** One dated release of a film in one country. */
+export interface ReleaseDate {
+	kind: ReleaseKind;
+	/** ISO date, YYYY-MM-DD. */
+	date: string;
+	/** Country the date belongs to; differs from the requested region when it had no dates. */
+	region: string;
+}

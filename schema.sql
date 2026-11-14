@@ -33,3 +33,8 @@ CREATE TABLE IF NOT EXISTS providers (
 	data TEXT NOT NULL,
 	fetched_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS releases (
+	tmdb_id INTEGER PRIMARY KEY,
+	data TEXT NOT NULL,
+	fetched_at INTEGER NOT NULL
+);

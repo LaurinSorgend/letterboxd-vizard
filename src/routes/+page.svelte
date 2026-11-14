@@ -72,6 +72,7 @@
 	} from '$lib/ingest/pipeline';
 	import { clearSnapshot, loadSnapshot, saveSnapshot, type Snapshot } from '$lib/store';
 	import Watchlist from '$lib/watchlist/Watchlist.svelte';
+	import ReleaseCalendar from '$lib/releases/ReleaseCalendar.svelte';
 	import type { CollectionParts, EnrichedFilm, LetterboxdData, WatchlistFilm } from '$lib/types';
 
 	type Phase = 'idle' | 'working' | 'ready';
@@ -91,8 +92,9 @@
 	let feedGap = $state(false);
 	let mainEl: HTMLElement | null = $state(null);
 	let watchlist: WatchlistFilm[] = $state([]);
-	let view: 'stats' | 'watchlist' = $state(
-		page.url.searchParams.get('view') === 'watchlist' ? 'watchlist' : 'stats'
+	const requestedView = page.url.searchParams.get('view');
+	let view: 'stats' | 'watchlist' | 'releases' = $state(
+		requestedView === 'watchlist' || requestedView === 'releases' ? requestedView : 'stats'
 	);
 
 	const unmatched = $derived(films.filter((f) => !f.tmdb));
@@ -341,12 +343,18 @@
 			label="View"
 			options={[
 				{ value: 'stats', label: 'Your stats' },
-				{ value: 'watchlist', label: `Your watchlist (${watchlist.length})` }
+				{ value: 'watchlist', label: `Your watchlist (${watchlist.length})` },
+				{ value: 'releases', label: 'Release calendar' }
 			]}
 			bind:value={view}
 		/>
 
-		{#if view === 'watchlist'}
+		{#if view === 'releases'}
+			<section id="releases">
+				<h2>Upcoming releases on your watchlist</h2>
+				<ReleaseCalendar {watchlist} onupload={() => (phase = 'idle')} />
+			</section>
+		{:else if view === 'watchlist'}
 			<section id="watchlist">
 				<h2>Your watchlist</h2>
 				<Watchlist {watchlist} onupload={() => (phase = 'idle')} />

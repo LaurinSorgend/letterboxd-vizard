@@ -4,6 +4,7 @@ import type {
 	OmdbRatings,
 	ProviderRequestItem,
 	RegionOffers,
+	ReleaseDate,
 	TmdbMovie
 } from '$lib/types';
 import { offersKey } from '$lib/types';
@@ -179,6 +180,36 @@ export async function fetchProviders(
 	});
 
 	return { offers, unresolved };
+}
+
+export interface ReleaseLookup {
+	/** Keyed by TMDB movie id; an empty list means TMDB has no dates for the film. */
+	releases: Map<number, ReleaseDate[]>;
+	/** Films still missing when the retry rounds ran out or the lookup was aborted. */
+	unresolved: number;
+}
+
+/** Theatrical, digital and physical release dates of each movie in `region`. */
+export async function fetchReleaseDates(
+	ids: number[],
+	region: string,
+	onProgress?: (done: number, total: number) => void,
+	signal?: AbortSignal
+): Promise<ReleaseLookup> {
+	const unique = [...new Set(ids)];
+	const releases = new Map<number, ReleaseDate[]>();
+
+	const unresolved = await runRounds<number, ReleaseDate[]>({
+		items: unique,
+		send: (batch) =>
+			postBatch('/api/releases', { region, ids: batch }, 'Release date lookup', signal),
+		keep: (index, found) => releases.set(unique[index], found ?? []),
+		onProgress,
+		firstRoundSize: COLLECTIONS_BATCH_SIZE,
+		signal
+	});
+
+	return { releases, unresolved };
 }
 
 /** Collection sizes for the franchises in a library, keeping only ids TMDB knows a collection for. */
