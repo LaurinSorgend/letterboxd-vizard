@@ -1,58 +1,46 @@
 <script lang="ts" module>
-	import type { FilmReleases } from './dates';
+	import { fetchReleaseDates } from '$lib/ingest/enrich';
+	import { CachedLookup } from '$lib/ingest/lookup.svelte';
 
-	/** Every country's dates per film, kept across mounts so views and countries switch for free. */
-	const dateCache = new Map<number, FilmReleases>();
+	/** Every country's dates per film, so switching country never asks the server again. */
+	const lookup = new CachedLookup((id: number) => id, fetchReleaseDates);
 </script>
 
 <script lang="ts">
-	import { fetchReleaseDates } from '$lib/ingest/enrich';
-	import { REGIONS, initialRegion, saveRegion } from '$lib/watchlist/region';
-	import { RELEASE_KINDS, type ReleaseKind, type WatchlistFilm } from '$lib/types';
+	import RegionSelect from '$lib/region/RegionSelect.svelte';
+	import { initialRegion } from '$lib/region/region';
+	import type { WatchlistFilm } from '$lib/types';
 	import {
 		calendarEntries,
 		clampMonth,
 		localToday,
-		monthOf,
+		monthKey,
 		nextReleaseMonth,
 		shiftMonth,
 		upcomingCandidates
 	} from './calendar';
-	import { regionReleases } from './dates';
-	import { KIND_LABELS } from './kinds';
+	import { FALLBACK_REGION, RELEASE_KINDS, type ReleaseKind } from './dates';
+	import { KINDS } from './kinds';
 	import CalendarMonth from './CalendarMonth.svelte';
 
-	let { watchlist, onupload }: { watchlist: WatchlistFilm[]; onupload: () => void } = $props();
+	let { watchlist }: { watchlist: WatchlistFilm[] } = $props();
 
 	const today = localToday();
-	const thisMonth = monthOf(today);
+	const thisMonth = monthKey(today);
 	let region = $state(initialRegion());
 	let kinds: ReleaseKind[] = $state([...RELEASE_KINDS]);
 	let picked = $state(thisMonth);
-	let dates = $state(new Map(dateCache));
-	let loaded = $state({ done: 0, total: 0 });
 
 	const candidates = $derived(upcomingCandidates(watchlist, today));
-	const loading = $derived(loaded.done < loaded.total);
-	const unresolved = $derived(loading ? 0 : candidates.filter((id) => !dates.has(id)).length);
+	const unresolved = $derived(lookup.loading ? 0 : lookup.missing(candidates));
 	const entries = $derived(
-		calendarEntries(
-			watchlist,
-			(id) => {
-				const releases = dates.get(id);
-				return releases ? regionReleases(releases, region) : undefined;
-			},
-			kinds,
-			`${thisMonth}-01`
-		)
+		calendarEntries(watchlist, lookup.values, region, kinds, `${thisMonth}-01`)
 	);
 	const upcoming = $derived(entries.filter((entry) => entry.date >= today));
-	const lastMonth = $derived(
-		entries.length > 0 ? monthOf(entries[entries.length - 1].date) : thisMonth
-	);
+	const lastMonth = $derived(entries.length > 0 ? monthKey(entries.at(-1)!.date) : thisMonth);
 	const month = $derived(clampMonth(picked, thisMonth, lastMonth));
 	const nextMonth = $derived(nextReleaseMonth(entries, month));
-	const inMonth = $derived(entries.filter((entry) => monthOf(entry.date) === month).length);
+	const inMonth = $derived(entries.filter((entry) => monthKey(entry.date) === month).length);
 	const monthName = $derived(
 		new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en', {
 			month: 'long',
@@ -63,161 +51,82 @@
 
 	$effect(() => {
 		const controller = new AbortController();
-		void loadDates(candidates, controller.signal);
+		void lookup.load(candidates, controller.signal);
 		return () => controller.abort();
 	});
-
-	/**
-	 * Fetches only the films the cache lacks. Whatever an aborted run found still lands in the
-	 * cache, and the next run asks for the rest, so `unresolved` always counts what is missing.
-	 */
-	async function loadDates(ids: number[], signal: AbortSignal) {
-		const missing = ids.filter((id) => !dateCache.has(id));
-		dates = new Map(dateCache);
-		loaded = { done: 0, total: missing.length };
-		if (missing.length === 0) return;
-		const found = await fetchReleaseDates(
-			missing,
-			(done, total) => {
-				if (!signal.aborted) loaded = { done, total };
-			},
-			signal
-		);
-		for (const [id, value] of found) dateCache.set(id, value);
-		if (signal.aborted) return;
-		dates = new Map(dateCache);
-		loaded = { done: missing.length, total: missing.length };
-	}
-
-	function changeRegion(next: string) {
-		region = next;
-		saveRegion(next);
-	}
 </script>
 
-{#if watchlist.length === 0}
-	<div class="empty">
-		<p>
-			The release calendar is built from the <code>watchlist.csv</code> in your Letterboxd export. A library
-			loaded by username has none, since Letterboxd's RSS feed leaves the watchlist out.
-		</p>
-		<button type="button" onclick={onupload}>Upload an export</button>
+<div class="form-controls">
+	<div class="controls">
+		<RegionSelect label="Release dates for" {region} onchange={(next) => (region = next)} />
+		<fieldset>
+			<legend>Release types</legend>
+			{#each RELEASE_KINDS as kind (kind)}
+				<label style:--kind-colour={KINDS[kind].colour}>
+					<input type="checkbox" value={kind} bind:group={kinds} />
+					<span class="swatch" aria-hidden="true"></span>
+					{KINDS[kind].label}
+				</label>
+			{/each}
+		</fieldset>
 	</div>
-{:else}
-	<div class="releases">
-		<div class="controls">
-			<label>
-				Release dates for
-				<select value={region} onchange={(e) => changeRegion(e.currentTarget.value)}>
-					{#each REGIONS as option (option.code)}
-						<option value={option.code}>{option.name}</option>
-					{/each}
-				</select>
-			</label>
-			<fieldset>
-				<legend>Release types</legend>
-				{#each RELEASE_KINDS as kind (kind)}
-					<label class="inline kind-{kind}">
-						<input type="checkbox" value={kind} bind:group={kinds} />
-						<span class="swatch" aria-hidden="true"></span>
-						{KIND_LABELS[kind]}
-					</label>
-				{/each}
-			</fieldset>
-		</div>
 
-		<p class="summary" role="status">
-			{#if loading}
-				Looking up release dates… <span class="num">{loaded.done}</span> /
-				<span class="num">{loaded.total}</span>
-			{:else if upcoming.length === 0}
-				Nothing on your watchlist has a release of the picked types coming up.
-			{:else}
-				<span class="num">{upcoming.length}</span>
-				{upcoming.length === 1 ? 'upcoming release' : 'upcoming releases'} across
-				<span class="num">{new Set(upcoming.map((e) => e.film.uri)).size}</span> watchlist films.
-			{/if}
-			{#if !loading && unresolved > 0}
-				Could not look up <span class="num">{unresolved}</span>
-				{unresolved === 1 ? 'film' : 'films'}.
-			{/if}
-		</p>
-
-		<nav class="months" aria-label="Month">
-			<button
-				type="button"
-				onclick={() => (picked = shiftMonth(month, -1))}
-				disabled={month <= thisMonth}
-			>
-				Previous
-			</button>
-			<h3 aria-live="polite">{monthName} <span class="count">({inMonth})</span></h3>
-			<button
-				type="button"
-				onclick={() => (picked = shiftMonth(month, 1))}
-				disabled={month >= lastMonth}
-			>
-				Next
-			</button>
-			{#if inMonth === 0 && nextMonth}
-				<button type="button" onclick={() => (picked = nextMonth ?? month)}>Next release</button>
-			{/if}
-		</nav>
-
-		{#if !loading && inMonth === 0}
-			<p class="summary">No releases of the picked types in {monthName}.</p>
+	<p class="summary" role="status">
+		{#if lookup.loading}
+			Looking up release dates… <span class="num">{lookup.progress.done}</span> /
+			<span class="num">{lookup.progress.total}</span>
+		{:else if upcoming.length === 0}
+			Nothing on your watchlist has a release of the picked types coming up.
+		{:else}
+			<span class="num">{upcoming.length}</span>
+			{upcoming.length === 1 ? 'upcoming release' : 'upcoming releases'} across
+			<span class="num">{new Set(upcoming.map((e) => e.film.uri)).size}</span> watchlist films.
 		{/if}
-		<CalendarMonth {month} {entries} {today} {region} />
+		{#if unresolved > 0}
+			Could not look up <span class="num">{unresolved}</span>
+			{unresolved === 1 ? 'film' : 'films'}.
+		{/if}
+	</p>
 
-		<p class="credit">
-			Release dates from <a href="https://www.themoviedb.org">TMDB</a>. Films without dates for the
-			chosen country show their US dates, marked (US).
-		</p>
-	</div>
-{/if}
+	<nav class="months" aria-label="Month">
+		<button
+			type="button"
+			onclick={() => (picked = shiftMonth(month, -1))}
+			disabled={month <= thisMonth}
+		>
+			Previous
+		</button>
+		<h3 aria-live="polite">{monthName} <span class="count">({inMonth})</span></h3>
+		<button
+			type="button"
+			onclick={() => (picked = shiftMonth(month, 1))}
+			disabled={month >= lastMonth}
+		>
+			Next
+		</button>
+		{#if inMonth === 0 && nextMonth}
+			<button type="button" onclick={() => (picked = nextMonth ?? month)}>Next release</button>
+		{/if}
+	</nav>
+
+	{#if !lookup.loading && inMonth === 0}
+		<p class="summary">No releases of the picked types in {monthName}.</p>
+	{/if}
+	<CalendarMonth {month} {entries} {today} />
+
+	<p class="credit">
+		Release dates from <a href="https://www.themoviedb.org">TMDB</a>. Films without dates for the
+		chosen country show their {FALLBACK_REGION} dates, marked ({FALLBACK_REGION}).
+	</p>
+</div>
 
 <style>
-	.releases :global(.kind-theatrical) {
-		--kind-colour: var(--ctp-peach);
-	}
-	.releases :global(.kind-digital) {
-		--kind-colour: var(--ctp-mauve);
-	}
-	.releases :global(.kind-physical) {
-		--kind-colour: var(--ctp-teal);
-	}
-	.releases select,
-	.releases button,
-	.empty button {
-		font: inherit;
-		font-size: var(--text-sm);
-		padding: 4px 8px;
-		color: var(--fg);
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		cursor: pointer;
-	}
-	.releases button:hover:not(:disabled),
-	.empty button:hover {
-		background: var(--surface);
-	}
-	.releases button:disabled {
-		cursor: default;
-		color: var(--fg-muted);
-	}
 	.controls {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 12px 24px;
 		align-items: end;
 		margin-bottom: 16px;
-	}
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		font-size: var(--text-sm);
-		color: var(--fg-secondary);
 	}
 	fieldset {
 		display: flex;
@@ -233,14 +142,14 @@
 		font-size: var(--text-sm);
 		color: var(--fg-secondary);
 	}
-	label.inline {
-		flex-direction: row;
+	fieldset label {
+		display: flex;
 		align-items: center;
 		gap: 6px;
-		color: var(--fg);
+		font-size: var(--text-sm);
 		cursor: pointer;
 	}
-	label.inline input {
+	fieldset input {
 		accent-color: var(--accent);
 		margin: 0;
 	}
@@ -278,9 +187,5 @@
 		margin-top: 16px;
 		font-size: var(--text-2xs);
 		color: var(--fg-muted);
-	}
-	.empty {
-		padding: 24px 0;
-		color: var(--fg-secondary);
 	}
 </style>

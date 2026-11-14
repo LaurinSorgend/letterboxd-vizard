@@ -1,18 +1,26 @@
 <script lang="ts" module>
-	import type { RegionOffers } from '$lib/types';
+	import { fetchProviders } from '$lib/ingest/enrich';
+	import { CachedLookup } from '$lib/ingest/lookup.svelte';
+	import { offersKey, type ProviderRequestItem, type RegionOffers } from '$lib/types';
 
-	/** Offers per region, kept across mounts so switching views or countries back costs no requests. */
-	const offerCache = new Map<string, Map<string, RegionOffers | null>>();
+	type OfferLookup = CachedLookup<ProviderRequestItem, string, RegionOffers | null>;
 
-	function cacheFor(region: string): Map<string, RegionOffers | null> {
-		let cached = offerCache.get(region);
-		if (!cached) offerCache.set(region, (cached = new Map()));
-		return cached;
+	/** Offers per country, since catalogues differ by country. */
+	const lookups = new Map<string, OfferLookup>();
+
+	function lookupFor(region: string): OfferLookup {
+		let lookup = lookups.get(region);
+		if (!lookup) {
+			lookup = new CachedLookup(offersKey, (items, onProgress, signal) =>
+				fetchProviders(items, region, onProgress, signal)
+			);
+			lookups.set(region, lookup);
+		}
+		return lookup;
 	}
 </script>
 
 <script lang="ts">
-	import { fetchProviders } from '$lib/ingest/enrich';
 	import {
 		filterWatchlist,
 		NO_FILTERS,
@@ -25,21 +33,20 @@
 		type WatchSort
 	} from './filter';
 	import { extractPalette, type Swatch } from '$lib/viz/colors';
-	import { initialRegion, loadServices, saveRegion, saveServices } from './region';
+	import { initialRegion } from '$lib/region/region';
+	import { loadServices, saveServices } from './services';
 	import WatchlistControls from './WatchlistControls.svelte';
 	import WatchlistFacets from './WatchlistFacets.svelte';
 	import ServicePicker from './ServicePicker.svelte';
 	import PosterWall from './PosterWall.svelte';
 	import RandomPick from './RandomPick.svelte';
-	import { offersKey, type WatchlistFilm } from '$lib/types';
+	import type { WatchlistFilm } from '$lib/types';
 
-	let { watchlist, onupload }: { watchlist: WatchlistFilm[]; onupload: () => void } = $props();
+	let { watchlist }: { watchlist: WatchlistFilm[] } = $props();
 
 	const startRegion = initialRegion();
 	let region = $state(startRegion);
-	let offers = $state(new Map<string, RegionOffers | null>());
-	let loaded = $state({ done: 0, total: 0 });
-	let unresolved = $state(0);
+	let lookup = $state.raw(lookupFor(startRegion));
 	let filters: WatchFilters = $state({ ...NO_FILTERS, services: loadServices(startRegion) });
 	let sort: WatchSort = $state('added-desc');
 	let seed = $state(0);
@@ -52,9 +59,10 @@
 			f.tmdb ? [{ tmdbId: f.tmdb.tmdbId, mediaType: f.tmdb.mediaType }] : []
 		)
 	);
-	const offersOf: OffersOf = (film) => (film.tmdb ? offers.get(offersKey(film.tmdb)) : null);
+	const offersOf: OffersOf = (film) => (film.tmdb ? lookup.values.get(offersKey(film.tmdb)) : null);
 
-	const loading = $derived(loaded.done < loaded.total);
+	const loading = $derived(lookup.loading);
+	const unresolved = $derived(loading ? 0 : lookup.missing(titles));
 	const counts = $derived(serviceCounts(watchlist, offersOf));
 	const filtered = $derived(filterWatchlist(watchlist, filters, offersOf));
 	const swatchOf: SwatchOf = (film) => {
@@ -83,36 +91,13 @@
 
 	$effect(() => {
 		const controller = new AbortController();
-		void loadOffers(region, titles, controller.signal);
+		void lookup.load(titles, controller.signal);
 		return () => controller.abort();
 	});
 
-	/** Fetches only the titles this region's cache lacks; an aborted load leaves the state alone. */
-	async function loadOffers(forRegion: string, items: typeof titles, signal: AbortSignal) {
-		const cached = cacheFor(forRegion);
-		const missing = items.filter((item) => !cached.has(offersKey(item)));
-		offers = new Map(cached);
-		unresolved = 0;
-		loaded = { done: 0, total: missing.length };
-		if (missing.length === 0) return;
-		const found = await fetchProviders(
-			missing,
-			forRegion,
-			(done, total) => {
-				if (!signal.aborted) loaded = { done, total };
-			},
-			signal
-		);
-		for (const [key, value] of found.offers) cached.set(key, value);
-		if (signal.aborted) return;
-		offers = new Map(cached);
-		unresolved = found.unresolved;
-		loaded = { done: missing.length, total: missing.length };
-	}
-
 	function changeRegion(next: string) {
 		region = next;
-		saveRegion(next);
+		lookup = lookupFor(next);
 		filters.services = loadServices(next);
 	}
 
@@ -123,73 +108,43 @@
 	}
 </script>
 
-{#if watchlist.length === 0}
-	<div class="empty">
-		<p>
-			Your watchlist comes from the <code>watchlist.csv</code> in your Letterboxd export. A library loaded
-			by username has none, since Letterboxd's RSS feed leaves the watchlist out.
-		</p>
-		<button type="button" onclick={onupload}>Upload an export</button>
-	</div>
-{:else}
-	<div class="watchlist">
-		<WatchlistControls
-			{region}
-			onregion={changeRegion}
-			bind:filters
-			bind:sort
-			bind:showLogos
-			onshuffle={() => ((sort = 'shuffle'), (seed += 1))}
-			onreset={reset}
-			colours={{ ...colours, ready: palette.size > 0, unread: unread.length }}
-			oncolours={readColours}
-		/>
-		<ServicePicker {counts} {loading} bind:selected={filters.services} />
-		<WatchlistFacets films={watchlist} bind:filters />
+<div class="form-controls">
+	<WatchlistControls
+		{region}
+		onregion={changeRegion}
+		bind:filters
+		bind:sort
+		bind:showLogos
+		onshuffle={() => ((sort = 'shuffle'), (seed += 1))}
+		onreset={reset}
+		colours={{ ...colours, ready: palette.size > 0, unread: unread.length }}
+		oncolours={readColours}
+	/>
+	<ServicePicker {counts} {loading} bind:selected={filters.services} />
+	<WatchlistFacets films={watchlist} bind:filters />
 
-		<p class="summary" role="status">
-			{#if loading}
-				Checking where your watchlist streams… {loaded.done} / {loaded.total}
-			{:else}
-				<span class="num">{shown.length}</span> of <span class="num">{watchlist.length}</span> films
-				{#if unresolved > 0}
-					· Could not check where <span class="num">{unresolved}</span>
-					{unresolved === 1 ? 'film streams' : 'films stream'}, so the availability filters leave
-					{unresolved === 1 ? 'it' : 'them'} out.
-				{/if}
+	<p class="summary" role="status">
+		{#if loading}
+			Checking where your watchlist streams… {lookup.progress.done} / {lookup.progress.total}
+		{:else}
+			<span class="num">{shown.length}</span> of <span class="num">{watchlist.length}</span> films
+			{#if unresolved > 0}
+				· Could not check where <span class="num">{unresolved}</span>
+				{unresolved === 1 ? 'film streams' : 'films stream'}, so the availability filters leave
+				{unresolved === 1 ? 'it' : 'them'} out.
 			{/if}
-		</p>
+		{/if}
+	</p>
 
-		<RandomPick films={shown} {offersOf} {loading} />
-		<PosterWall films={shown} {offersOf} services={filters.services} {showLogos} />
+	<RandomPick films={shown} {offersOf} {loading} />
+	<PosterWall films={shown} {offersOf} services={filters.services} {showLogos} />
 
-		<p class="credit">
-			Streaming availability from <a href="https://www.justwatch.com">JustWatch</a>, via TMDB.
-		</p>
-	</div>
-{/if}
+	<p class="credit">
+		Streaming availability from <a href="https://www.justwatch.com">JustWatch</a>, via TMDB.
+	</p>
+</div>
 
 <style>
-	.watchlist :global(select),
-	.watchlist :global(input:not([type='checkbox'])),
-	.watchlist :global(button:not(.link)),
-	.empty button {
-		font: inherit;
-		font-size: var(--text-sm);
-		padding: 4px 8px;
-		color: var(--fg);
-		background: var(--bg-secondary);
-		border: 1px solid var(--border);
-		min-width: 0;
-	}
-	.watchlist :global(button:not(.link)),
-	.empty button {
-		cursor: pointer;
-	}
-	.watchlist :global(button:not(.link):hover),
-	.empty button:hover {
-		background: var(--surface);
-	}
 	.summary {
 		margin: 0 0 12px;
 		font-size: var(--text-sm);
@@ -202,9 +157,5 @@
 		margin-top: 16px;
 		font-size: var(--text-2xs);
 		color: var(--fg-muted);
-	}
-	.empty {
-		padding: 24px 0;
-		color: var(--fg-secondary);
 	}
 </style>

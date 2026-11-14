@@ -1,5 +1,4 @@
-import type { FilmReleases } from '$lib/releases/dates';
-import type { ReleaseKind } from '$lib/types';
+import type { FilmReleases, ReleaseKind } from '$lib/releases/dates';
 import type { FetchBudget } from './budget';
 import { tmdbGet } from './tmdb';
 

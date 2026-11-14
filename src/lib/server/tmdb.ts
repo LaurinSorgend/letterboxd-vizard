@@ -7,7 +7,7 @@ import {
 	type TmdbMovie
 } from '$lib/types';
 import { normalizeTitle } from '$lib/text';
-import { BudgetExhausted, type FetchBudget } from './budget';
+import { BudgetExhausted, RetryLater, type FetchBudget } from './budget';
 import { lookupSeriesOnTvdb } from './tvdb';
 
 const BASE = 'https://api.themoviedb.org/3';
@@ -43,11 +43,15 @@ export async function tmdbGet(
 
 	for (let attempt = 0; ; attempt++) {
 		budget.take();
-		const response = await fetch(url, { headers });
+		const response = await fetch(url, { headers }).catch((cause: unknown) => {
+			throw new RetryLater(`TMDB ${path} unreachable`, { cause });
+		});
 		if (response.ok) return response.json();
 		const detail = await response.text();
-		const canRetry = (response.status === 429 || response.status >= 500) && attempt === 0;
-		if (!canRetry) throw new Error(`TMDB ${path} failed: ${response.status} ${detail}`);
+		const failure = `TMDB ${path} failed: ${response.status} ${detail}`;
+		const transient = response.status === 429 || response.status >= 500;
+		if (!transient) throw new Error(failure);
+		if (attempt > 0) throw new RetryLater(failure);
 		if (budget.exhausted) throw new BudgetExhausted();
 		const after = Number(response.headers.get('Retry-After')) * 1000;
 		const wait = after > 0 ? Math.min(after, MAX_RETRY_WAIT_MS) : RETRY_WAIT_MS;
@@ -221,9 +225,9 @@ export async function fetchRecord(
 }
 
 /**
- * A franchise's full size. One subrequest, and the answer changes about once a decade.
- * `tmdbGet` throws on a non-OK response (a missing collection is a 404), so that case is
- * indistinguishable here from any other TMDB failure and both come back as null.
+ * A franchise's full size, or null when TMDB has none (a 404) or refuses the request for good.
+ * One subrequest, and the answer changes about once a decade. Throws `RetryLater` when the
+ * lookup may succeed if asked again.
  */
 export async function fetchCollection(
 	budget: FetchBudget,
@@ -233,7 +237,7 @@ export async function fetchCollection(
 	try {
 		data = (await tmdbGet(budget, `/collection/${id}`, {})) as typeof data;
 	} catch (cause) {
-		if (cause instanceof BudgetExhausted) throw cause;
+		if (cause instanceof RetryLater) throw cause;
 		console.error(`tmdb collection failed: ${id}`, cause);
 		return null;
 	}

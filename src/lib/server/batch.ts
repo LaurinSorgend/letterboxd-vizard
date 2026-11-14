@@ -1,16 +1,19 @@
 import pLimit from 'p-limit';
-import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from './budget';
+import { FetchBudget, FETCHES_PER_REQUEST, RetryLater } from './budget';
 
 const CONCURRENCY = 5;
 
-export interface BatchLookup<K, V> {
+/** Most items one batch request may carry, on every batch endpoint. */
+export const MAX_BATCH = 100;
+
+export interface BatchLookup<T, K, V> {
+	/** Cache key of a request item, or null for one the upstream cannot know. */
+	keyOf: (item: T) => K | null;
 	/** Cached values for the keys, stale and unknown ones left out. */
 	getCached: (keys: K[]) => Promise<Map<K, V>>;
 	/** One upstream lookup; each call spends from the shared per-request budget. */
-	fetchOne: (budget: FetchBudget, key: K) => Promise<V>;
+	fetchOne: (budget: FetchBudget, item: T) => Promise<V>;
 	putCached: (entries: [K, V][]) => Promise<void>;
-	/** Whether a failed lookup is answered as pending (retried by the client) rather than null. */
-	retryFailures: boolean;
 	/** Names a failed key in the server log. */
 	label: string;
 }
@@ -22,30 +25,33 @@ export interface BatchAnswer<V> {
 }
 
 /**
- * The cache-then-fetch flow every batch endpoint shares: reads the cache for all keys, fetches the
- * rest under one fetch budget, stores what came back, and answers in request order. A null key is
- * one the upstream cannot know and always answers null.
+ * Reads the cache for every item, fetches the rest under one fetch budget, stores what came back,
+ * and answers in request order. A lookup that may succeed later is pending; any other failure is
+ * final and answers null, as does an item without a key.
  */
-export async function resolveBatch<K, V>(
-	keys: (K | null)[],
-	lookup: BatchLookup<K, V>
+export async function resolveBatch<T, K, V>(
+	items: T[],
+	lookup: BatchLookup<T, K, V>
 ): Promise<BatchAnswer<V>> {
-	const wanted = [...new Set(keys.filter((key): key is K => key !== null))];
-	const known = await lookup.getCached(wanted);
+	const keys = items.map(lookup.keyOf);
+	const firstItem = new Map<K, T>();
+	keys.forEach((key, index) => {
+		if (key !== null && !firstItem.has(key)) firstItem.set(key, items[index]);
+	});
+	const known = await lookup.getCached([...firstItem.keys()]);
 	const budget = new FetchBudget(FETCHES_PER_REQUEST);
 	const limit = pLimit(CONCURRENCY);
 	const resolved = new Map<K, V>();
 	const retry = new Set<K>();
 	await Promise.all(
-		wanted
-			.filter((key) => !known.has(key))
-			.map(async (key) => {
+		[...firstItem]
+			.filter(([key]) => !known.has(key))
+			.map(async ([key, item]) => {
 				try {
-					resolved.set(key, await limit(() => lookup.fetchOne(budget, key)));
+					resolved.set(key, await limit(() => lookup.fetchOne(budget, item)));
 				} catch (cause) {
-					const deferred = cause instanceof BudgetExhausted;
-					if (!deferred) console.error(`${lookup.label} failed: ${String(key)}`, cause);
-					if (deferred || lookup.retryFailures) retry.add(key);
+					if (cause instanceof RetryLater) retry.add(key);
+					else console.error(`${lookup.label} failed: ${String(key)}`, cause);
 				}
 			})
 	);
@@ -59,6 +65,3 @@ export async function resolveBatch<K, V>(
 		.map(([index]) => index);
 	return { results, pending };
 }
-
-/** TMDB ids are positive; the app stores TheTVDB records under negative ids. */
-export const isTmdbId = (id: number): boolean => id > 0;

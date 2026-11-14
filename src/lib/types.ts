@@ -160,16 +160,9 @@ export interface ProviderRequestItem {
 /** Key a title's offers are stored under, client and server; TMDB numbers films and series separately. */
 export const offersKey = (item: ProviderRequestItem): string => `${item.mediaType}:${item.tmdbId}`;
 
-/** The release channels the calendar can filter by. */
-export type ReleaseKind = 'theatrical' | 'digital' | 'physical';
+/** TMDB ids are positive; TheTVDB records are stored under negative ids, which TMDB never knows. */
+export const isTmdbId = (id: number): boolean => id > 0;
 
-export const RELEASE_KINDS: ReleaseKind[] = ['theatrical', 'digital', 'physical'];
-
-/** One dated release of a film in one country. */
-export interface ReleaseDate {
-	kind: ReleaseKind;
-	/** ISO date, YYYY-MM-DD. */
-	date: string;
-	/** Country the date belongs to; differs from the requested region when it had no dates. */
-	region: string;
-}
+/** A film TMDB holds as a movie, the only kind with recommendations and release dates. */
+export const isTmdbMovie = (tmdb: TmdbMovie | null | undefined): tmdb is TmdbMovie =>
+	tmdb?.mediaType === 'movie' && isTmdbId(tmdb.tmdbId);

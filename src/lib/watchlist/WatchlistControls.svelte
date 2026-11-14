@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { REGIONS } from './region';
+	import RegionSelect from '$lib/region/RegionSelect.svelte';
 	import type { WatchFilters, WatchSort } from './filter';
 
 	let {
@@ -46,14 +46,7 @@
 </script>
 
 <div class="controls">
-	<label>
-		I watch in
-		<select value={region} onchange={(e) => onregion(e.currentTarget.value)}>
-			{#each REGIONS as option (option.code)}
-				<option value={option.code}>{option.name}</option>
-			{/each}
-		</select>
-	</label>
+	<RegionSelect label="I watch in" {region} onchange={onregion} />
 	<label>
 		Availability
 		<select bind:value={filters.availability}>

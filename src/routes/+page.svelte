@@ -349,15 +349,22 @@
 			bind:value={view}
 		/>
 
-		{#if view === 'releases'}
-			<section id="releases">
-				<h2>Upcoming releases on your watchlist</h2>
-				<ReleaseCalendar {watchlist} onupload={() => (phase = 'idle')} />
-			</section>
-		{:else if view === 'watchlist'}
-			<section id="watchlist">
-				<h2>Your watchlist</h2>
-				<Watchlist {watchlist} onupload={() => (phase = 'idle')} />
+		{#if view !== 'stats'}
+			<section id={view}>
+				<h2>{view === 'releases' ? 'Upcoming releases on your watchlist' : 'Your watchlist'}</h2>
+				{#if watchlist.length === 0}
+					<div class="empty-watchlist form-controls">
+						<p>
+							The watchlist comes from the <code>watchlist.csv</code> in your Letterboxd export. A library
+							loaded by username has none, since Letterboxd's RSS feed leaves the watchlist out.
+						</p>
+						<button type="button" onclick={() => (phase = 'idle')}>Upload an export</button>
+					</div>
+				{:else if view === 'releases'}
+					<ReleaseCalendar {watchlist} />
+				{:else}
+					<Watchlist {watchlist} />
+				{/if}
 			</section>
 		{:else}
 			<SectionNav container={mainEl} />
@@ -725,6 +732,10 @@
 	.feed-note {
 		color: var(--fg-secondary);
 		margin: 0 0 24px;
+	}
+	.empty-watchlist {
+		padding: 24px 0;
+		color: var(--fg-secondary);
 	}
 	.feed-note button {
 		font: inherit;

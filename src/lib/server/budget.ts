@@ -1,5 +1,8 @@
+/** A lookup that could not finish now but may succeed if the client asks again. */
+export class RetryLater extends Error {}
+
 /** Signals that the per-invocation subrequest budget ran out before a lookup could finish. */
-export class BudgetExhausted extends Error {
+export class BudgetExhausted extends RetryLater {
 	constructor() {
 		super('fetch budget exhausted');
 	}

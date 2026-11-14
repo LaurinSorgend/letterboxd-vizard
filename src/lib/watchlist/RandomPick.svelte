@@ -96,8 +96,4 @@
 		margin: 8px 0 0;
 		font-size: var(--text-sm);
 	}
-	button:disabled {
-		color: var(--fg-muted);
-		cursor: default;
-	}
 </style>

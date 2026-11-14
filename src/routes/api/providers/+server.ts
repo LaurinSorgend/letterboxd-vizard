@@ -1,14 +1,12 @@
 import { json, error } from '@sveltejs/kit';
-import { isTmdbId, resolveBatch } from '$lib/server/batch';
+import { MAX_BATCH, resolveBatch } from '$lib/server/batch';
 import { getProvidersCachedMany, putProvidersCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
-import { fetchAvailability, regionOffers, type WatchAvailability } from '$lib/server/providers';
+import { fetchAvailability, regionOffers } from '$lib/server/providers';
 import { checkRateLimit } from '$lib/server/ratelimit';
 import { requireSession } from '$lib/server/session';
-import { offersKey, type ProviderRequestItem } from '$lib/types';
+import { isTmdbId, offersKey, type ProviderRequestItem } from '$lib/types';
 import type { RequestHandler } from './$types';
-
-const MAX_BATCH = 100;
 
 function isItem(item: unknown): item is ProviderRequestItem {
 	const candidate = item as ProviderRequestItem | null;
@@ -35,20 +33,13 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	if (items.length > MAX_BATCH) error(400, `Batch too large, send at most ${MAX_BATCH} items`);
 
 	const db = await getDb(platform);
-	const kindOf = new Map(items.map((item) => [offersKey(item), item]));
-	const { results, pending } = await resolveBatch<string, WatchAvailability>(
-		items.map((item) => (isTmdbId(item.tmdbId) ? offersKey(item) : null)),
-		{
-			getCached: (keys) => getProvidersCachedMany(db, keys),
-			fetchOne: (budget, key) => {
-				const item = kindOf.get(key)!;
-				return fetchAvailability(budget, item.mediaType, item.tmdbId);
-			},
-			putCached: (entries) => putProvidersCachedMany(db, entries),
-			retryFailures: false,
-			label: 'tmdb providers'
-		}
-	);
+	const { results, pending } = await resolveBatch(items, {
+		keyOf: (item) => (isTmdbId(item.tmdbId) ? offersKey(item) : null),
+		getCached: (keys) => getProvidersCachedMany(db, keys),
+		fetchOne: (budget, item) => fetchAvailability(budget, item.mediaType, item.tmdbId),
+		putCached: (entries) => putProvidersCachedMany(db, entries),
+		label: 'tmdb providers'
+	});
 	return json({
 		results: results.map((availability) =>
 			availability ? regionOffers(availability, region) : null

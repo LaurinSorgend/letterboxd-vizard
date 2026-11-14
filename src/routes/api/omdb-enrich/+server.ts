@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import pLimit from 'p-limit';
+import { MAX_BATCH } from '$lib/server/batch';
 import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
 import { getOmdbCachedMany, putOmdbCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
@@ -10,7 +11,6 @@ import { requireSession } from '$lib/server/session';
 import type { OmdbRatings } from '$lib/types';
 import type { RequestHandler } from './$types';
 
-const MAX_BATCH = 100;
 const CONCURRENCY = 5;
 
 export const POST: RequestHandler = async ({ request, platform, cookies, getClientAddress }) => {

@@ -53,15 +53,15 @@ interface RoundsOptions<T, R> {
 	keep: (index: number, result: R | null) => void;
 	onProgress?: (done: number, total: number) => void;
 	firstRoundSize?: number;
-	/** Stops sending further batches once aborted; the items left count as unresolved. */
+	/** Stops sending further batches once aborted; the items left never reach `keep`. */
 	signal?: AbortSignal;
 }
 
 /**
  * Runs a batched lookup to completion: chunks the queue, keeps `MAX_IN_FLIGHT` batches in
  * the air, and re-queues whatever the server deferred under its fetch budget or a failed
- * request left behind, so a large library still resolves in one visit.
- * @returns how many items were still unresolved when the rounds ran out
+ * request left behind, so a large library still resolves in one visit. Items still unresolved
+ * when the rounds run out never reach `keep`.
  */
 async function runRounds<T, R>({
 	items,
@@ -70,7 +70,7 @@ async function runRounds<T, R>({
 	onProgress,
 	firstRoundSize = BATCH_SIZE,
 	signal
-}: RoundsOptions<T, R>): Promise<number> {
+}: RoundsOptions<T, R>): Promise<void> {
 	let queue = items.map((_, index) => index);
 	let done = 0;
 
@@ -107,7 +107,6 @@ async function runRounds<T, R>({
 		await Promise.all(Array.from({ length: Math.min(MAX_IN_FLIGHT, batches.length) }, worker));
 		queue = retry;
 	}
-	return items.length - done;
 }
 
 /** Resolves name+year items against /api/enrich in batches, reporting progress after each batch. */
@@ -152,59 +151,47 @@ export async function enrichOmdb(
 	return ratings;
 }
 
-export interface ProviderLookup {
-	/** Keyed by `offersKey`; null means the title is offered nowhere in the region. */
-	offers: Map<string, RegionOffers | null>;
-	/** Titles still missing when the retry rounds ran out or the lookup was aborted. */
-	unresolved: number;
-}
-
-/** Where each title can be watched in `region`. */
+/**
+ * Where each title can be watched in `region`, keyed by `offersKey`; null means offered nowhere.
+ * Titles the rounds could not reach are absent.
+ */
 export async function fetchProviders(
 	items: ProviderRequestItem[],
 	region: string,
-	onProgress?: (done: number, total: number) => void,
+	onProgress?: (done: number) => void,
 	signal?: AbortSignal
-): Promise<ProviderLookup> {
-	const unique = [...new Map(items.map((item) => [offersKey(item), item])).values()];
+): Promise<Map<string, RegionOffers | null>> {
 	const offers = new Map<string, RegionOffers | null>();
-
-	const unresolved = await runRounds<ProviderRequestItem, RegionOffers>({
-		items: unique,
+	await runRounds<ProviderRequestItem, RegionOffers>({
+		items,
 		send: (batch) =>
 			postBatch('/api/providers', { region, items: batch }, 'Provider lookup', signal),
-		keep: (index, found) => offers.set(offersKey(unique[index]), found),
+		keep: (index, found) => offers.set(offersKey(items[index]), found),
 		onProgress,
 		firstRoundSize: COLLECTIONS_BATCH_SIZE,
 		signal
 	});
-
-	return { offers, unresolved };
+	return offers;
 }
 
 /**
- * Theatrical, digital and physical release dates of each movie in every country, keyed by TMDB
- * id. Films the lookup could not reach are absent, so a later call asks for them again.
+ * Release dates of each movie in every country, keyed by TMDB id; null means TMDB has none.
+ * Films the rounds could not reach are absent.
  */
 export async function fetchReleaseDates(
 	ids: number[],
-	onProgress?: (done: number, total: number) => void,
+	onProgress?: (done: number) => void,
 	signal?: AbortSignal
-): Promise<Map<number, FilmReleases>> {
-	const unique = [...new Set(ids)];
-	const releases = new Map<number, FilmReleases>();
-
+): Promise<Map<number, FilmReleases | null>> {
+	const releases = new Map<number, FilmReleases | null>();
 	await runRounds<number, FilmReleases>({
-		items: unique,
+		items: ids,
 		send: (batch) => postBatch('/api/releases', { ids: batch }, 'Release date lookup', signal),
-		keep: (index, found) => {
-			if (found) releases.set(unique[index], found);
-		},
+		keep: (index, found) => releases.set(ids[index], found),
 		onProgress,
 		firstRoundSize: COLLECTIONS_BATCH_SIZE,
 		signal
 	});
-
 	return releases;
 }
 

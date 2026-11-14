@@ -2,14 +2,10 @@
 	import { imageUrl } from '$lib/viz/images';
 	import { webHref } from '$lib/viz/href';
 	import { monthGrid, type CalendarEntry } from './calendar';
-	import { KIND_LABELS } from './kinds';
+	import { KINDS } from './kinds';
 
-	let {
-		month,
-		entries,
-		today,
-		region
-	}: { month: string; entries: CalendarEntry[]; today: string; region: string } = $props();
+	let { month, entries, today }: { month: string; entries: CalendarEntry[]; today: string } =
+		$props();
 
 	const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 	const days = $derived(monthGrid(month, entries));
@@ -23,8 +19,8 @@
 	};
 
 	function describe(entry: CalendarEntry): string {
-		const elsewhere = entry.region === region ? '' : `, ${entry.region} date`;
-		return `${entry.film.name}: ${KIND_LABELS[entry.kind].toLowerCase()} release${elsewhere}`;
+		const elsewhere = entry.fallbackRegion ? `, ${entry.fallbackRegion} date` : '';
+		return `${entry.film.name}: ${KINDS[entry.kind].label.toLowerCase()} release${elsewhere}`;
 	}
 </script>
 
@@ -49,7 +45,11 @@
 					{#each day.entries as entry (`${entry.film.uri}-${entry.kind}`)}
 						{@const href = webHref(entry.film.uri)}
 						{@const poster = imageUrl(entry.film.tmdb?.posterPath ?? null, 'w92')}
-						<li class="entry kind-{entry.kind}" title={describe(entry)}>
+						<li
+							class="entry"
+							style:--kind-colour={KINDS[entry.kind].colour}
+							title={describe(entry)}
+						>
 							{#if poster}<img src={poster} alt="" loading="lazy" />{/if}
 							<span class="text">
 								{#if href}
@@ -58,7 +58,9 @@
 									{entry.film.name}
 								{/if}
 								<span class="kind">
-									{KIND_LABELS[entry.kind]}{entry.region === region ? '' : ` (${entry.region})`}
+									{KINDS[entry.kind].label}{entry.fallbackRegion
+										? ` (${entry.fallbackRegion})`
+										: ''}
 								</span>
 							</span>
 						</li>
@@ -101,8 +103,7 @@
 	.past {
 		opacity: 0.6;
 	}
-	.today .date .num,
-	.today .date .long {
+	.today .date {
 		background: var(--accent);
 		color: var(--on-accent);
 		padding: 0 4px;

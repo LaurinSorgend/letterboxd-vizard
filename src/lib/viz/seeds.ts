@@ -1,5 +1,5 @@
 import { effectiveCountries } from './countries';
-import type { EnrichedFilm, Seed, TmdbMovie } from '$lib/types';
+import { isTmdbId, isTmdbMovie, type EnrichedFilm, type Seed, type TmdbMovie } from '$lib/types';
 
 const MAX_PER_DECADE = 4;
 const MAX_PER_COUNTRY = 6;
@@ -19,7 +19,7 @@ function toSeed(film: EnrichedFilm): Seed {
 
 /** TMDB ids of enriched items with a real TMDB record (negative ids are TheTVDB). */
 export function watchedTmdbIds(films: { tmdb: TmdbMovie | null }[]): number[] {
-	return films.filter((f) => f.tmdb && f.tmdb.tmdbId > 0).map((f) => f.tmdb!.tmdbId);
+	return films.flatMap((f) => (f.tmdb && isTmdbId(f.tmdb.tmdbId) ? [f.tmdb.tmdbId] : []));
 }
 
 /**
@@ -29,10 +29,7 @@ export function watchedTmdbIds(films: { tmdb: TmdbMovie | null }[]): number[] {
  */
 export function pickDiverseSeeds(films: EnrichedFilm[], count: number): Seed[] {
 	const pool = shuffled(
-		films.filter(
-			(f) =>
-				f.rating !== null && f.rating >= 3.5 && f.tmdb?.mediaType === 'movie' && f.tmdb.tmdbId > 0
-		)
+		films.filter((f) => f.rating !== null && f.rating >= 3.5 && isTmdbMovie(f.tmdb))
 	);
 	const perDecade = new Map<number, number>();
 	const perCountry = new Map<string, number>();
@@ -63,11 +60,7 @@ const GENRE_SEEDS = 12;
 
 function favorites(films: EnrichedFilm[]): EnrichedFilm[] {
 	return films.filter(
-		(f) =>
-			f.rating !== null &&
-			f.rating >= FAVORITE_RATING &&
-			f.tmdb?.mediaType === 'movie' &&
-			f.tmdb.tmdbId > 0
+		(f) => f.rating !== null && f.rating >= FAVORITE_RATING && isTmdbMovie(f.tmdb)
 	);
 }
 
@@ -96,9 +89,6 @@ export function pickGenreSeeds(films: EnrichedFilm[], genre: string): Seed[] {
 
 /** Random sample of a country's watched movies you didn't dislike (unrated, or rated 3+). */
 export function pickCountrySeeds(films: EnrichedFilm[], count: number): Seed[] {
-	const pool = films.filter(
-		(f) =>
-			f.tmdb?.mediaType === 'movie' && f.tmdb.tmdbId > 0 && (f.rating === null || f.rating >= 3)
-	);
+	const pool = films.filter((f) => isTmdbMovie(f.tmdb) && (f.rating === null || f.rating >= 3));
 	return shuffled(pool).slice(0, count).map(toSeed);
 }

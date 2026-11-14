@@ -347,6 +347,30 @@ a {
 	background: color-mix(in srgb, var(--ctp-overlay2) 25%, transparent);
 }
 
+/* The compact control look of the watchlist and release views. */
+.form-controls :is(select, input:not([type='checkbox']), button:not(.link)) {
+	font: inherit;
+	font-size: var(--text-sm);
+	padding: 4px 8px;
+	color: var(--fg);
+	background: var(--bg-secondary);
+	border: 1px solid var(--border);
+	min-width: 0;
+}
+
+.form-controls :is(button:not(.link)) {
+	cursor: pointer;
+}
+
+.form-controls :is(button:not(.link):hover:not(:disabled)) {
+	background: var(--surface);
+}
+
+.form-controls :is(button:not(.link):disabled) {
+	cursor: default;
+	color: var(--fg-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,

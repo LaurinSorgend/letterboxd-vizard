@@ -1,7 +1,8 @@
-import type { ReleaseKind } from '$lib/types';
+import type { ReleaseKind } from './dates';
 
-export const KIND_LABELS: Record<ReleaseKind, string> = {
-	theatrical: 'Theatrical',
-	digital: 'Digital',
-	physical: 'Physical'
+/** Each release kind's label and its Catppuccin colour. */
+export const KINDS: Record<ReleaseKind, { label: string; colour: string }> = {
+	theatrical: { label: 'Theatrical', colour: 'var(--ctp-peach)' },
+	digital: { label: 'Digital', colour: 'var(--ctp-mauve)' },
+	physical: { label: 'Physical', colour: 'var(--ctp-teal)' }
 };

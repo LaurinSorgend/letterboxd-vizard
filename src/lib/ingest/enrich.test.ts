@@ -74,25 +74,24 @@ describe('fetchProviders', () => {
 		{ tmdbId: 2, mediaType: 'tv' as const }
 	];
 
-	it('counts titles still missing after every round failed as unresolved', async () => {
+	it('leaves out titles still missing after every round failed', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('slow down', { status: 429 })));
 
-		const { offers, unresolved } = await fetchProviders(items, 'GB');
+		const offers = await fetchProviders(items, 'GB');
 
 		expect(offers.size).toBe(0);
-		expect(unresolved).toBe(2);
 	});
 
-	it('sends nothing once aborted and reports every title unresolved', async () => {
+	it('sends nothing once aborted and answers no title', async () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal('fetch', fetchMock);
 		const controller = new AbortController();
 		controller.abort();
 
-		const { unresolved } = await fetchProviders(items, 'GB', undefined, controller.signal);
+		const offers = await fetchProviders(items, 'GB', undefined, controller.signal);
 
 		expect(fetchMock).not.toHaveBeenCalled();
-		expect(unresolved).toBe(2);
+		expect(offers.size).toBe(0);
 	});
 
 	it('keys offers by media type and id, with null for titles offered nowhere', async () => {
@@ -102,9 +101,8 @@ describe('fetchProviders', () => {
 			vi.fn().mockResolvedValue(jsonResponse({ results: [offer, null], pending: [] }))
 		);
 
-		const { offers, unresolved } = await fetchProviders(items, 'GB');
+		const offers = await fetchProviders(items, 'GB');
 
-		expect(unresolved).toBe(0);
 		expect(offers.get('movie:1')).toEqual(offer);
 		expect(offers.get('tv:2')).toBeNull();
 	});

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BudgetExhausted, FetchBudget } from './budget';
+import { BudgetExhausted, FetchBudget, RetryLater } from './budget';
 import { fetchCollection } from './tmdb';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -24,6 +24,20 @@ describe('fetchCollection', () => {
 	it('returns null when TMDB has no such collection', async () => {
 		stub({ status_code: 34 }, false);
 		await expect(fetchCollection(new FetchBudget(5), 1)).resolves.toBeNull();
+	});
+
+	it('rejects with RetryLater, not null, when TMDB keeps failing', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('down', { status: 503 }))
+		);
+		const result = expect(fetchCollection(new FetchBudget(5), 8091)).rejects.toBeInstanceOf(
+			RetryLater
+		);
+		await vi.runAllTimersAsync();
+		await result;
+		vi.useRealTimers();
 	});
 
 	it('rejects with BudgetExhausted, not null, once the budget is spent', async () => {

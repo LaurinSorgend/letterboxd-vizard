@@ -1,15 +1,12 @@
-import type { ReleaseDate, ReleaseKind, WatchlistFilm } from '$lib/types';
+import { isTmdbMovie, type WatchlistFilm } from '$lib/types';
+import { regionReleases, type FilmReleases, type ReleaseDate, type ReleaseKind } from './dates';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Digital and disc releases trail the cinema run, so a film this old can still have one coming. */
 const LOOKBACK_DAYS = 2 * 365;
 
-export interface CalendarEntry {
+export interface CalendarEntry extends ReleaseDate {
 	film: WatchlistFilm;
-	kind: ReleaseKind;
-	date: string;
-	/** Country of the date, which is the fallback country when the chosen one had none. */
-	region: string;
 }
 
 /** A day cell of the month grid; `date` is null for the padding before the 1st and after the last. */
@@ -18,10 +15,12 @@ export interface CalendarDay {
 	entries: CalendarEntry[];
 }
 
-export type ReleasesOf = (tmdbId: number) => ReleaseDate[] | undefined;
+/** Each film's dates in every country, null when TMDB has none; films not looked up are absent. */
+export type ReleaseCache = ReadonlyMap<number, FilmReleases | null>;
 
 /** Today in the viewer's time zone, as YYYY-MM-DD. */
-export function localToday(now = new Date()): string {
+export function localToday(): string {
+	const now = new Date();
 	const pad = (n: number) => String(n).padStart(2, '0');
 	return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
@@ -33,41 +32,40 @@ function shiftDays(iso: string, days: number): string {
 /** TMDB movie ids worth asking about: undated films and those released in the last two years. */
 export function upcomingCandidates(watchlist: WatchlistFilm[], today: string): number[] {
 	const cutoff = shiftDays(today, -LOOKBACK_DAYS);
-	return watchlist.flatMap((film) => {
-		const tmdb = film.tmdb;
-		if (!tmdb || tmdb.mediaType !== 'movie' || tmdb.tmdbId <= 0) return [];
-		return !tmdb.releaseDate || tmdb.releaseDate >= cutoff ? [tmdb.tmdbId] : [];
-	});
+	return watchlist.flatMap(({ tmdb }) =>
+		isTmdbMovie(tmdb) && (!tmdb.releaseDate || tmdb.releaseDate >= cutoff) ? [tmdb.tmdbId] : []
+	);
 }
 
-/** Every release of the picked kinds on or after `from`, by date and then title. */
+/** Every release of the picked kinds in `region` on or after `from`, by date and then title. */
 export function calendarEntries(
 	watchlist: WatchlistFilm[],
-	releasesOf: ReleasesOf,
-	kinds: ReleaseKind[],
+	cache: ReleaseCache,
+	region: string,
+	kinds: readonly ReleaseKind[],
 	from: string
 ): CalendarEntry[] {
-	const entries = watchlist.flatMap((film) =>
-		(film.tmdb?.mediaType === 'movie' ? (releasesOf(film.tmdb.tmdbId) ?? []) : [])
+	const entries = watchlist.flatMap((film) => {
+		const releases = isTmdbMovie(film.tmdb) ? cache.get(film.tmdb.tmdbId) : null;
+		return (releases ? regionReleases(releases, region) : [])
 			.filter((release) => kinds.includes(release.kind) && release.date >= from)
-			.map((release) => ({ film, ...release }))
-	);
+			.map((release) => ({ film, ...release }));
+	});
 	return entries.sort(
 		(a, b) => a.date.localeCompare(b.date) || a.film.name.localeCompare(b.film.name)
 	);
 }
 
-/** `YYYY-MM` of an ISO date. */
-export const monthOf = (iso: string): string => iso.slice(0, 7);
+/** The `YYYY-MM` month an ISO date falls in. */
+export const monthKey = (iso: string): string => iso.slice(0, 7);
 
-/** The month after (or before, for a negative step) a `YYYY-MM` month. */
+/** The `YYYY-MM` month `step` months away. */
 export function shiftMonth(month: string, step: number): string {
 	const [year, index] = month.split('-').map(Number);
-	const date = new Date(Date.UTC(year, index - 1 + step, 1));
-	return date.toISOString().slice(0, 7);
+	return new Date(Date.UTC(year, index - 1 + step, 1)).toISOString().slice(0, 7);
 }
 
-/** Keeps a month within `[first, last]`, so a narrowed filter never strands the view past its end. */
+/** Keeps a month within `[first, last]`. */
 export function clampMonth(month: string, first: string, last: string): string {
 	if (month < first) return first;
 	return month > last ? last : month;
@@ -75,8 +73,8 @@ export function clampMonth(month: string, first: string, last: string): string {
 
 /** Month of the first entry after `month`, or null when nothing comes later. */
 export function nextReleaseMonth(entries: CalendarEntry[], month: string): string | null {
-	const next = entries.find((entry) => monthOf(entry.date) > month);
-	return next ? monthOf(next.date) : null;
+	const next = entries.find((entry) => monthKey(entry.date) > month);
+	return next ? monthKey(next.date) : null;
 }
 
 /** Weeks of a month, Monday first, padded to whole weeks, with each day's entries attached. */
@@ -86,7 +84,7 @@ export function monthGrid(month: string, entries: CalendarEntry[]): CalendarDay[
 	const lead = (new Date(Date.UTC(year, index - 1, 1)).getUTCDay() + 6) % 7;
 	const byDate = new Map<string, CalendarEntry[]>();
 	for (const entry of entries) {
-		if (monthOf(entry.date) === month)
+		if (monthKey(entry.date) === month)
 			byDate.set(entry.date, [...(byDate.get(entry.date) ?? []), entry]);
 	}
 	const days: CalendarDay[] = Array.from({ length: lead }, () => ({ date: null, entries: [] }));
