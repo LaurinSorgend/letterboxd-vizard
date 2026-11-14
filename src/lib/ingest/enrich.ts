@@ -4,9 +4,10 @@ import type {
 	OmdbRatings,
 	ProviderRequestItem,
 	RegionOffers,
-	TmdbMovie
+	TmdbMovie,
+	UpcomingCandidate
 } from '$lib/types';
-import type { FilmReleases } from '$lib/releases/dates';
+import type { FilmReleases, ReleaseKind } from '$lib/releases/dates';
 import { offersKey } from '$lib/types';
 
 const BATCH_SIZE = 50;
@@ -193,6 +194,42 @@ export async function fetchReleaseDates(
 		signal
 	});
 	return releases;
+}
+
+/** Full TMDB records for the given ids, null where TMDB has none. */
+export async function fetchRecords(
+	ids: number[],
+	onProgress?: (done: number) => void,
+	signal?: AbortSignal
+): Promise<Map<number, TmdbMovie | null>> {
+	const records = new Map<number, TmdbMovie | null>();
+	await runRounds<number, TmdbMovie>({
+		items: ids,
+		send: (batch) => postBatch('/api/records', { ids: batch }, 'Record lookup', signal),
+		keep: (index, found) => records.set(ids[index], found),
+		onProgress,
+		firstRoundSize: COLLECTIONS_BATCH_SIZE,
+		signal
+	});
+	return records;
+}
+
+/** Films releasing soon in a region, including new work by the given people. */
+export async function fetchUpcoming(
+	region: string,
+	kinds: ReleaseKind[],
+	people: number[],
+	signal?: AbortSignal
+): Promise<UpcomingCandidate[]> {
+	const response = await fetch('/api/upcoming', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ region, kinds, people }),
+		signal
+	});
+	if (!response.ok) throw new Error(`Upcoming lookup failed (${response.status})`);
+	const { candidates } = (await response.json()) as { candidates: UpcomingCandidate[] };
+	return candidates;
 }
 
 /** Collection sizes for the franchises in a library, keeping only ids TMDB knows a collection for. */
