@@ -5,6 +5,7 @@ const LIKED_UNRATED_RATING = 4;
 const RATING_OFFSET = 2.5;
 const MIN_WEIGHT = 0.5;
 const AFFINITY_HALF = 2;
+const KEYWORD_HALF_SHARE = 0.05;
 const MIN_CAST_SUPPORT = 2;
 const MIN_KEYWORD_SUPPORT = 2;
 const MIN_KEYWORD_SUPPORT_LARGE = 3;
@@ -52,7 +53,11 @@ interface Favourite {
 	weight: number;
 }
 
-const affinity = (s: number): number => s / (s + AFFINITY_HALF);
+const affinity = (s: number, half = AFFINITY_HALF): number => s / (s + half);
+
+/** Keywords recur across a large favourite set, so their half-saturation grows with its weight. */
+const keywordHalf = (totalWeight: number): number =>
+	Math.max(AFFINITY_HALF, KEYWORD_HALF_SHARE * totalWeight);
 
 const billing = (i: number): number => 1 / Math.sqrt(1 + i);
 
@@ -120,17 +125,18 @@ function castAffinities(cast: Tally<number>): Map<number, number> {
 function keywordAffinities(
 	kw: Tally<string>,
 	library: TmdbMovie[],
-	favouriteCount: number
+	favs: Favourite[]
 ): Map<string, number> {
 	const L = library.length;
 	const counts = keywordCounts(library);
+	const half = keywordHalf(favs.reduce((sum, f) => sum + f.weight, 0));
 	const minSupport =
-		favouriteCount > LARGE_FAVOURITE_COUNT ? MIN_KEYWORD_SUPPORT_LARGE : MIN_KEYWORD_SUPPORT;
+		favs.length > LARGE_FAVOURITE_COUNT ? MIN_KEYWORD_SUPPORT_LARGE : MIN_KEYWORD_SUPPORT;
 	const out = new Map<string, number>();
 	for (const [k, s] of kw.sum) {
 		const n = counts.get(k) ?? 0;
 		if ((kw.support.get(k) ?? 0) < minSupport || n === 0 || n / L > MAX_KEYWORD_SHARE) continue;
-		out.set(k, affinity(s) * idf(L, n));
+		out.set(k, affinity(s, half) * idf(L, n));
 	}
 	return out;
 }
@@ -148,7 +154,7 @@ export function buildTasteProfile(films: EnrichedFilm[]): TasteProfile {
 	return {
 		directors,
 		cast: castAffinities(sums.cast),
-		keywords: keywordAffinities(sums.kw, library, favs.length),
+		keywords: keywordAffinities(sums.kw, library, favs),
 		collections
 	};
 }
