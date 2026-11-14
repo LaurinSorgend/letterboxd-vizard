@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import type { CollectionParts, OmdbRatings, TmdbMovie } from '$lib/types';
+import type { CollectionParts, OmdbRatings, TmdbMovie, UpcomingCandidate } from '$lib/types';
 import type { FetchBudget } from './budget';
 import type { WatchAvailability } from './providers';
 import type { FilmReleases } from '$lib/releases/dates';
@@ -10,6 +10,8 @@ const RELATED_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 /** Streaming catalogues change weekly, so availability goes stale within days. */
 const PROVIDERS_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const RELEASES_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const RECORDS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const UPCOMING_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** D1 allows at most 100 bound parameters per query. */
 const MAX_PARAMS = 100;
@@ -270,6 +272,42 @@ export function putReleasesCachedMany(
 	entries: [number, FilmReleases][]
 ): Promise<void> {
 	return putJsonCachedMany(db, 'releases', 'tmdb_id', entries);
+}
+
+/** Full TMDB records per movie id, for films not in the user's own export. */
+export function getRecordsCachedMany(
+	db: D1Database,
+	tmdbIds: number[]
+): Promise<Map<number, TmdbMovie>> {
+	return getJsonCachedMany<TmdbMovie>(db, 'records', 'tmdb_id', tmdbIds, RECORDS_TTL_MS);
+}
+
+export function putRecordsCachedMany(
+	db: D1Database,
+	entries: [number, TmdbMovie][]
+): Promise<void> {
+	return putJsonCachedMany(db, 'records', 'tmdb_id', entries);
+}
+
+/** TMDB discover results per query key; the upcoming slate shifts daily. */
+export function getUpcomingCachedMany(
+	db: D1Database,
+	keys: string[]
+): Promise<Map<string, UpcomingCandidate[]>> {
+	return getJsonCachedMany<UpcomingCandidate[], string>(
+		db,
+		'upcoming',
+		'cache_key',
+		keys,
+		UPCOMING_TTL_MS
+	);
+}
+
+export function putUpcomingCachedMany(
+	db: D1Database,
+	entries: [string, UpcomingCandidate[]][]
+): Promise<void> {
+	return putJsonCachedMany(db, 'upcoming', 'cache_key', entries);
 }
 
 /**

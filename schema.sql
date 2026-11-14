@@ -38,3 +38,13 @@ CREATE TABLE IF NOT EXISTS releases (
 	data TEXT NOT NULL,
 	fetched_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS records (
+	tmdb_id INTEGER PRIMARY KEY,
+	data TEXT NOT NULL,
+	fetched_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS upcoming (
+	cache_key TEXT PRIMARY KEY,
+	data TEXT NOT NULL,
+	fetched_at INTEGER NOT NULL
+);

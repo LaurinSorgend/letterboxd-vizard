@@ -163,6 +163,14 @@ export const offersKey = (item: ProviderRequestItem): string => `${item.mediaTyp
 /** TMDB ids are positive; TheTVDB records are stored under negative ids, which TMDB never knows. */
 export const isTmdbId = (id: number): boolean => id > 0;
 
+/** An upcoming film found by TMDB discover, before its full record is fetched. */
+export interface UpcomingCandidate {
+	tmdbId: number;
+	title: string;
+	year: number | null;
+	posterPath: string | null;
+}
+
 /** A film TMDB holds as a movie, the only kind with recommendations and release dates. */
 export const isTmdbMovie = (tmdb: TmdbMovie | null | undefined): tmdb is TmdbMovie =>
 	tmdb?.mediaType === 'movie' && isTmdbId(tmdb.tmdbId);
