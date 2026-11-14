@@ -29,14 +29,20 @@ function write(key: string, value: string): void {
 	}
 }
 
-/** The saved country, else the one the browser's language names (en-GB → GB), else the US. */
+const isListed = (code: string | null | undefined): code is string =>
+	!!code && REGIONS.some((region) => region.code === code);
+
+/**
+ * The saved country, else the one the browser's language names (en-GB → GB), else the US. Only a
+ * country the picker lists is used, so the picker always shows the country the data is for.
+ */
 export function initialRegion(): string {
 	const saved = read(REGION_KEY);
-	if (saved && /^[A-Z]{2}$/.test(saved)) return saved;
+	if (isListed(saved)) return saved;
 	if (browser) {
 		try {
 			const region = new Intl.Locale(navigator.language).maximize().region;
-			if (region && /^[A-Z]{2}$/.test(region)) return region;
+			if (isListed(region)) return region;
 		} catch {
 			// An unparseable language tag falls through to the default.
 		}

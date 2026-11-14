@@ -101,7 +101,8 @@
 	.past {
 		opacity: 0.6;
 	}
-	.today .date .num {
+	.today .date .num,
+	.today .date .long {
 		background: var(--accent);
 		color: var(--on-accent);
 		padding: 0 4px;

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { calendarEntries, monthGrid, shiftMonth, upcomingCandidates } from '$lib/releases/calendar';
-import { compactReleases, regionReleases } from '$lib/server/releases';
+import {
+	calendarEntries,
+	clampMonth,
+	monthGrid,
+	nextReleaseMonth,
+	shiftMonth,
+	upcomingCandidates
+} from '$lib/releases/calendar';
+import { regionReleases } from '$lib/releases/dates';
+import { compactReleases } from '$lib/server/releases';
 import { tmdb } from '$lib/testing/fixtures';
 import type { ReleaseDate, WatchlistFilm } from '$lib/types';
 
@@ -52,6 +60,37 @@ describe('calendarEntries', () => {
 	it('filters by release kind', () => {
 		const entries = calendarEntries([a, b], releasesOf, ['digital'], '2026-11-01');
 		expect(entries.map((e) => e.kind)).toEqual(['digital']);
+	});
+});
+
+describe('calendarEntries with a series', () => {
+	it('never gives a series the dates of the movie sharing its id', () => {
+		const series = listed('Series', { mediaType: 'tv' });
+		const shared = (): ReleaseDate[] => [{ kind: 'digital', date: '2027-01-01', region: 'US' }];
+		expect(calendarEntries([series], shared, ['digital'], '2026-01-01')).toEqual([]);
+	});
+});
+
+describe('month navigation', () => {
+	it('clamps a month into the range that has releases', () => {
+		expect(clampMonth('2027-08', '2026-11', '2027-02')).toBe('2027-02');
+		expect(clampMonth('2026-09', '2026-11', '2027-02')).toBe('2026-11');
+		expect(clampMonth('2026-12', '2026-11', '2027-02')).toBe('2026-12');
+	});
+
+	it('finds the next month with a release, never an earlier one', () => {
+		const film = listed('Later');
+		const entries = calendarEntries(
+			[film],
+			() => [
+				{ kind: 'digital', date: '2026-11-20', region: 'US' },
+				{ kind: 'physical', date: '2027-03-02', region: 'US' }
+			],
+			['digital', 'physical'],
+			'2026-11-01'
+		);
+		expect(nextReleaseMonth(entries, '2026-12')).toBe('2027-03');
+		expect(nextReleaseMonth(entries, '2027-03')).toBeNull();
 	});
 });
 

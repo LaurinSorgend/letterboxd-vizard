@@ -2,7 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { CollectionParts, OmdbRatings, TmdbMovie } from '$lib/types';
 import type { FetchBudget } from './budget';
 import type { WatchAvailability } from './providers';
-import type { FilmReleases } from './releases';
+import type { FilmReleases } from '$lib/releases/dates';
 
 const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** TMDB's recommendations shift slowly, so a related list stays useful far longer than a week. */

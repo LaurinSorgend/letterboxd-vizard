@@ -48,7 +48,7 @@ export function calendarEntries(
 	from: string
 ): CalendarEntry[] {
 	const entries = watchlist.flatMap((film) =>
-		(film.tmdb ? (releasesOf(film.tmdb.tmdbId) ?? []) : [])
+		(film.tmdb?.mediaType === 'movie' ? (releasesOf(film.tmdb.tmdbId) ?? []) : [])
 			.filter((release) => kinds.includes(release.kind) && release.date >= from)
 			.map((release) => ({ film, ...release }))
 	);
@@ -65,6 +65,18 @@ export function shiftMonth(month: string, step: number): string {
 	const [year, index] = month.split('-').map(Number);
 	const date = new Date(Date.UTC(year, index - 1 + step, 1));
 	return date.toISOString().slice(0, 7);
+}
+
+/** Keeps a month within `[first, last]`, so a narrowed filter never strands the view past its end. */
+export function clampMonth(month: string, first: string, last: string): string {
+	if (month < first) return first;
+	return month > last ? last : month;
+}
+
+/** Month of the first entry after `month`, or null when nothing comes later. */
+export function nextReleaseMonth(entries: CalendarEntry[], month: string): string | null {
+	const next = entries.find((entry) => monthOf(entry.date) > month);
+	return next ? monthOf(next.date) : null;
 }
 
 /** Weeks of a month, Monday first, padded to whole weeks, with each day's entries attached. */

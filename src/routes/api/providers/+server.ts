@@ -1,6 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import pLimit from 'p-limit';
-import { BudgetExhausted, FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
+import { isTmdbId, resolveBatch } from '$lib/server/batch';
 import { getProvidersCachedMany, putProvidersCachedMany } from '$lib/server/cache';
 import { getDb } from '$lib/server/db';
 import { fetchAvailability, regionOffers, type WatchAvailability } from '$lib/server/providers';
@@ -10,7 +9,6 @@ import { offersKey, type ProviderRequestItem } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 const MAX_BATCH = 100;
-const CONCURRENCY = 5;
 
 function isItem(item: unknown): item is ProviderRequestItem {
 	const candidate = item as ProviderRequestItem | null;
@@ -37,46 +35,24 @@ export const POST: RequestHandler = async ({ request, platform, cookies, getClie
 	if (items.length > MAX_BATCH) error(400, `Batch too large, send at most ${MAX_BATCH} items`);
 
 	const db = await getDb(platform);
-	// Negative ids are TheTVDB records, which TMDB has no availability for.
-	const keys = items.map((item) => (item.tmdbId > 0 ? offersKey(item) : null));
-	const known = await getProvidersCachedMany(db, [
-		...new Set(keys.filter((key): key is string => key !== null))
-	]);
-
-	const budget = new FetchBudget(FETCHES_PER_REQUEST);
-	const limit = pLimit(CONCURRENCY);
-	const resolved = new Map<string, WatchAvailability>();
-	const deferred = new Set<string>();
-	// tmdbGet already retried a 429/5xx once, so anything but the budget running out
-	// is final for this request and answers null rather than asking the client to retry.
-	const lookups = new Map<string, Promise<void>>();
-	for (const [index, item] of items.entries()) {
-		const key = keys[index];
-		if (!key || known.has(key) || lookups.has(key)) continue;
-		lookups.set(
-			key,
-			(async () => {
-				try {
-					resolved.set(
-						key,
-						await limit(() => fetchAvailability(budget, item.mediaType, item.tmdbId))
-					);
-				} catch (cause) {
-					if (cause instanceof BudgetExhausted) deferred.add(key);
-					else console.error(`tmdb providers failed: ${key}`, cause);
-				}
-			})()
-		);
-	}
-	await Promise.all(lookups.values());
-	if (resolved.size > 0) await putProvidersCachedMany(db, [...resolved]);
-
-	const results = keys.map((key) => {
-		const availability = key ? (known.get(key) ?? resolved.get(key)) : undefined;
-		return availability ? regionOffers(availability, region) : null;
+	const kindOf = new Map(items.map((item) => [offersKey(item), item]));
+	const { results, pending } = await resolveBatch<string, WatchAvailability>(
+		items.map((item) => (isTmdbId(item.tmdbId) ? offersKey(item) : null)),
+		{
+			getCached: (keys) => getProvidersCachedMany(db, keys),
+			fetchOne: (budget, key) => {
+				const item = kindOf.get(key)!;
+				return fetchAvailability(budget, item.mediaType, item.tmdbId);
+			},
+			putCached: (entries) => putProvidersCachedMany(db, entries),
+			retryFailures: false,
+			label: 'tmdb providers'
+		}
+	);
+	return json({
+		results: results.map((availability) =>
+			availability ? regionOffers(availability, region) : null
+		),
+		pending
 	});
-	const pending = [...keys.entries()]
-		.filter(([, key]) => key !== null && deferred.has(key))
-		.map(([i]) => i);
-	return json({ results, pending });
 };

@@ -4,9 +4,9 @@ import type {
 	OmdbRatings,
 	ProviderRequestItem,
 	RegionOffers,
-	ReleaseDate,
 	TmdbMovie
 } from '$lib/types';
+import type { FilmReleases } from '$lib/releases/dates';
 import { offersKey } from '$lib/types';
 
 const BATCH_SIZE = 50;
@@ -182,34 +182,30 @@ export async function fetchProviders(
 	return { offers, unresolved };
 }
 
-export interface ReleaseLookup {
-	/** Keyed by TMDB movie id; an empty list means TMDB has no dates for the film. */
-	releases: Map<number, ReleaseDate[]>;
-	/** Films still missing when the retry rounds ran out or the lookup was aborted. */
-	unresolved: number;
-}
-
-/** Theatrical, digital and physical release dates of each movie in `region`. */
+/**
+ * Theatrical, digital and physical release dates of each movie in every country, keyed by TMDB
+ * id. Films the lookup could not reach are absent, so a later call asks for them again.
+ */
 export async function fetchReleaseDates(
 	ids: number[],
-	region: string,
 	onProgress?: (done: number, total: number) => void,
 	signal?: AbortSignal
-): Promise<ReleaseLookup> {
+): Promise<Map<number, FilmReleases>> {
 	const unique = [...new Set(ids)];
-	const releases = new Map<number, ReleaseDate[]>();
+	const releases = new Map<number, FilmReleases>();
 
-	const unresolved = await runRounds<number, ReleaseDate[]>({
+	await runRounds<number, FilmReleases>({
 		items: unique,
-		send: (batch) =>
-			postBatch('/api/releases', { region, ids: batch }, 'Release date lookup', signal),
-		keep: (index, found) => releases.set(unique[index], found ?? []),
+		send: (batch) => postBatch('/api/releases', { ids: batch }, 'Release date lookup', signal),
+		keep: (index, found) => {
+			if (found) releases.set(unique[index], found);
+		},
 		onProgress,
 		firstRoundSize: COLLECTIONS_BATCH_SIZE,
 		signal
 	});
 
-	return { releases, unresolved };
+	return releases;
 }
 
 /** Collection sizes for the franchises in a library, keeping only ids TMDB knows a collection for. */
