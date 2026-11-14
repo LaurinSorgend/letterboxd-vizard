@@ -10,7 +10,8 @@ import type { UpcomingCandidate } from '$lib/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { RequestHandler } from './$types';
 
-const POPULAR_PAGES = 2;
+const POPULAR_PAGES = 5;
+const PEOPLE_PAGES = 2;
 const MAX_PEOPLE = 30;
 
 interface UpcomingBody {
@@ -75,7 +76,7 @@ async function popularCandidates(
 	budget: FetchBudget,
 	{ region, kinds }: UpcomingBody
 ): Promise<UpcomingCandidate[]> {
-	const keyOf = (kind: ReleaseKind) => `${region}:${kind}`;
+	const keyOf = (kind: ReleaseKind) => `${region}:${kind}:${POPULAR_PAGES}`;
 	const cached = await getUpcomingCachedMany(db, kinds.map(keyOf));
 	const missing = kinds.filter((kind) => !cached.has(keyOf(kind)));
 	const fetched = await Promise.all(missing.map((kind) => fetchPopular(budget, region, kind)));
@@ -93,7 +94,11 @@ async function peopleCandidates(
 	{ region, kinds, people }: UpcomingBody
 ): Promise<UpcomingCandidate[]> {
 	if (people.length === 0) return [];
-	const pages = await Promise.all(kinds.map((kind) => fetchPage(budget, region, kind, 1, people)));
+	const pages = await Promise.all(
+		kinds.flatMap((kind) =>
+			Array.from({ length: PEOPLE_PAGES }, (_, i) => fetchPage(budget, region, kind, i + 1, people))
+		)
+	);
 	return pages.flatMap((p) => p ?? []);
 }
 

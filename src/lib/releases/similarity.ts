@@ -20,7 +20,7 @@ const WEIGHT_CAST = 0.2;
 const WEIGHT_KEYWORD = 0.25;
 const WEIGHT_COLLECTION = 0.15;
 /** Lowest score a recommendation may have. */
-export const THRESHOLD = 0.2;
+export const THRESHOLD = 0.15;
 /** Most recommendations returned. */
 export const MAX_RESULTS = 20;
 const TOP_DIRECTORS = 20;

@@ -55,8 +55,16 @@ describe('buildTasteProfile', () => {
 });
 
 describe('scoreUpcoming', () => {
-	it('drops a candidate sharing only the director of a single 4-star favourite', () => {
+	it('keeps a candidate sharing only the director of a single 4-star favourite', () => {
 		const profile = buildTasteProfile([fav({ directors: [person(1)] })]);
+		const [kept] = scoreUpcoming(profile, [candidate({})], new Set());
+		expect(kept.score).toBeCloseTo(0.4 * (1.5 / 3.5), 3);
+	});
+
+	it('drops a candidate sharing only the director of a liked 2-star film', () => {
+		const profile = buildTasteProfile([
+			{ ...fav({ directors: [person(1)] }), rating: 2, liked: true }
+		]);
 		expect(scoreUpcoming(profile, [candidate({})], new Set())).toEqual([]);
 	});
 
