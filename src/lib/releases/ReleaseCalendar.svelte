@@ -9,7 +9,7 @@
 <script lang="ts">
 	import RegionSelect from '$lib/region/RegionSelect.svelte';
 	import { initialRegion } from '$lib/region/region';
-	import type { WatchlistFilm } from '$lib/types';
+	import type { EnrichedFilm, WatchlistFilm } from '$lib/types';
 	import {
 		calendarEntries,
 		clampMonth,
@@ -17,26 +17,46 @@
 		monthKey,
 		nextReleaseMonth,
 		shiftMonth,
-		upcomingCandidates
+		sortEntries,
+		upcomingCandidates,
+		type CalendarFilm
 	} from './calendar';
 	import { FALLBACK_REGION, RELEASE_KINDS, type ReleaseKind } from './dates';
 	import { KINDS } from './kinds';
 	import CalendarMonth from './CalendarMonth.svelte';
+	import RecommendControls from './RecommendControls.svelte';
 
-	let { watchlist }: { watchlist: WatchlistFilm[] } = $props();
+	let { watchlist, films }: { watchlist: WatchlistFilm[]; films: EnrichedFilm[] } = $props();
 
 	const today = localToday();
 	const thisMonth = monthKey(today);
+	const from = `${thisMonth}-01`;
 	let region = $state(initialRegion());
 	let kinds: ReleaseKind[] = $state([...RELEASE_KINDS]);
 	let picked = $state(thisMonth);
+	let recommendation = $state<{
+		region: string;
+		kinds: ReleaseKind[];
+		films: CalendarFilm[];
+	} | null>(null);
 
-	const candidates = $derived(upcomingCandidates(watchlist, today));
+	const recommended = $derived(recommendation?.region === region ? recommendation.films : []);
+	const candidates = $derived([
+		...new Set([
+			...upcomingCandidates(watchlist, today),
+			...recommended.flatMap((film) => (film.tmdb ? [film.tmdb.tmdbId] : []))
+		])
+	]);
 	const unresolved = $derived(lookup.loading ? 0 : lookup.missing(candidates));
 	const entries = $derived(
-		calendarEntries(watchlist, lookup.values, region, kinds, `${thisMonth}-01`)
+		sortEntries([
+			...calendarEntries(watchlist, lookup.values, region, kinds, from),
+			...calendarEntries(recommended, lookup.values, region, recommendation?.kinds ?? [], from)
+		])
 	);
-	const upcoming = $derived(entries.filter((entry) => entry.date >= today));
+	const upcoming = $derived(
+		entries.filter((entry) => entry.date >= today && !entry.film.recommended)
+	);
 	const lastMonth = $derived(entries.length > 0 ? monthKey(entries.at(-1)!.date) : thisMonth);
 	const month = $derived(clampMonth(picked, thisMonth, lastMonth));
 	const nextMonth = $derived(nextReleaseMonth(entries, month));
@@ -69,6 +89,7 @@
 				</label>
 			{/each}
 		</fieldset>
+		<RecommendControls {films} {watchlist} {region} onresult={(r) => (recommendation = r)} />
 	</div>
 
 	<p class="summary" role="status">
@@ -76,11 +97,15 @@
 			Looking up release dates… <span class="num">{lookup.progress.done}</span> /
 			<span class="num">{lookup.progress.total}</span>
 		{:else if upcoming.length === 0}
-			Nothing on your watchlist has a release of the picked types coming up.
+			{#if watchlist.length > 0}
+				Nothing on your watchlist has a release of the picked types coming up.
+			{/if}
 		{:else}
 			<span class="num">{upcoming.length}</span>
 			{upcoming.length === 1 ? 'upcoming release' : 'upcoming releases'} across
-			<span class="num">{new Set(upcoming.map((e) => e.film.uri)).size}</span> watchlist films.
+			<span class="num">{new Set(upcoming.map((e) => e.film.tmdb?.tmdbId ?? e.film.uri)).size}</span
+			>
+			watchlist films.
 		{/if}
 		{#if unresolved > 0}
 			Could not look up <span class="num">{unresolved}</span>
@@ -113,7 +138,8 @@
 
 	<p class="credit">
 		Release dates from <a href="https://www.themoviedb.org">TMDB</a>. Films without dates for the
-		chosen country show their {FALLBACK_REGION} dates, marked ({FALLBACK_REGION}).
+		chosen country show their {FALLBACK_REGION} dates, marked ({FALLBACK_REGION}). Recommendations
+		compare directors, cast and keywords with your favourites.
 	</p>
 </div>
 

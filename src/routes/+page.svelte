@@ -351,8 +351,8 @@
 
 		{#if view !== 'stats'}
 			<section id={view}>
-				<h2>{view === 'releases' ? 'Upcoming releases on your watchlist' : 'Your watchlist'}</h2>
-				{#if watchlist.length === 0}
+				<h2>{view === 'releases' ? 'Upcoming releases' : 'Your watchlist'}</h2>
+				{#if watchlist.length === 0 && (view === 'watchlist' || films.length === 0)}
 					<div class="empty-watchlist form-controls">
 						<p>
 							The watchlist comes from the <code>watchlist.csv</code> in your Letterboxd export. A library
@@ -361,7 +361,7 @@
 						<button type="button" onclick={() => (phase = 'idle')}>Upload an export</button>
 					</div>
 				{:else if view === 'releases'}
-					<ReleaseCalendar {watchlist} />
+					<ReleaseCalendar {watchlist} {films} />
 				{:else}
 					<Watchlist {watchlist} />
 				{/if}
