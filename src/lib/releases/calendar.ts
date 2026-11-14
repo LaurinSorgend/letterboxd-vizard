@@ -1,12 +1,27 @@
-import { isTmdbMovie, type WatchlistFilm } from '$lib/types';
+import { isTmdbMovie, type TmdbMovie, type WatchlistFilm } from '$lib/types';
 import { regionReleases, type FilmReleases, type ReleaseDate, type ReleaseKind } from './dates';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Digital and disc releases trail the cinema run, so a film this old can still have one coming. */
 const LOOKBACK_DAYS = 2 * 365;
 
+/** Why a film off the watchlist was recommended. */
+export interface Recommended {
+	score: number;
+	reason: string;
+}
+
+/** A film the calendar can show: a watchlist row, or a recommendation with no Letterboxd link. */
+export interface CalendarFilm {
+	name: string;
+	year: number | null;
+	uri: string | null;
+	tmdb: TmdbMovie | null;
+	recommended?: Recommended;
+}
+
 export interface CalendarEntry extends ReleaseDate {
-	film: WatchlistFilm;
+	film: CalendarFilm;
 }
 
 /** A day cell of the month grid; `date` is null for the padding before the 1st and after the last. */
@@ -37,23 +52,32 @@ export function upcomingCandidates(watchlist: WatchlistFilm[], today: string): n
 	);
 }
 
-/** Every release of the picked kinds in `region` on or after `from`, by date and then title. */
+/** Orders entries by date and then title, in place. */
+export function sortEntries(entries: CalendarEntry[]): CalendarEntry[] {
+	return entries.sort(
+		(a, b) => a.date.localeCompare(b.date) || a.film.name.localeCompare(b.film.name)
+	);
+}
+
+/**
+ * Every release of the picked kinds in `region` on or after `from`, by date and then title.
+ * Recommended films only show dates from `region` itself, never the fallback country's.
+ */
 export function calendarEntries(
-	watchlist: WatchlistFilm[],
+	films: CalendarFilm[],
 	cache: ReleaseCache,
 	region: string,
 	kinds: readonly ReleaseKind[],
 	from: string
 ): CalendarEntry[] {
-	const entries = watchlist.flatMap((film) => {
+	const entries = films.flatMap((film) => {
 		const releases = isTmdbMovie(film.tmdb) ? cache.get(film.tmdb.tmdbId) : null;
 		return (releases ? regionReleases(releases, region) : [])
 			.filter((release) => kinds.includes(release.kind) && release.date >= from)
+			.filter((release) => !film.recommended || release.fallbackRegion === null)
 			.map((release) => ({ film, ...release }));
 	});
-	return entries.sort(
-		(a, b) => a.date.localeCompare(b.date) || a.film.name.localeCompare(b.film.name)
-	);
+	return sortEntries(entries);
 }
 
 /** The `YYYY-MM` month an ISO date falls in. */

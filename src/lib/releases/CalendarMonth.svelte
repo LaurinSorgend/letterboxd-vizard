@@ -20,7 +20,15 @@
 
 	function describe(entry: CalendarEntry): string {
 		const elsewhere = entry.fallbackRegion ? `, ${entry.fallbackRegion} date` : '';
-		return `${entry.film.name}: ${KINDS[entry.kind].label.toLowerCase()} release${elsewhere}`;
+		const why = entry.film.recommended ? ` · recommended: ${entry.film.recommended.reason}` : '';
+		return `${entry.film.name}: ${KINDS[entry.kind].label.toLowerCase()} release${elsewhere}${why}`;
+	}
+
+	function entryHref(entry: CalendarEntry): string | null {
+		const { uri, tmdb, recommended } = entry.film;
+		const href = webHref(uri);
+		if (href || !recommended || !tmdb) return href;
+		return `https://www.themoviedb.org/movie/${tmdb.tmdbId}`;
 	}
 </script>
 
@@ -42,11 +50,12 @@
 					<span class="long">{dayLabel(day.date)}</span>
 				</span>
 				<ul>
-					{#each day.entries as entry (`${entry.film.uri}-${entry.kind}`)}
-						{@const href = webHref(entry.film.uri)}
+					{#each day.entries as entry (`${entry.film.tmdb?.tmdbId ?? entry.film.uri}-${entry.kind}`)}
+						{@const href = entryHref(entry)}
 						{@const poster = imageUrl(entry.film.tmdb?.posterPath ?? null, 'w92')}
 						<li
 							class="entry"
+							class:recommended={!!entry.film.recommended}
 							style:--kind-colour={KINDS[entry.kind].colour}
 							title={describe(entry)}
 						>
@@ -60,7 +69,8 @@
 								<span class="kind">
 									{KINDS[entry.kind].label}{entry.fallbackRegion
 										? ` (${entry.fallbackRegion})`
-										: ''}
+										: ''}{#if entry.film.recommended}
+										<span class="rec">Rec</span>{/if}
 								</span>
 							</span>
 						</li>
@@ -154,6 +164,13 @@
 	}
 	.kind {
 		color: var(--fg-secondary);
+	}
+	.recommended {
+		border-left-style: dashed;
+	}
+	.rec {
+		font-family: var(--font-mono);
+		color: var(--ctp-blue);
 	}
 	@media (max-width: 640px) {
 		.grid {
