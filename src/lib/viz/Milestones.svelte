@@ -2,13 +2,18 @@
 	import { imageUrl, webHref } from '$lib/film/links';
 	import { formatShort } from '$lib/format';
 	import type { Milestone } from './milestones';
+	import { pager } from './pager.svelte';
+	import ShowMore from './ShowMore.svelte';
 
 	const LIMIT = 12;
 
 	let { milestones }: { milestones: Milestone[] } = $props();
 
-	let expanded = $state(false);
-	const rows = $derived(expanded ? milestones : milestones.slice(0, LIMIT));
+	const paging = pager(
+		() => milestones.length,
+		() => LIMIT
+	);
+	const rows = $derived(milestones.slice(0, paging.shown));
 </script>
 
 <ol class="timeline">
@@ -38,15 +43,7 @@
 		</li>
 	{/each}
 </ol>
-{#if milestones.length > LIMIT}
-	<button type="button" class="more" onclick={() => (expanded = !expanded)}>
-		{#if expanded}
-			Show fewer
-		{:else}
-			Show all (<span data-numeric>{milestones.length}</span>)
-		{/if}
-	</button>
-{/if}
+<ShowMore pager={paging} />
 
 <style>
 	.timeline {
@@ -145,19 +142,6 @@
 	.detail {
 		font-size: var(--text-sm);
 		color: var(--fg-secondary);
-	}
-	.more {
-		margin-top: 8px;
-		padding: 4px 12px;
-		font: inherit;
-		font-size: var(--text-sm);
-		color: var(--fg);
-		background: transparent;
-		border: 1px solid var(--border);
-		cursor: pointer;
-	}
-	.more:hover {
-		background: var(--surface);
 	}
 	@media (max-width: 640px) {
 		.timeline::before {

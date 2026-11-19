@@ -2,6 +2,8 @@
 	import { stars } from '$lib/format';
 	import FilmList from './FilmList.svelte';
 	import { selectByKey } from './selection.svelte';
+	import { pager } from './pager.svelte';
+	import ShowMore from './ShowMore.svelte';
 	import type { BarDatum } from '$lib/film/tally';
 
 	let {
@@ -10,13 +12,16 @@
 		description
 	}: { data: BarDatum[]; limit?: number; description: string } = $props();
 
-	let expanded = $state(false);
 	let pinnedKey: string | null = $state(null);
 	const selection = selectByKey(
 		() => data,
 		(d) => d.key
 	);
-	const rows = $derived(expanded ? data : data.slice(0, limit));
+	const paging = pager(
+		() => data.length,
+		() => limit
+	);
+	const rows = $derived(data.slice(0, paging.shown));
 	const max = $derived(Math.max(1, ...rows.map((d) => d.count)));
 	const hasImages = $derived(data.some((d) => d.image !== undefined));
 	// The accent marks the top entry; when every entry ties, nothing leads.
@@ -84,15 +89,7 @@
 		<span class="avg" data-numeric>{stars(d.avg)}</span>
 	{/each}
 </div>
-{#if data.length > limit}
-	<button type="button" class="more" onclick={() => (expanded = !expanded)}>
-		{#if expanded}
-			Show fewer
-		{:else}
-			Show all (<span data-numeric>{data.length}</span>)
-		{/if}
-	</button>
-{/if}
+<ShowMore pager={paging} />
 {#if selection.selected}
 	{@const selected = selection.selected}
 	<FilmList title={selected.label} films={selected.films} />
@@ -196,18 +193,5 @@
 		font-size: var(--text-sm);
 		color: var(--fg-secondary);
 		justify-self: end;
-	}
-	.more {
-		margin-top: 8px;
-		padding: 4px 12px;
-		font: inherit;
-		font-size: var(--text-sm);
-		color: var(--fg);
-		background: transparent;
-		border: 1px solid var(--border);
-		cursor: pointer;
-	}
-	.more:hover {
-		background: var(--surface);
 	}
 </style>
