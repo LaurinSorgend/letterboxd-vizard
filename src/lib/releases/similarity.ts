@@ -1,6 +1,6 @@
+import { isFavourite } from '$lib/recommend/taste';
 import { isTmdbMovie, type EnrichedFilm, type TmdbMovie } from '$lib/types';
 
-const FAVOURITE_RATING = 4;
 const LIKED_UNRATED_RATING = 4;
 const RATING_OFFSET = 2.5;
 const MIN_WEIGHT = 0.5;
@@ -19,10 +19,8 @@ const WEIGHT_DIRECTOR = 0.4;
 const WEIGHT_CAST = 0.2;
 const WEIGHT_KEYWORD = 0.25;
 const WEIGHT_COLLECTION = 0.15;
-/** Lowest score a recommendation may have. */
-export const THRESHOLD = 0.15;
-/** Most recommendations returned. */
-export const MAX_RESULTS = 20;
+const THRESHOLD = 0.15;
+const MAX_RESULTS = 20;
 const TOP_DIRECTORS = 20;
 const TOP_CAST = 10;
 const REASON_CAST_NAMES = 2;
@@ -37,7 +35,7 @@ export interface TasteProfile {
 }
 
 /** An upcoming film with its similarity score and a short reason. */
-export interface ScoredFilm {
+interface ScoredFilm {
 	record: TmdbMovie;
 	score: number;
 	reason: string;
@@ -70,8 +68,7 @@ function add<K>(map: Map<K, number>, key: K, value: number): void {
 }
 
 function favouriteWeight(film: EnrichedFilm): number | null {
-	const isFavourite = (film.rating !== null && film.rating >= FAVOURITE_RATING) || film.liked;
-	if (!isFavourite) return null;
+	if (!isFavourite(film)) return null;
 	const r = film.rating ?? LIKED_UNRATED_RATING;
 	return Math.max(MIN_WEIGHT, r - RATING_OFFSET);
 }
@@ -254,19 +251,13 @@ function reasonFor(c: Components): string {
 	return parts.join(' · ');
 }
 
-const isCandidate = (record: TmdbMovie, exclude: ReadonlySet<number>): boolean =>
-	!exclude.has(record.tmdbId) &&
-	record.directors.length > 0 &&
-	record.cast.length >= MIN_CANDIDATE_CAST;
+const isCandidate = (record: TmdbMovie): boolean =>
+	record.directors.length > 0 && record.cast.length >= MIN_CANDIDATE_CAST;
 
 /** Scores upcoming films against the profile; returns the best matches above the threshold. */
-export function scoreUpcoming(
-	profile: TasteProfile,
-	records: TmdbMovie[],
-	exclude: ReadonlySet<number>
-): ScoredFilm[] {
+export function scoreUpcoming(profile: TasteProfile, records: TmdbMovie[]): ScoredFilm[] {
 	return records
-		.filter((record) => isCandidate(record, exclude))
+		.filter(isCandidate)
 		.map((record) => {
 			const c = components(profile, record);
 			return { record, score: combine(c), reason: reasonFor(c) };

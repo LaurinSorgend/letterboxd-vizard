@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { bestPredictor, ratingCorrelation } from './ratingCorrelation';
 	import type { EnrichedFilm } from '$lib/types';
+	import RampLegend from './RampLegend.svelte';
+	import { binColor, FIRST_LIGHT_BIN, shareBin } from './ramp';
 
 	let { films }: { films: EnrichedFilm[] } = $props();
 
 	const matrix = $derived(ratingCorrelation(films));
 	const predictor = $derived(bestPredictor(matrix));
 
-	/** -1..1 mapped onto the shared 10-bin Viridis ramp. */
-	function bin(r: number): number {
-		return Math.min(9, Math.max(0, Math.floor(((r + 1) / 2) * 10)));
-	}
+	const bin = (r: number): number => shareBin((r + 1) / 2);
 
 	function cellTitle(rowLabel: string, colLabel: string, r: number | null, n: number): string {
 		if (r === null) return `${rowLabel} × ${colLabel}: not enough overlap (${n} films)`;
@@ -34,10 +33,10 @@
 				{@const cell = matrix.cells[r][c]}
 				<span
 					class="cell"
-					class:dark={cell.r !== null && bin(cell.r) >= 6}
+					class:dark={cell.r !== null && bin(cell.r) >= FIRST_LIGHT_BIN}
 					style="grid-row: {r + 2}; grid-column: {c + 2}; background: {cell.r === null
 						? 'var(--bg-secondary)'
-						: `var(--map-bin-${bin(cell.r)})`};"
+						: binColor(bin(cell.r))};"
 					title={cellTitle(rowAxis.label, colAxis.label, cell.r, cell.n)}
 				>
 					<span data-numeric>{cell.r === null ? '—' : cell.r.toFixed(2)}</span>
@@ -47,15 +46,7 @@
 	</div>
 </div>
 
-<div class="legend" aria-hidden="true">
-	<span class="less">−1</span>
-	<span class="scale">
-		{#each Array(10) as _, i (i)}
-			<i class="swatch" style="background: var(--map-bin-{i});"></i>
-		{/each}
-	</span>
-	<span class="more">+1</span>
-</div>
+<RampLegend less="−1" more="+1" />
 
 {#if predictor}
 	<p class="note">
@@ -111,23 +102,6 @@
 	}
 	.cell.dark {
 		color: #11111b;
-	}
-	.legend {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin-top: 8px;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
-	}
-	.scale {
-		display: inline-flex;
-		gap: 2px;
-	}
-	.swatch {
-		width: 13px;
-		height: 13px;
-		display: inline-block;
 	}
 	.note {
 		margin: 8px 0 0;

@@ -1,3 +1,6 @@
+import { env } from '$env/dynamic/private';
+import { DEFAULT_FETCH_BUDGET } from '$lib/types';
+
 /** A lookup that could not finish now but may succeed if the client asks again. */
 export class RetryLater extends Error {}
 
@@ -9,13 +12,13 @@ export class BudgetExhausted extends RetryLater {
 }
 
 /**
- * Caps outbound subrequests per invocation. Workers' free plan allows 50 subrequests per request
- * and D1 queries count alongside HTTP fetches, so callers reserve every subrequest here and defer
- * the rest instead of dying mid-flight when Workers cuts them off at 50.
+ * Caps upstream fetches per invocation. Workers' free plan allows 50 subrequests per request, so
+ * every fetch is taken from here and lookups past the cap are deferred instead of dying mid-flight
+ * when Workers cuts them off. Cache queries are not taken from it; see `fetchesPerRequest`.
  *
- * An optional reserve walls off part of the budget: `take`/`tryTake` refuse to spend past it until
+ * An optional reserve walls off part of the budget: `take` refuses to spend past it until
  * `releaseReserve` opens it, so an early phase can't starve a later one (e.g. seed lookups leaving
- * nothing for the poster fetches that follow).
+ * nothing for the record fetches that follow).
  */
 export class FetchBudget {
 	#remaining: number;
@@ -30,31 +33,25 @@ export class FetchBudget {
 		return this.#remaining <= this.#reserve;
 	}
 
-	/** Reserves one subrequest, or throws BudgetExhausted. */
+	/** @throws BudgetExhausted when none is left to spend */
 	take(): void {
 		if (this.exhausted) throw new BudgetExhausted();
 		this.#remaining -= 1;
 	}
 
-	/** Reserves one subrequest, returning false instead of throwing once the budget is spent. */
-	tryTake(): boolean {
-		if (this.exhausted) return false;
-		this.#remaining -= 1;
-		return true;
-	}
-
-	/** Opens the reserved subrequests for use, e.g. once seed lookups hand off to poster fetches. */
 	releaseReserve(): void {
 		this.#reserve = 0;
 	}
 }
 
 /**
- * Per-invocation subrequest cap (fetches and D1 queries alike). 40 leaves headroom under the
- * Workers free-plan 50-subrequest limit; self-hosters (no such limit) can raise it via the
- * FETCH_BUDGET env var. Only a positive integer overrides the default, so 0, negatives, and junk
- * fall back to 40 rather than silently disabling or instantly exhausting the budget.
+ * Per-invocation cap on upstream fetches. The default (DEFAULT_FETCH_BUDGET, 40) leaves headroom
+ * under the Workers free-plan limit of 50 subrequests for the request's D1 queries, a handful per
+ * batch since each cache reads and writes a chunk of keys per query. Self-hosters (no such limit)
+ * can raise it with FETCH_BUDGET. Only a positive integer overrides the default, so 0, negatives
+ * and junk fall back to it rather than disabling or instantly exhausting the budget.
  */
-const budgetOverride = Number(process.env.FETCH_BUDGET);
-export const FETCHES_PER_REQUEST =
-	Number.isInteger(budgetOverride) && budgetOverride > 0 ? budgetOverride : 40;
+export function fetchesPerRequest(): number {
+	const override = Number(env.FETCH_BUDGET);
+	return Number.isInteger(override) && override > 0 ? override : DEFAULT_FETCH_BUDGET;
+}

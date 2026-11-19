@@ -1,11 +1,13 @@
-import { count } from '$lib/format';
-import { webHref } from '$lib/viz/href';
-import type { BarDatum } from '$lib/viz/stats';
+import { webHref } from '$lib/film/links';
+import type { BarDatum } from '$lib/film/tally';
+import { POSTER_ROW, type Accent } from '../look';
+import type { Year } from '$lib/year';
 import type { EnrichedFilm } from '$lib/types';
 
-/** Scene hues, defined as CSS custom properties in wrapped.css and flipped per theme. */
-export type Accent =
-	'neutral' | 'amber' | 'oxblood' | 'cyan' | 'indigo' | 'forest' | 'magenta' | 'gold';
+/** What every frame is built from: the year, its verdict, and whose year it was. */
+export interface DeckInput extends Year {
+	viewer: string | null;
+}
 
 export interface Poster {
 	name: string;
@@ -50,12 +52,10 @@ export interface Scene {
 	body: SceneBody;
 }
 
-export { count, percent } from '$lib/format';
-
-export const stars = (rating: number | null): string =>
-	rating === null ? '—' : `★ ${rating.toFixed(1)}`;
-export const plural = (n: number, one: string, many = `${one}s`): string =>
-	`${count(n)} ${n === 1 ? one : many}`;
+/** The first `POSTER_ROW` films as posters; count the whole list, not the row. */
+export function posterRow(films: EnrichedFilm[], meta: (film: EnrichedFilm) => string): Poster[] {
+	return films.slice(0, POSTER_ROW).map((film) => posterOf(film, meta(film)));
+}
 
 export function posterOf(film: EnrichedFilm, meta: string): Poster {
 	return {
@@ -73,9 +73,4 @@ export function barsFrom(data: BarDatum[]): Bar[] {
 		value: String(datum.count),
 		share: datum.count / top
 	}));
-}
-
-export function runtimeLabel(minutes: number): string {
-	const hours = Math.floor(minutes / 60);
-	return hours === 0 ? `${minutes}m` : `${hours}h ${minutes % 60}m`;
 }

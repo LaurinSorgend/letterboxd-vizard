@@ -1,12 +1,14 @@
 <script lang="ts">
-	import { imageUrl } from './images';
-	import { webHref } from './href';
-	import { formatShort, type Milestone } from './milestones';
+	import { imageUrl, webHref } from '$lib/film/links';
+	import { formatShort } from '$lib/format';
+	import type { Milestone } from './milestones';
 
-	let { milestones, limit = 12 }: { milestones: Milestone[]; limit?: number } = $props();
+	const LIMIT = 12;
+
+	let { milestones }: { milestones: Milestone[] } = $props();
 
 	let expanded = $state(false);
-	const rows = $derived(expanded ? milestones : milestones.slice(0, limit));
+	const rows = $derived(expanded ? milestones : milestones.slice(0, LIMIT));
 </script>
 
 <ol class="timeline">
@@ -36,7 +38,7 @@
 		</li>
 	{/each}
 </ol>
-{#if milestones.length > limit}
+{#if milestones.length > LIMIT}
 	<button type="button" class="more" onclick={() => (expanded = !expanded)}>
 		{#if expanded}
 			Show fewer
@@ -125,8 +127,6 @@
 	}
 	.eyebrow {
 		font-size: var(--text-2xs);
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
 		color: var(--fg-muted);
 	}
 	.film {

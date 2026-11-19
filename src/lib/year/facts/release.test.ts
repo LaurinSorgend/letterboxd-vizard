@@ -1,0 +1,119 @@
+import { describe, expect, it } from 'vitest';
+import { film, tmdb, watched } from '$lib/testing/fixtures';
+import { buildLibrary } from '../library';
+import { freshness, longestWait, quickestWatch, releaseLags } from './release';
+
+const stalker = film({
+	name: 'Stalker',
+	...watched(['2025-04-12']),
+	tmdb: tmdb({ releaseDate: '1979-05-13', year: 1979 })
+});
+const brutalist = film({
+	name: 'The Brutalist',
+	...watched(['2025-01-27']),
+	tmdb: tmdb({ releaseDate: '2025-01-24', year: 2025 })
+});
+const undated = film({ ...watched(['2025-02-02']), tmdb: tmdb({ releaseDate: null, year: null }) });
+const earlyBird = film({
+	name: 'Early Bird',
+	...watched(['2025-01-10']),
+	tmdb: tmdb({ releaseDate: '2025-02-01', year: 2025 })
+});
+const openingDay = film({
+	name: 'Opening Day',
+	...watched(['2025-03-01']),
+	tmdb: tmdb({ releaseDate: '2025-03-01', year: 2025 })
+});
+
+const library = buildLibrary({ films: [stalker, brutalist, undated], year: 2025 });
+
+/* longestWait needs ten films with a release date before it will report one, so the wait
+   fixtures carry eight more that are dated but wait nowhere near five years. */
+const padding = Array.from({ length: 8 }, (_, i) =>
+	film({
+		...watched([`2025-06-0${i + 1}`]),
+		tmdb: tmdb({ releaseDate: '2025-01-01', year: 2025 })
+	})
+);
+const waits = buildLibrary({ films: [stalker, brutalist, undated, ...padding], year: 2025 });
+
+describe('releaseLags', () => {
+	it('measures from release to the first watch inside the year', () => {
+		const lags = releaseLags(library);
+		expect(lags).toHaveLength(2);
+		expect(lags.find((lag) => lag.film === brutalist)?.days).toBe(3);
+	});
+});
+
+describe('longestWait', () => {
+	it('names the film that waited longest, in whole years', () => {
+		expect(longestWait(waits)).toMatchObject({
+			film: stalker,
+			years: 45,
+			released: '1979-05-13',
+			watched: '2025-04-12',
+			longWaits: 1
+		});
+	});
+});
+
+describe('quickestWatch', () => {
+	it('names the film that reached the viewer fastest', () => {
+		expect(quickestWatch(library)).toMatchObject({ film: brutalist, days: 3, insideMonth: 1 });
+	});
+
+	it('ignores a watch that predates the release date', () => {
+		const withEarly = buildLibrary({
+			films: [stalker, brutalist, earlyBird, undated],
+			year: 2025
+		});
+		expect(quickestWatch(withEarly)).toMatchObject({ film: brutalist, days: 3, insideMonth: 1 });
+	});
+
+	it('keeps a watch on the release date itself', () => {
+		const withOpeningDay = buildLibrary({
+			films: [stalker, brutalist, openingDay, undated],
+			year: 2025
+		});
+		expect(quickestWatch(withOpeningDay)).toMatchObject({
+			film: openingDay,
+			days: 0,
+			insideMonth: 2
+		});
+	});
+});
+
+describe('freshness', () => {
+	const releases = (count: number, current: number) =>
+		Array.from({ length: count }, (_, i) =>
+			film({
+				...watched([`2025-06-${String((i % 28) + 1).padStart(2, '0')}`]),
+				rating: 4,
+				tmdb: tmdb({
+					releaseDate: i < current ? '2025-03-01' : '1994-03-01',
+					year: i < current ? 2025 : 1994
+				})
+			})
+		);
+
+	it('reports the share released in the deck year', () => {
+		const result = freshness(buildLibrary({ films: releases(20, 5), year: 2025 }));
+		expect(result?.thisYear).toBe(5);
+		expect(result?.share).toBeCloseTo(0.25);
+		expect(result?.preMillennium).toBe(15);
+		expect(result?.films).toHaveLength(5);
+	});
+
+	it('shares against every film in the year, not just the dated ones', () => {
+		const undatedPair = Array.from({ length: 2 }, () =>
+			film({ ...watched(['2025-07-01']), tmdb: tmdb({ releaseDate: null, year: null }) })
+		);
+		const result = freshness(
+			buildLibrary({ films: [...releases(20, 5), ...undatedPair], year: 2025 })
+		);
+		// 20 dated (5 current) + 2 undated = 22 films watched in the year; thisYear stays 5,
+		// but the denominator is every film, not just the dated 20.
+		expect(result?.thisYear).toBe(5);
+		expect(result?.share).toBeCloseTo(5 / 22);
+	});
+});

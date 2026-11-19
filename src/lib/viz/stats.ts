@@ -1,28 +1,13 @@
-import { imageUrl } from './images';
-import { getOrCreate } from '$lib/collections';
-import { stripDiacritics } from '$lib/text';
-import { collectionName, type Collection, type DiaryEntry, type EnrichedFilm } from '$lib/types';
-
-export interface BarDatum {
-	label: string;
-	count: number;
-	avg: number | null;
-	/** A subset of `films`, drawn as its own segment of the bar. */
-	highlight?: { count: number; films: EnrichedFilm[] };
-	image?: string | null;
-	imageLarge?: string | null;
-	href?: string;
-	films: EnrichedFilm[];
-}
-
-const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
-
-/** Mean of the non-null ratings, or null if nothing is rated. */
-export function avgRating(films: EnrichedFilm[]): number | null {
-	const ratings = films.map((f) => f.rating).filter((r): r is number => r !== null);
-	if (ratings.length === 0) return null;
-	return ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
-}
+import { getOrCreate } from '$lib/maps';
+import { imageUrl, webHref } from '$lib/film/links';
+import { libraryMinutes } from '$lib/film/runtime';
+import { TMDB } from '$lib/film/ratings';
+import { votes } from '$lib/film/votes';
+import { releaseYear } from '$lib/film/release';
+import { latestWatch } from '$lib/film/diary';
+import { DAY_MS, median } from '$lib/math';
+import { avgRating, type BarDatum } from '$lib/film/tally';
+import type { EnrichedFilm } from '$lib/types';
 
 /** Counts per rating step 0.5–5, each split by whether you hearted it; empty steps included. */
 export function ratingHistogram(films: EnrichedFilm[]): BarDatum[] {
@@ -32,22 +17,19 @@ export function ratingHistogram(films: EnrichedFilm[]): BarDatum[] {
 		if (film.rating !== null) groups.get(film.rating)?.push(film);
 	}
 	return [...groups].map(([rating, group]) => {
-		const liked = group.filter((film) => film.liked);
 		return {
+			key: String(rating),
 			label: String(rating),
 			count: group.length,
 			avg: null,
-			highlight: { count: liked.length, films: liked },
+			highlight: { count: likedCount(group) },
 			films: group
 		};
 	});
 }
 
-/** Films you hearted, and how many of those you left unrated. */
-export function likeTotals(films: EnrichedFilm[]): { liked: number; unrated: number } {
-	const liked = films.filter((film) => film.liked);
-	return { liked: liked.length, unrated: liked.filter((film) => film.rating === null).length };
-}
+export const likedCount = (films: EnrichedFilm[]): number =>
+	films.filter((film) => film.liked).length;
 
 /** Diary watch events per calendar year, gaps filled with zeros. */
 export function watchesPerYear(films: EnrichedFilm[]): BarDatum[] {
@@ -66,6 +48,7 @@ export function watchesPerYear(films: EnrichedFilm[]): BarDatum[] {
 	const result: BarDatum[] = [];
 	for (let y = Math.min(...years); y <= Math.max(...years); y++) {
 		result.push({
+			key: String(y),
 			label: String(y),
 			count: counts.get(y) ?? 0,
 			avg: null,
@@ -84,12 +67,13 @@ export function mostRewatched(films: EnrichedFilm[]): BarDatum[] {
 	return films
 		.filter((film) => film.watchedDates.length > 1 || film.rewatch)
 		.map((film) => ({
+			key: film.uri,
 			label: film.name,
 			count: Math.max(1, film.watchedDates.length),
 			avg: film.rating,
 			image: imageUrl(film.tmdb?.posterPath ?? null, 'w92'),
 			imageLarge: imageUrl(film.tmdb?.posterPath ?? null, 'w185'),
-			href: film.uri,
+			href: webHref(film.uri),
 			films: [film]
 		}))
 		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
@@ -101,25 +85,25 @@ export interface RecentWatch {
 	rating: number | null;
 }
 
-/** Each diary-logged film at its latest watch, newest first. */
-export function recentWatches(films: EnrichedFilm[], limit = 10): RecentWatch[] {
+const RECENT_WATCHES = 10;
+
+/** The latest diary-logged films, each at its latest watch, newest first. */
+export function recentWatches(films: EnrichedFilm[]): RecentWatch[] {
 	return films
 		.flatMap((film) => {
-			const latest = film.entries.reduce<DiaryEntry | null>(
-				(newest, entry) => (!newest || entry.date > newest.date ? entry : newest),
-				null
-			);
-			return latest ? [{ film, date: latest.date, rating: latest.rating ?? film.rating }] : [];
+			const date = latestWatch(film);
+			if (date === null) return [];
+			const entry = film.entries.find((e) => e.date === date);
+			return [{ film, date, rating: entry?.rating ?? film.rating }];
 		})
 		.sort((a, b) => b.date.localeCompare(a.date) || a.film.name.localeCompare(b.film.name))
-		.slice(0, limit);
+		.slice(0, RECENT_WATCHES);
 }
 
-/** Films per release decade. */
 export function releaseDecades(films: EnrichedFilm[]): BarDatum[] {
 	const groups = new Map<number, EnrichedFilm[]>();
 	for (const film of films) {
-		const year = film.tmdb?.year ?? film.year;
+		const year = releaseYear(film);
 		if (year === null) continue;
 		const decade = Math.floor(year / 10) * 10;
 		getOrCreate(groups, decade, () => []).push(film);
@@ -127,36 +111,12 @@ export function releaseDecades(films: EnrichedFilm[]): BarDatum[] {
 	return [...groups]
 		.sort(([a], [b]) => a - b)
 		.map(([decade, group]) => ({
+			key: `${decade}s`,
 			label: `${decade}s`,
 			count: group.length,
 			avg: avgRating(group),
 			films: group
 		}));
-}
-
-export function totalRuntimeMinutes(films: EnrichedFilm[]): number {
-	return films.reduce((sum, f) => sum + (f.tmdb?.runtime ?? 0), 0);
-}
-
-export interface Streak {
-	days: number;
-	start: string;
-	end: string;
-}
-
-const DAY_MS_STREAK = 24 * 60 * 60 * 1000;
-
-/** The longest run of consecutive calendar days in a set of ISO dates, or null if empty. */
-export function longestRun(dates: string[]): Streak | null {
-	const days = [...new Set(dates)].sort();
-	if (days.length === 0) return null;
-	let best: Streak = { days: 1, start: days[0], end: days[0] };
-	let run = 1;
-	for (let i = 1; i < days.length; i++) {
-		run = (Date.parse(days[i]) - Date.parse(days[i - 1])) / DAY_MS_STREAK === 1 ? run + 1 : 1;
-		if (run > best.days) best = { days: run, start: days[i - run + 1], end: days[i] };
-	}
-	return best;
 }
 
 /** An ordered bucket holding everything below `below` that no earlier band took. */
@@ -178,6 +138,7 @@ function banded(
 		groups[bands.findIndex((band) => value < band.below)].push(film);
 	}
 	return bands.map((band, i) => ({
+		key: band.label,
 		label: band.label,
 		count: groups[i].length,
 		avg: avgRating(groups[i]),
@@ -197,10 +158,8 @@ const RUNTIME_BANDS: Band[] = [
 
 /** Films per runtime band. Series carry whole-run lengths, so a short one lands among films. */
 export function runtimeBuckets(films: EnrichedFilm[]): BarDatum[] {
-	return banded(films, RUNTIME_BANDS, (film) => film.tmdb?.runtime || null);
+	return banded(films, RUNTIME_BANDS, (film) => libraryMinutes(film) || null);
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /* Gap bands in days between release and first watch; the last catches everything from 25y up. */
 const LAG_BANDS: Band[] = [
@@ -231,36 +190,9 @@ export function watchLag(films: EnrichedFilm[]): BarDatum[] {
 	return banded(films, LAG_BANDS, daysToFirstWatch);
 }
 
-/** Nearest-rank quantile: `fraction: 0.5` is the upper middle on an even count. */
-export function quantile(values: number[], fraction: number): number | null {
-	if (values.length === 0) return null;
-	const sorted = [...values].sort((a, b) => a - b);
-	return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
-}
-
-/**
- * Middle value by nearest rank. Every median shown alongside another in the recap uses this
- * one convention, so the figures stay comparable.
- */
-export function median(values: number[]): number | null {
-	return quantile(values, 0.5);
-}
-
 /** Median days between release and first watch, or null if no film has both dates. */
 export function medianWatchLag(films: EnrichedFilm[]): number | null {
 	return median(films.map(daysToFirstWatch).filter((value): value is number => value !== null));
-}
-
-/** A day count as a rough span: "12 days", "5 months", "3.2 years". */
-export function formatDays(days: number): string {
-	if (days < 60) return `${Math.round(days)} days`;
-	if (days < 365) return `${Math.round(days / 30)} months`;
-	return `${(days / 365).toFixed(1)} years`;
-}
-
-/** TMDB's vote count plus IMDb's: two audiences pooled, so a film big on only one still counts. */
-export function combinedVoteCount(film: EnrichedFilm): number {
-	return (film.tmdb?.voteCount ?? 0) + (film.omdb?.imdbVotes ?? 0);
 }
 
 /*
@@ -279,190 +211,5 @@ const AUDIENCE_BANDS: Band[] = [
 
 /** Films per combined TMDB + IMDb vote-count band, least-seen band first. */
 export function audienceBands(films: EnrichedFilm[]): BarDatum[] {
-	return banded(films, AUDIENCE_BANDS, (film) => combinedVoteCount(film) || null);
-}
-
-/** Share (0–1) of films with a vote count that fall under `below`, or null if none have one. */
-export function obscurityShare(films: EnrichedFilm[], below = 1_000): number | null {
-	const counts = films.map(combinedVoteCount).filter((count) => count > 0);
-	return counts.length === 0
-		? null
-		: counts.filter((count) => count < below).length / counts.length;
-}
-
-/** Films grouped by every key they carry, count-desc; a film counts once per distinct key. */
-export function grouped(films: EnrichedFilm[], keysOf: (f: EnrichedFilm) => string[]): BarDatum[] {
-	const groups = new Map<string, EnrichedFilm[]>();
-	for (const film of films) {
-		for (const key of new Set(keysOf(film))) {
-			getOrCreate(groups, key, () => []).push(film);
-		}
-	}
-	return [...groups]
-		.map(([label, group]) => ({ label, count: group.length, avg: avgRating(group), films: group }))
-		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-}
-
-export function byGenre(films: EnrichedFilm[]): BarDatum[] {
-	return grouped(films, (f) => f.tmdb?.genres ?? []);
-}
-
-export function byLanguage(films: EnrichedFilm[]): BarDatum[] {
-	return grouped(films, (f) => {
-		if (!f.tmdb?.originalLanguage) return [];
-		try {
-			return [languageNames.of(f.tmdb.originalLanguage) ?? f.tmdb.originalLanguage];
-		} catch {
-			return [f.tmdb.originalLanguage];
-		}
-	});
-}
-
-/** Letterboxd person-page slug: lowercase, diacritics stripped, hyphens. */
-function letterboxdSlug(name: string): string {
-	return stripDiacritics(name)
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-+|-+$/g, '');
-}
-
-export function byPerson(films: EnrichedFilm[], role: 'directors' | 'cast'): BarDatum[] {
-	// Group on tmdbId, not name: TMDB has several people sharing a name, and pooling them would
-	// merge their films, counts and averages into one bogus bar. People without an id (rare) keep
-	// grouping by name, the best we can do for them.
-	interface PersonGroup {
-		name: string;
-		tmdbId: number | null;
-		films: EnrichedFilm[];
-		profilePath: string | null;
-	}
-	const groups = new Map<string, PersonGroup>();
-	for (const film of films) {
-		const seen = new Set<string>();
-		for (const person of film.tmdb?.[role] ?? []) {
-			const key = person.tmdbId !== null ? `id:${person.tmdbId}` : `name:${person.name}`;
-			if (seen.has(key)) continue;
-			seen.add(key);
-			const group = getOrCreate(groups, key, () => ({
-				name: person.name,
-				tmdbId: person.tmdbId,
-				films: [],
-				profilePath: null
-			}));
-			group.profilePath ??= person.profilePath;
-			group.films.push(film);
-		}
-	}
-
-	// A bare name-slug lands on whoever owns it on Letterboxd, so it is only safe when the name is
-	// unique in this library; anyone sharing a name here links to their unambiguous TMDB page instead.
-	const nameCounts = new Map<string, number>();
-	for (const { name } of groups.values()) nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
-
-	const kind = role === 'directors' ? 'director' : 'actor';
-	return [...groups.values()]
-		.map((group) => ({
-			label: group.name,
-			count: group.films.length,
-			avg: avgRating(group.films),
-			image: imageUrl(group.profilePath, 'w92'),
-			imageLarge: imageUrl(group.profilePath, 'w185'),
-			href:
-				group.tmdbId !== null && (nameCounts.get(group.name) ?? 0) > 1
-					? `https://www.themoviedb.org/person/${group.tmdbId}`
-					: `https://letterboxd.com/${kind}/${letterboxdSlug(group.name)}/`,
-			films: group.films
-		}))
-		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-}
-
-/**
- * Franchises you have seen more than one film of, most-watched first. A single film from a
- * collection says nothing about following the franchise, so those groups drop out.
- */
-export function byCollection(films: EnrichedFilm[]): BarDatum[] {
-	const groups = new Map<number, { collection: Collection; films: EnrichedFilm[] }>();
-	for (const film of films) {
-		const collection = film.tmdb?.collection;
-		if (!collection) continue;
-		getOrCreate(groups, collection.id, () => ({ collection, films: [] })).films.push(film);
-	}
-	return [...groups.values()]
-		.filter((group) => group.films.length > 1)
-		.map(({ collection, films: group }) => ({
-			label: collectionName(collection.name),
-			count: group.length,
-			avg: avgRating(group),
-			image: imageUrl(collection.posterPath, 'w92'),
-			imageLarge: imageUrl(collection.posterPath, 'w185'),
-			href: `https://www.themoviedb.org/collection/${collection.id}`,
-			films: group
-		}))
-		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-}
-
-/** How many TMDB-matched films belong to any franchise at all, and how many were matched. */
-export function collectionShare(films: EnrichedFilm[]): { inCollection: number; total: number } {
-	const matched = films.filter((film) => film.tmdb);
-	return {
-		inCollection: matched.filter((film) => film.tmdb?.collection).length,
-		total: matched.length
-	};
-}
-
-export interface RatingGap {
-	film: EnrichedFilm;
-	yours: number;
-	tmdb: number;
-	gap: number;
-}
-
-/** Films rated most above/below the TMDB average (TMDB's 10-scale halved). */
-export function ratingGaps(films: EnrichedFilm[]): { over: RatingGap[]; under: RatingGap[] } {
-	const gaps: RatingGap[] = [];
-	for (const film of films) {
-		if (film.rating === null || !film.tmdb?.voteAverage) continue;
-		const tmdb = film.tmdb.voteAverage / 2;
-		gaps.push({ film, yours: film.rating, tmdb, gap: film.rating - tmdb });
-	}
-	gaps.sort((a, b) => b.gap - a.gap);
-	return {
-		over: gaps.slice(0, 5).filter((g) => g.gap > 0),
-		under: gaps
-			.slice(-5)
-			.filter((g) => g.gap < 0)
-			.reverse()
-	};
-}
-
-export interface MetacriticGap {
-	film: EnrichedFilm;
-	/** Both 0-100: your stars ×20 against Metacritic's own scale. */
-	yours: number;
-	metascore: number;
-	gap: number;
-}
-
-const METACRITIC_TOP_N = 10;
-
-/** Films rated most differently from Metacritic's critic score, both put on a 0-100 scale. */
-export function metacriticGaps(films: EnrichedFilm[]): {
-	over: MetacriticGap[];
-	under: MetacriticGap[];
-} {
-	const gaps: MetacriticGap[] = [];
-	for (const film of films) {
-		if (film.rating === null || film.omdb?.metascore == null) continue;
-		const yours = film.rating * 20;
-		const metascore = film.omdb.metascore;
-		gaps.push({ film, yours, metascore, gap: yours - metascore });
-	}
-	gaps.sort((a, b) => b.gap - a.gap);
-	return {
-		over: gaps.slice(0, METACRITIC_TOP_N).filter((g) => g.gap > 0),
-		under: gaps
-			.slice(-METACRITIC_TOP_N)
-			.filter((g) => g.gap < 0)
-			.reverse()
-	};
+	return banded(films, AUDIENCE_BANDS, (film) => votes(film) || null);
 }

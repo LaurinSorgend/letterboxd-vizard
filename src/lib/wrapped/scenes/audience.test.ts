@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { film, omdb, tmdb, watched } from '$lib/testing/fixtures';
-import { buildWrapped } from '../wrapped';
+import { deckOf } from '$lib/testing/year';
 import { criticScene, languageScene, obscurityScene } from './audience';
 
 const many = (over: (i: number) => Parameters<typeof film>[0], count = 26) =>
@@ -16,7 +16,7 @@ describe('obscurityScene', () => {
 		// convention (Math.ceil, or a descending sort) would land on a different index and
 		// so a different number here, which is what makes this fixture discriminating.
 		const films = many((i) => ({ tmdb: tmdb({ voteCount: (i + 1) * 500 }) }));
-		const scene = obscurityScene(buildWrapped(films, 2025)!);
+		const scene = obscurityScene(deckOf(films, 2025));
 		expect(scene?.id).toBe('obscurity');
 		expect(scene?.note).toContain('Half');
 		expect(scene?.value).toBe('7,000');
@@ -26,14 +26,14 @@ describe('obscurityScene', () => {
 
 	it('drops out under twenty-five films with a vote count', () => {
 		const films = many((i) => ({ tmdb: tmdb({ voteCount: i < 5 ? 100 : null }) }), 12);
-		expect(obscurityScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(obscurityScene(deckOf(films, 2025))).toBeNull();
 	});
 });
 
 describe('languageScene', () => {
 	it('measures against the language of the viewer', () => {
 		const films = many((i) => ({ tmdb: tmdb({ originalLanguage: i < 10 ? 'fr' : 'de' }) }), 20);
-		const scene = languageScene(buildWrapped(films, 2025, { locale: 'de-DE' })!);
+		const scene = languageScene(deckOf(films, 2025, { locale: 'de-DE' }));
 		expect(scene?.label).toBe('Not in German');
 		expect(scene?.value).toBe('50%');
 		expect(scene?.note).toBe(
@@ -43,7 +43,7 @@ describe('languageScene', () => {
 
 	it('drops out when almost everything was in the viewer’s language', () => {
 		const films = many((i) => ({ tmdb: tmdb({ originalLanguage: i === 0 ? 'fr' : 'en' }) }), 20);
-		expect(languageScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(languageScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('drops out under fifteen films with a language on record', () => {
@@ -51,17 +51,13 @@ describe('languageScene', () => {
 			(i) => (i < 10 ? { tmdb: tmdb({ originalLanguage: i < 5 ? 'fr' : 'en' }) } : {}),
 			20
 		);
-		expect(languageScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(languageScene(deckOf(films, 2025))).toBeNull();
 	});
 
-	it('omits the "did most of the work" sentence when no single other language stands out', () => {
-		// 'iw' and 'he' are distinct ISO codes that both display as "Hebrew", so the foreign
-		// group collapses into the viewer's own label and `largest` comes back null.
+	it('counts two codes for one language as the viewer’s own', () => {
+		// 'iw' and 'he' both name Hebrew, so a year split between them was not foreign at all.
 		const films = many((i) => ({ tmdb: tmdb({ originalLanguage: i < 15 ? 'iw' : 'he' }) }), 20);
-		const scene = languageScene(buildWrapped(films, 2025, { locale: 'iw' })!);
-		expect(scene?.note).toBe('5 of 20 films were in a language other than Hebrew.');
-		// The only path in this file that can render a literal '0' — pin it.
-		expect(scene?.stats).toContainEqual({ label: 'Other', value: '0' });
+		expect(languageScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('drops the frame for a year watched entirely in one language, whatever the browser says', () => {
@@ -70,14 +66,14 @@ describe('languageScene', () => {
 		// rather than about the viewer; measured against what they watched there is nothing
 		// foreign here at all, and the frame has nothing to say.
 		const films = many(() => ({ tmdb: tmdb({ originalLanguage: 'fr' }) }), 20);
-		expect(languageScene(buildWrapped(films, 2025, { locale: 'en-GB' })!)).toBeNull();
+		expect(languageScene(deckOf(films, 2025, { locale: 'en-GB' }))).toBeNull();
 	});
 
 	it('measures against the most-watched language, not English, and counts every language', () => {
 		// English is present but is not the language of this year: French is, at ten films.
 		// So the frame reads "not in French", the runner-up is German, and English drops into
 		// the foreign column. Seven distinct languages against a bar row capped at five also
-		// tells the `languages` field apart from the `shownBars.length` it replaced.
+		// tells the `languages` field apart from the length of the bar row.
 		const codes = ['en', 'fr', 'de', 'es', 'it', 'ja', 'ko'];
 		const counts = [5, 10, 8, 6, 4, 3, 2];
 		const languages: string[] = [];
@@ -88,7 +84,7 @@ describe('languageScene', () => {
 			(i) => ({ tmdb: tmdb({ originalLanguage: languages[i] }) }),
 			languages.length
 		);
-		const scene = languageScene(buildWrapped(films, 2025, { locale: 'en-GB' })!);
+		const scene = languageScene(deckOf(films, 2025, { locale: 'en-GB' }));
 		expect(scene?.label).toBe('Not in French');
 		expect(scene?.stats).toEqual([
 			{ label: 'Languages', value: '7' },
@@ -110,7 +106,7 @@ describe('criticScene', () => {
 			}),
 			...many(() => ({ rating: 3, omdb: omdb({ metascore: 60 }) }), 11)
 		];
-		const scene = criticScene(buildWrapped(films, 2025)!);
+		const scene = criticScene(deckOf(films, 2025));
 		expect(scene).toMatchObject({ id: 'critics', value: 'Speak No Evil' });
 		expect(scene?.note).toBe(
 			'Critics put it at 34 on Metascore. You gave it ★ 4.5. That is the widest you and the critics stood apart all year.'
@@ -128,7 +124,7 @@ describe('criticScene', () => {
 			}),
 			...many(() => ({ rating: 3, omdb: omdb({ metascore: 60 }) }), 11)
 		];
-		const scene = criticScene(buildWrapped(films, 2025)!);
+		const scene = criticScene(deckOf(films, 2025));
 		expect(scene).toMatchObject({ id: 'critics', value: 'Movie We Hated' });
 		expect(scene?.stats).toContainEqual({ label: 'You were harsher on', value: '1 film' });
 	});
@@ -136,16 +132,16 @@ describe('criticScene', () => {
 	it('drops out without OMDb', () => {
 		expect(
 			criticScene(
-				buildWrapped(
+				deckOf(
 					many(() => ({ rating: 4 }), 12),
 					2025
-				)!
+				)
 			)
 		).toBeNull();
 	});
 
 	it('drops out when the widest gap stays under thirty points', () => {
 		const films = many(() => ({ rating: 3, omdb: omdb({ metascore: 50 }) }), 12);
-		expect(criticScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(criticScene(deckOf(films, 2025))).toBeNull();
 	});
 });

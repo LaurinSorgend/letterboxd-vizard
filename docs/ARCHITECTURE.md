@@ -22,22 +22,25 @@ flowchart LR
         parse["ingest/parse.ts<br/>parseExport()"]
         rss["ingest/rss.ts<br/>mergeFeed(), feedHasGap()"]
         pipeline["ingest/pipeline.ts<br/>enrichLibrary(), refreshFromFeed()"]
-        enrichClient["ingest/enrich.ts<br/>runRounds() batching + retry"]
+        enrichClient["api/*<br/>endpoint client, runRounds() batching + retry"]
         store["store.ts<br/>localStorage snapshot"]
         viz["viz/*<br/>pure stats + Svelte charts"]
-        wrapped["wrapped/*<br/>year-in-review deck"]
+        year["year/*<br/>one year: Library, facts, verdict"]
+        wrapped["wrapped/*<br/>year-in-review deck + page recap"]
         page --> parse
         page --> rss
         page --> pipeline --> enrichClient
+        page --> enrichClient
         pipeline --> rss
         page <--> store
         page --> viz
         page --> wrapped
+        wrapped --> year
     end
 
     subgraph server["Server (Cloudflare Worker or Node)"]
         direction TB
-        hooks["hooks.server.ts<br/>mints session cookie"]
+        hooks["hooks.server.ts<br/>session cookie + API gate"]
         api["routes/api/*<br/>enrich, omdb-enrich,<br/>collections, recommend"]
         feed["routes/api/feed/[username]<br/>RSS proxy, parseFeed()"]
         feed --> guard
@@ -97,15 +100,19 @@ flowchart LR
 
 ## 3. Upload and enrichment flow
 
+The page only hands the file to the library session (`lib/library.svelte.ts`), which owns the
+load, the enrichment, franchise sizes and saving. `ingest/pipeline.ts` owns all three ways a
+library is loaded (`loadExport`, `loadFeed`, `refreshFromFeed`).
+
 ```mermaid
 sequenceDiagram
     autonumber
     actor U as User
     participant P as +page.svelte
-    participant PA as parse.ts
-    participant F as /api/feed
+    participant L as library.svelte.ts
     participant PI as pipeline.ts
-    participant E as enrich.ts (client)
+    participant PA as parse.ts
+    participant E as api/endpoints.ts
     participant H as hooks.server.ts
     participant A as /api/enrich
     participant C as cache.ts
@@ -116,40 +123,45 @@ sequenceDiagram
     P->>H: request
     H-->>P: Set-Cookie lv_session (HMAC, 6h)
     U->>P: drop zip
-    P->>PA: parseExport(bytes)
-    PA-->>P: LetterboxdData {films, watchlist, profile}
-    P->>F: fetchFeed(profile.username)
-    F-->>P: FeedEntry[] (empty on any failure)
-    P->>P: mergeFeed(films, feed): viewings logged after the export
-    P->>PI: enrichLibrary(films, watchlist, report)
+    P->>L: loadFile(file)
+    L->>PI: loadExport(bytes)
+    PI->>PA: parseExport(bytes)
+    PA-->>PI: LetterboxdData {films, watchlist, profile}
+    PI->>E: fetchFeed(profile.username) (empty on any failure)
+    PI->>PI: mergeFeed(films, feed): viewings logged after the export
+    PI-->>L: LetterboxdData, source = export
+    L->>PI: enrichLibrary(films, watchlist, progress)
     PI->>E: enrichFilms(films) and enrichFilms(watchlist)
-    loop runRounds (max 8 rounds, 2 batches in flight)
+    loop runRounds (max 8 rounds, 2 batches in flight, backoff between rounds)
         E->>A: POST {items: name+year}
         A->>A: requireSession + checkRateLimit
-        A->>C: getCachedMany(keys)
+        A->>C: matches, then tmdb_records by id
         C-->>A: hits and fresh misses
         A->>T: lookupMovie(budget, name, year) for unknown keys
         T->>X: search / details (each costs 1 budget unit)
         X-->>T: JSON
         T-->>A: TmdbMovie or null
-        A->>C: putCachedMany(resolved)
+        A->>C: store matches + records
         A-->>E: {results, pending[]}
         Note over E: pending indices (budget hit) are re-queued next round
     end
     E-->>PI: films with tmdb
-    PI->>E: enrichOmdb(imdbIds) via /api/omdb-enrich
-    PI-->>P: EnrichedLibrary {films, watchlistIds}
-    P->>PI: collectionsFor(films)
-    PI->>E: fetchCollections(ids) via /api/collections
-    P->>P: films = EnrichedFilm[], phase = ready
-    P->>P: saveSnapshot() if "remember" is on
+    PI->>E: enrichOmdb(distinct imdbIds) via /api/omdb-enrich
+    PI-->>L: {films, watchlist}
+    L->>L: #setFilms: collectionsFor(films) via /api/collections,<br/>then saveSnapshot() if "remember" is on
+    L->>L: phase = ready
 ```
 
-## 4. TMDB lookup strategy (`lookupMovie`)
+## 4. TMDB lookup strategy (`lookupMovie`, `server/enrich.ts`)
 
 ```mermaid
 flowchart TD
-    start([name, year]) --> hasYear{year known?}
+    start([name, year]) --> cached{"match cached?<br/>(matches / misses)"}
+    cached -- "miss, under 30d" --> nul
+    cached -- "match, record cached" --> done
+    cached -- "match, record gone<br/>(RECORD_SCHEMA bump)" --> byId[fetchRecord by id]
+    byId --> done
+    cached -- unknown --> hasYear{year known?}
     hasYear -- yes --> m1[search movie with year]
     m1 -->|hit| rec
     m1 -->|miss| t1[search tv with year]
@@ -161,101 +173,163 @@ flowchart TD
     loose --> tiers["tiers: movie+year match, tv+year match,<br/>any movie, any tv"]
     tiers -->|first hit| rec[fetchRecord<br/>details + credits + keywords + external_ids<br/>in ONE request]
     tiers -->|none| nul([null: cached as a miss, 30d TTL])
-    rec --> done([TmdbMovie])
+    rec --> done([TmdbMovie: match and record cached])
 ```
+
+Same-titled results are told apart by year: `server/match.ts` takes the first result, in the API's
+ranking, within one year of the Letterboxd year, for TMDB and TheTVDB alike. TheTVDB goes through
+the same `budgetedFetch` as TMDB, so an outage there is pending, not a final miss. Its alpha-3
+country codes map to alpha-2 through `virtual:alpha3-countries`, a table `vite.config.ts` builds
+from the `world-countries` dev dependency at build time, so the package stays out of the Worker.
+`yearOf` (in `$lib/dates`) reads the year of a TMDB date or a TheTVDB year.
 
 ## 5. Server request guards
 
 ```mermaid
 flowchart LR
-    req["POST /api/* or<br/>GET /api/feed/username"] --> s{valid lv_session<br/>cookie?}
+    req["/api/* request"] --> known{"known route?"}
+    known -- no --> r404[404]
+    known -- yes --> s{valid lv_session<br/>cookie?}
     s -- no --> r403[403]
-    s -- yes --> rl{rate limiter bound<br/>and under limit?}
+    s -- yes --> rl{"route's rate limiter<br/>bound and under limit?"}
     rl -- no --> r429[429]
-    rl -- yes --> v{"body valid and<br/>batch at most 100?"}
+    rl -- yes --> v{"readBatch: body valid<br/>and batch at most 100?"}
     v -- no --> r400[400]
     v -- yes --> cache[batched cache read]
-    cache --> fetch["fetch misses<br/>pLimit(5) + FetchBudget(40)"]
-    fetch -->|budget exhausted| pend[add to pending]
+    cache --> fetch["resolveBatch: fetch misses<br/>pLimit(5) + FetchBudget(40)"]
+    fetch -->|RetryLater: budget, 5xx, unreachable| pend[add to pending]
+    fetch -->|other error| nul[null, not cached]
     fetch --> put[batched cache write]
     pend --> resp
+    nul --> resp
     put --> resp["200 {results, pending}"]
 ```
 
-`/api/feed/[username]` shares the session check and the `ENRICH_LIMITER` binding, then validates
-the username (`[A-Za-z0-9_]{2,30}`, else 400). It makes one fetch to Letterboxd, so it needs no
-`FetchBudget` or cache. Letterboxd's 404 passes through as 404 ("no member called …"); any other
-failure becomes 502.
+`hooks.server.ts` runs the session check and the rate limit for every known `/api` route, before
+the route runs; `ratelimit.ts` holds the one table of which limiter binding each route counts
+against, and a test checks it names every route. An unknown `/api` path has no route id, so it
+falls through to SvelteKit's 404 ungated.
+
+`/api/feed/[username]` validates the username (`[A-Za-z0-9_]{2,30}`, else 400). It makes one fetch
+to Letterboxd, so it needs no `FetchBudget` or cache. Letterboxd's 404 passes through as 404 ("no
+member called …"); any other failure becomes 502.
 
 ## 6. Server classes and modules
+
+Every cached lookup lives in one module: its fetcher, its cache table and TTL, and the
+`BatchLookup` that ties them together. The batch routes are `readBatch` plus `resolveBatch` over
+that lookup; `cache.ts` and `batch.ts` know nothing about any feature.
 
 ```mermaid
 classDiagram
     direction LR
 
+    class Batch {
+        +requestContext(platform, reserve) RequestContext
+        +readBatch(request, field, isItem, expected)
+        +resolveBatch(items, lookup, ctx) BatchAnswer
+    }
+    class RequestContext {
+        db: D1Database
+        budget: FetchBudget
+        limit: pLimit(5)
+    }
+    class BatchLookup {
+        keyOf(item) key?
+        cache: Cache
+        fetchOne(budget, item)
+        label
+    }
+    class Cache {
+        +getMany(db, keys) Map
+        +putMany(db, entries)
+    }
+    class CacheModule["cache.ts"] {
+        +jsonCache(table, key, ttlMs?, version?) Cache
+        +hitMissCache(table, missTable, key, missTtlMs, version?) Cache
+    }
     class FetchBudget {
         -remaining: number
         -reserve: number
         +exhausted: boolean
         +take()
-        +tryTake() boolean
         +releaseReserve()
     }
+    class RetryLater
     class BudgetExhausted
-    Error <|-- BudgetExhausted
+    Error <|-- RetryLater
+    RetryLater <|-- BudgetExhausted
     FetchBudget ..> BudgetExhausted : throws
-
-    class Cache {
-        +cacheKey(name, year) string
-        +getCachedMany(db, keys)
-        +putCachedMany(db, entries)
-        +getRelatedCachedMany()
-        +putRelatedCachedMany()
-        +getCollectionsCachedMany()
-        +putCollectionsCachedMany()
-        +getOmdbCachedMany()
-        +putOmdbCachedMany()
+    class Http["http.ts"] {
+        +budgetedFetch(budget, url, init, label)
     }
-    class Db {
-        +getDb(platform) D1Database
-    }
-    class LocalDb {
-        +localDb() D1Database
-    }
-    class Tmdb {
+    class Tmdb["tmdb.ts"] {
         +tmdbGet(budget, path, params)
-        +lookupMovie(budget, name, year)
-        +fetchRecord(budget, kind, id)
-        +fetchCollection(budget, id)
     }
-    class Tvdb {
+    class Enrich["enrich.ts"] {
+        +resolveEnrich(items, ctx) BatchAnswer
+    }
+    class Records["records.ts"] {
+        +fetchRecord(budget, kind, id)
+        +records Cache
+        +movieRecords BatchLookup
+        +freshMovieRecords BatchLookup
+    }
+    class Features["collections / omdb / providers / releases / related"] {
+        +collections, omdbRatings, availability, releases, related: BatchLookup
+    }
+    class Discover["discover.ts"] {
+        +discoverUpcoming()
+        +popularCache Cache
+    }
+    class Tvdb["tvdb.ts"] {
         +lookupSeriesOnTvdb()
     }
-    class Omdb {
-        +fetchOmdbRatings(budget, imdbId)
+    class Match["match.ts"] {
+        +exactTitleMatches()
+        +firstNearYear()
     }
-    class Related {
-        +relatedMoviesMany(db, budget, limit, ids)
-    }
-    class Session {
-        +mintSessionToken(secret)
-        +verifySessionToken(secret, token)
+    class Session["session.ts"] {
+        +issueSession(cookies)
         +requireSession(cookies)
     }
-    class RateLimit {
-        +checkRateLimit(limiter, key)
+    class RateLimit["ratelimit.ts"] {
+        +LIMITER_OF
+        +checkRateLimit(event, routeId)
     }
 
-    Db --> LocalDb : self-host fallback
-    Cache ..> Db : receives D1Database
-    Cache ..> FetchBudget
-    Tmdb ..> FetchBudget
-    Tvdb ..> FetchBudget
-    Omdb ..> FetchBudget
-    Tmdb ..> Tvdb : fallback
-    Related ..> Tmdb : tmdbGet
-    Related ..> Cache
+    Batch ..> RequestContext
+    Batch ..> BatchLookup
+    BatchLookup o-- Cache
+    CacheModule ..> Cache : builds
+    RequestContext o-- FetchBudget
+    Http ..> FetchBudget
+    Tmdb ..> Http
+    Tvdb ..> Http
+    Enrich ..> Records : records by id
+    Enrich ..> Tvdb : fallback
+    Enrich ..> Match
+    Tvdb ..> Match
+    Records ..> Tmdb
+    Features ..> Tmdb
+    Discover ..> Tmdb
+    Enrich ..> CacheModule
+    Records ..> CacheModule
+    Features ..> CacheModule
+    Discover ..> CacheModule
 ```
+
+`requestContext` is built per request: Workers cap subrequests per invocation and forbid I/O
+queued from another request's context. `/api/recommend` asks for one with a reserve and shares it
+across its two `resolveBatch` phases; `/api/upcoming` shares its budget between the cached popular
+pages and the uncached pages for the viewer's people. D1 queries are not counted in the budget:
+the 10 subrequests between `FETCH_BUDGET` (default `DEFAULT_FETCH_BUDGET` = 40, in `$lib/types`) and Workers' 50 pay for them, a handful per batch
+since every cache reads and writes a chunk of keys per query.
+
+Configuration is read from `$env/dynamic/private` where it is used: `TMDB_API_KEY` in `tmdb.ts`,
+`TVDB_API_KEY` in `tvdb.ts`, `OMDB_API_KEY` in `omdb.ts` (`omdbConfigured()` lets `/api/omdb-enrich`
+answer all-null without one), `SESSION_SECRET` in `session.ts`, `FETCH_BUDGET` in `budget.ts` and
+`CACHE_DB_PATH` in `local-db.ts`.
 
 ## 7. Data model
 
@@ -341,10 +415,10 @@ classDiagram
     class Snapshot {
         films: EnrichedFilm[]
         watchlist
-        watchlistIds
+        watchlistIds? (written by older builds)
         profile
         collections
-        source?: export / feed
+        source: export / feed
     }
     class FeedEntry {
         uri: string
@@ -376,15 +450,19 @@ classDiagram
 
 ```mermaid
 erDiagram
-    movies {
-        TEXT cache_key PK "v6::lowercased name::year"
-        INTEGER tmdb_id
-        TEXT data "JSON TmdbMovie"
+    matches {
+        TEXT cache_key PK "m1:lowercased name::year"
+        TEXT data "JSON {mediaType, tmdbId}"
         INTEGER fetched_at
     }
     misses {
-        TEXT cache_key PK
+        TEXT cache_key PK "m1:lowercased name::year"
         INTEGER fetched_at "TTL 30d"
+    }
+    tmdb_records {
+        TEXT record_key PK "v6:movie:id or v6:tv:id (RECORD_SCHEMA)"
+        TEXT data "JSON TmdbMovie"
+        INTEGER fetched_at "read at most 7d old by /api/records"
     }
     related {
         INTEGER tmdb_id PK
@@ -393,13 +471,23 @@ erDiagram
     }
     collections {
         INTEGER collection_id PK
-        TEXT data "JSON CollectionParts"
-        INTEGER fetched_at
+        TEXT data "JSON CollectionParts, TMDB's raw name"
+        INTEGER fetched_at "TTL 90d"
     }
     providers {
         TEXT media_key PK "movie:id or tv:id"
         TEXT data "JSON WatchAvailability, every country"
         INTEGER fetched_at "TTL 3d"
+    }
+    releases {
+        INTEGER tmdb_id PK
+        TEXT data "JSON FilmReleases, every country"
+        INTEGER fetched_at "TTL 7d"
+    }
+    upcoming {
+        TEXT cache_key PK "region:kind:pages"
+        TEXT data "JSON UpcomingCandidate[]"
+        INTEGER fetched_at "TTL 1d"
     }
     omdb {
         TEXT imdb_id PK
@@ -410,103 +498,172 @@ erDiagram
         TEXT imdb_id PK
         INTEGER fetched_at "TTL 30d"
     }
-    movies ||--o| related : "tmdb_id"
-    movies }o--o| collections : "data.collection.id"
-    movies }o--o| omdb : "data.imdbId"
+    matches ||--|| tmdb_records : "data.mediaType:data.tmdbId"
+    tmdb_records ||--o| related : "tmdb_id"
+    tmdb_records ||--o| releases : "tmdb_id"
+    tmdb_records ||--o| providers : "mediaType:tmdbId"
+    tmdb_records }o--o| collections : "data.collection.id"
+    tmdb_records }o--o| omdb : "data.imdbId"
 ```
+
+Each table is declared in code by the module whose fetcher fills it (`jsonCache` or
+`hitMissCache`), and a test checks the declared tables and columns against `schema.sql`. The
+self-hosted SQLite applies `schema.sql` on open; D1 needs `wrangler d1 execute --file=schema.sql`
+after a table is added.
+
+A record is stored once, by id, and versioned by `RECORD_SCHEMA` (shared with the browser
+snapshot, so it only versions the record's shape). `/api/enrich` stores what a (name, year)
+resolved to in `matches`, versioned on its own by `MATCH_VERSION` in `server/enrich.ts`, so a
+`RECORD_SCHEMA` bump refetches records by id without searching again: `resolveEnrich` reads the
+matches first and hands them to the lookup that fetches what is missing. A versioned table deletes
+rows of other generations on its first read in an isolate. `/api/records` and `/api/recommend`
+read the same `tmdb_records`.
 
 ## 8. Recommendations flow
 
 ```mermaid
 sequenceDiagram
     actor U as User
-    participant R as Recommendations.svelte
-    participant S as viz/seeds.ts
+    participant R as RecommendationsSection.svelte
+    participant S as recommend/seeds.ts
     participant A as /api/recommend
-    participant RL as related.ts
-    participant C as cache.ts
+    participant B as resolveBatch
+    participant C as D1 caches
     participant T as TMDB
 
-    R->>S: seeds from watched + rated films
-    R->>A: POST {seeds (max 25), exclude[]}
-    A->>RL: relatedMoviesMany (budget reserve = 15)
-    RL->>C: getRelatedCachedMany
-    RL->>T: /movie/:id/recommendations for cache misses
-    RL->>C: putRelatedCachedMany
-    alt every seed failed
-        A-->>R: {available: false}
-    else
-        A->>A: score += max(0.5, rating - 2.5) per related film
-        A->>A: releaseReserve(), take top 20
-        A->>C: getCachedMany (poster + countries)
-        A->>T: fetchRecord for uncached (may be pending)
-        A-->>R: {available: true, results[]}
-    end
+    R->>S: pickDiverseSeeds(films), excludedIds(…)
+    R->>A: POST {seeds (MAX_SEEDS = 25), exclude[]}
+    A->>A: requestContext(reserve = 15)
+    A->>B: seed ids, related lookup
+    B->>C: related (90d)
+    B->>T: /movie/:id/recommendations for misses
+    B->>C: store fetched lists
+    A->>A: score += max(0.5, rating - 2.5) per related film
+    A->>A: releaseReserve(), take top 20
+    A->>B: ranked ids, movieRecords lookup
+    B->>C: tmdb_records (poster + countries)
+    B->>T: fetchRecord for misses
+    A-->>R: {results[]}, pending where a record must be asked again
     R-->>U: ranked suggestions, optionally per country
 ```
 
 ## 9. Client-side visualization layer
 
 Charts are thin Svelte components over pure TypeScript functions that take `EnrichedFilm[]`, so the
-statistics are unit-testable without a DOM.
+statistics are unit-testable without a DOM. Each dashboard section in `lib/dashboard/sections/`
+reads the library from context, derives its own data, holds its own toggles and renders through
+one `<Section id title nav>`, which registers with a context registry; `SectionNav` lists the
+registry in document order. `+page.svelte` is a list of section tags.
 
 ```mermaid
 flowchart TD
-    films[("films: EnrichedFilm[]")]
+    lib[("Library context<br/>library.films / watchlist / collections")]
 
-    films --> stats["viz/stats.ts<br/>byGenre, byPerson, byCollection,<br/>watchesPerYear, runtimeBuckets, ..."]
-    films --> heat["viz/heatmap.ts<br/>daily / weekly / seasonal grids"]
-    films --> net["viz/network.ts<br/>films joined by shared cast"]
-    films --> kw["viz/keywords.ts"]
-    films --> ms["viz/milestones.ts"]
-    films --> ctr["viz/contrarian.ts, ratingRadar.ts,<br/>ratingCorrelation.ts"]
-    films --> pt["viz/peopleTimeline.ts, quadrants.ts,<br/>scatter.ts, countries.ts"]
+    lib --> sections["dashboard/sections/*Section.svelte<br/>derive data, local toggles"]
+    sections --> Section["dashboard/Section.svelte<br/>heading, layout, registers"]
+    Section --> reg["dashboard/registry.svelte.ts<br/>SectionRegistry"]
+    reg --> nav[SectionNav]
 
-    stats --> RB[RankedBars / Columns / FilmList]
+    sections --> stats["film/tally.ts + viz/stats.ts<br/>byGenre, byPerson, byCollection (shared tallies),<br/>watchesPerYear, runtimeBuckets, ... (chart shaping)"]
+    sections --> heat["viz/heatmap.ts<br/>daily / weekly / seasonal grids"]
+    sections --> rs["film/ratings.ts<br/>SOURCES on one 0-100 scale,<br/>gapsTo, starGapsTo, extremes"]
+    rs --> rsUsers["ratingRadar.ts, ratingCorrelation.ts,<br/>contrarian.ts, RatingGaps,<br/>year critics + traits"]
+    sections --> other["viz/network.ts, keywords.ts, quadrants.ts,<br/>scatter.ts, peopleTimeline.ts, countries.ts"]
+
+    stats --> RB[RankedBars / Columns]
     heat --> HM[Heatmap]
-    net --> NW[Network]
-    kw --> KC[KeywordCloud]
-    ms --> MS[Milestones]
-    ctr --> RC[RatingGaps / Radar / Contrarian /<br/>MetacriticDisagreement / Correlation]
-    pt --> PV[PeopleTimeline / Quadrants / Scatter / WorldMap]
+    rsUsers --> RC[GapList / Radar / Contrarian /<br/>MetacriticDisagreement / Correlation]
+    other --> PV[Network / KeywordCloud / Quadrants /<br/>Scatter / PeopleTimeline / WorldMap]
 
-    RB & HM & NW & KC & MS & RC & PV --> page["+page.svelte sections<br/>nav via SectionNav, headline via StatTiles"]
+    subgraph shared["shared chart pieces"]
+        ramp["ramp.ts + RampLegend<br/>BIN_COUNT, binOf, binColor, legend"]
+        kit["chart/: PlotFrame, Tooltip, Axes,<br/>DataTable, FilmLink, plot.ts"]
+        sel["selection.svelte.ts<br/>selectByKey → FilmList"]
+        pick["picker.svelte.ts<br/>createPicker → PickerList"]
+        posters["$lib/posters<br/>PosterGrid, PosterPalette,<br/>ColourSortButton, colors.ts"]
+    end
+    HM & PV & RC --> ramp
+    PV --> kit
+    RB & HM & PV --> sel
+    PV & RC --> pick
+    sections --> posters
+    sections --> rec["$lib/recommend<br/>Recommendations, CountryRec,<br/>excludedIds, fetchRecommendationsSettled"]
 ```
 
-## 10. Year-in-review deck ("Wrapped")
+- **One rating model.** Every "you vs. a source" chart maps over `SOURCES`; a TMDB score of 0
+  counts as no score everywhere.
+- **One ramp.** `ramp.ts` owns how many bins there are, how a value falls into one and the legend
+  text; the colours are `--map-bin-0…9` and `--degree-bin-0…9` in `app.css`, set inline through
+  `binColor`.
+- **Selections are keys.** A chart keeps the selected label, cell key, country code or film URI and
+  looks the item up again on every read, so a feed sync never leaves a stale film list open.
+- **Recommendations wait for pending films.** `/api/recommend` marks a film `pending` when its
+  record did not load in time; `fetchRecommendationsSettled` re-requests those a few times for both
+  the recommendation rows and a country's picks.
+
+## 10. Year in review: the year core and its two views
+
+`src/lib/year/` is the stable core: data in, numbers out. It imports only shared domain code
+(`$lib/film`, `$lib/math`, `$lib/format`, `$lib/maps`, `$lib/types`), including the library tallies
+in `$lib/film/tally` that the dashboard shares; nothing in it imports `viz/`, `wrapped/`, Svelte or
+deck copy. The rule
+copy in `verdict/` is the verdict's own output and lives with the rules. `src/lib/wrapped/` holds
+both views of a year: the deck and the page recap card grid.
 
 ```mermaid
 flowchart LR
-    films[EnrichedFilm list + year] --> lib["library.ts<br/>buildLibrary() → Library<br/>(slice, dates, lazy tallies)"]
-    lib --> facts["facts/*<br/>audience, critics, dates,<br/>history, release, timing, library"]
-    lib --> verdicts["viz/verdicts<br/>traits → rules → nearest miss"]
-    facts --> wrapped["wrapped.ts<br/>buildWrapped() → Wrapped"]
-    verdicts --> wrapped
-    wrapped --> deck["deck.ts<br/>SEQUENCE of scene builders<br/>ranked, capped at 20"]
-    scenes["scenes/*<br/>core, history, timing, library,<br/>audience, release"] --> deck
+    films[EnrichedFilm list + year] --> entry["year/index.ts<br/>buildYear() → { library, personality }<br/>recapYears(), deckYear(): the December rule"]
+    entry --> lib["year/library.ts<br/>buildLibrary() → Library<br/>(slice, dates, lazy tallies, browser locale)"]
+    lib --> facts["year/facts/*<br/>totals, months, extremes, timing,<br/>history, release, audience, critics,<br/>library-facts (raw measures, no gates)"]
+    lib --> cal["year/calendar.ts<br/>inYear, dayNumber, weekdayOf, monthOf"]
+    facts --> verdict["year/verdict/*<br/>traits read facts → RULES → nearest miss"]
+    entry --> verdict
+    facts --> scenes["wrapped/scenes/*<br/>one builder per frame,<br/>frame gates (MIN_*) + English copy"]
+    scenes --> deck["wrapped/deck.ts<br/>SEQUENCE ranked, capped at 20"]
     deck --> UI["Wrapped.svelte + Frame.svelte<br/>rain.ts backdrop"]
     UI --> cards["cards.ts + canvas.ts<br/>save as share card"]
-    entry["WrappedEntry.svelte<br/>picks year (December / demo)"] --> UI
+    look["wrapped/look.ts<br/>accents, poster counts, dense bars,<br/>gate marks, tray turn"] --> UI
+    look --> cards
+    labels["wrapped/labels.ts<br/>shared headings"] --> scenes
+    labels --> recap["YearRecap.svelte<br/>page card grid"]
+    facts --> recap
+    entry --> recap
+    entry --> wentry["WrappedEntry.svelte<br/>deckYear(), auto-open once"]
+    wentry --> UI
 ```
 
+One definition per measure: `releaseYear(film)` (TMDB's year, else the export's), `votes(film)`
+(TMDB + IMDb combined, used to pick and quote the deepest cut and the biggest crowd, and by The
+Deep Diver), `languageName(code)` in `$lib/film/language` (languages are counted by display name
+everywhere), collections grouped by TMDB id, `sittingMinutes(film)` in `$lib/film/runtime` (the longest
+sitting and the mean runtime leave a series' whole-run length out), and the `OBSCURE_VOTES` / `POPULAR_VOTES` bands
+that the rules and their copy both read. The obscurity spread and the Populist/Omnivore traits
+keep TMDB's own vote count (`tmdbVotes`), the scale their thresholds were tuned on, with their own
+`TMDB_OBSCURE_VOTES` / `TMDB_POPULAR_VOTES` bands beside the combined ones in `$lib/film/votes`.
+
 ## 11. Page state machine
+
+The state lives in the `Library` session (`lib/library.svelte.ts`, `library.phase`), provided to
+the page and every section through context.
 
 ```mermaid
 stateDiagram-v2
     [*] --> idle
-    idle --> ready : snapshot found in localStorage
-    idle --> working : file dropped / username entered / demo
-    working --> working : stage films → ratings → collections
-    working --> ready : enrichment finished
+    idle --> ready : restore() finds a snapshot in localStorage
+    idle --> working : loadFile() / loadUsername() / demo
+    working --> working : progress stage films → ratings
+    working --> ready : enrichment and franchise sizes finished
     working --> idle : error (message shown)
     ready --> working : new file dropped
-    ready --> ready : syncFeed() adds new diary entries in the background
-    ready --> idle : "Upload an export" (feed-only library or feed gap)
+    ready --> ready : #syncFeed() adds new diary entries in the background
+    ready --> idle : startOver(), "Upload an export" (offersExport: feed-only library or feed gap)
     note right of ready
-        "Remember" toggle writes or clears
-        the localStorage Snapshot (key v5).
+        setRemember() writes or clears the
+        localStorage Snapshot (key carries RECORD_SCHEMA).
+        Loads and feed top-ups set the films through
+        #setFilms: franchise sizes, then save if remembered.
         A restored snapshot with a profile
-        username runs syncFeed() once.
+        username runs #syncFeed() once.
     end note
 ```
 
@@ -591,24 +748,24 @@ flowchart LR
 
 ### Use case specifications
 
-| ID | Use case | Trigger | Main flow | Alternatives and errors |
-|----|----------|---------|-----------|-------------------------|
-| UC1 | Upload export zip | Drop or pick a `.zip` in `FileDrop` | `parseExport` merges the CSVs, UC16 merges in newer feed entries, `enrichLibrary` resolves titles on `/api/enrich` and adds OMDb ratings, `collectionsFor` sizes franchises, page becomes `ready` | No `watched.csv` gives "not a Letterboxd export" and the page stays `idle`. Batches that fail or hit the budget are retried for up to 8 rounds. Watchlist, OMDb and feed failures are swallowed so the main flow still completes |
-| UC2 | Try demo library | `?demo` in dev mode | Fetches `/demo-export.zip` and runs UC1 | Dev only |
-| UC3 | Restore snapshot | Page mount | `loadSnapshot` fills `films`, `watchlist`, `collections`, `profile`, `source`, page becomes `ready`, then UC16 runs in the background | Missing, corrupt or old-generation snapshot is ignored |
-| UC4 | Remember / forget | `RememberToggle` | On: `saveSnapshot` to `localStorage`. Off: `clearSnapshot` | Quota exceeded: toggle reverts and an error says data lasts for this visit only |
-| UC5 | Browse sections | Scroll or `SectionNav` | `+page.svelte` derives each chart's data from `films` | Sections with no data (for example triangulation without OMDb) are hidden |
-| UC6 | Toggle metric / scope | Buttons in a chart | `MetricToggle`, runtime scope, season scale, keyword cloud or bars switch the derived data | none |
-| UC7 | Inspect a country, film or person | Click on map, bar or node | `selectByLabel` and chart state show a `FilmList` or detail | Click again clears the selection |
-| UC8 | Compare rating sources | OMDb key present | Radar, contrarian, Metacritic gap and correlation charts | Without `OMDB_API_KEY` the endpoint returns all-null and the charts are hidden |
-| UC9 | Get recommendations | Section renders | `pickDiverseSeeds` and `pickGenreSeeds` feed `/api/recommend`, with retries `1.5s, 3.5s, 7s` while records are `pending` | `available: false` shows the section as unavailable. Watchlist can be included or excluded |
-| UC10 | Watch year in review | December, or demo | `buildRecap` then `buildWrapped` then `buildDeck`. Frames play on a timer or by keys. Gate frame opens the extras | Years under 10 films are not eligible. The current year is held back until December |
-| UC11 | Save a share card | Share button in the deck | `storyCard` or `summaryCard` draws to canvas, `deliver` uses the Web Share API or downloads a PNG | User cancels the share sheet and nothing is saved. Canvas failure throws "picture could not be rendered" |
-| UC12 | Switch theme | `ThemeSwitch` | Choose Catppuccin flavor and accent, stored in `localStorage` | Falls back to the system theme |
-| UC13 | Deploy | Build with `DEPLOY_TARGET` | Cloudflare: Worker, assets, D1. Node: Docker with local SQLite | none |
-| UC14 | Configure | `.env` / Worker vars | `TMDB_API_KEY`, `SESSION_SECRET`, optional `TVDB_API_KEY`, `OMDB_API_KEY`, `FETCH_BUDGET`, `CACHE_DB_PATH` | Missing `SESSION_SECRET` makes API routes return 500. Missing TMDB key makes lookups fail |
-| UC15 | Load from a username | Submit `UsernameForm` | `fetchFeed` calls `/api/feed/[username]`, `mergeFeed([], feed)` builds the films, profile holds only the username, `source = 'feed'`, then the UC1 enrichment steps. The page notes that only recent entries are shown and offers "Upload an export" | Invalid name: 400. Unknown member: 404. Letterboxd unreachable or refusing: 502. A feed with no film items gives "no diary entries". No watchlist, tags or undated watches |
-| UC16 | Top up from the RSS feed | After UC1 parsing, or after UC3 | `fetchFeed(profile.username)`, then `mergeFeed` adds viewings not yet on record. On UC3, `refreshFromFeed` enriches only the films the feed introduced, `collectionsFor` sizes new franchises, and the snapshot is saved again. A status line says how many entries were added | A full feed (50 film items) that starts after the newest saved viewing sets `feedGap` and asks for a fresh export. A failed request leaves the library as it was, with a short note on UC3 |
+| ID   | Use case                          | Trigger                             | Main flow                                                                                                                                                                                                                                                                      | Alternatives and errors                                                                                                                                                                                                                                          |
+| ---- | --------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UC1  | Upload export zip                 | Drop or pick a `.zip` in `FileDrop` | `parseExport` merges the CSVs, UC16 merges in newer feed entries, `enrichLibrary` resolves titles on `/api/enrich` and adds OMDb ratings, `collectionsFor` sizes franchises, page becomes `ready`                                                                              | No `watched.csv` gives "not a Letterboxd export" and the page stays `idle`. Batches that fail or hit the budget are retried for up to 8 rounds, with a short pause before each. Watchlist, OMDb and feed failures are swallowed so the main flow still completes |
+| UC2  | Try demo library                  | `?demo` in dev mode                 | Fetches `/demo-export.zip` and runs UC1                                                                                                                                                                                                                                        | Dev only                                                                                                                                                                                                                                                         |
+| UC3  | Restore snapshot                  | Page mount                          | `loadSnapshot` fills `films`, `watchlist`, `collections`, `profile`, `source`, page becomes `ready`, then UC16 runs in the background                                                                                                                                          | Missing, corrupt or old-generation snapshot is ignored                                                                                                                                                                                                           |
+| UC4  | Remember / forget                 | `RememberToggle`                    | On: `saveSnapshot` to `localStorage`. Off: `clearSnapshot`                                                                                                                                                                                                                     | Quota exceeded: toggle reverts and an error says data lasts for this visit only                                                                                                                                                                                  |
+| UC5  | Browse sections                   | Scroll or `SectionNav`              | Each `dashboard/sections/*Section.svelte` derives its chart's data from the library                                                                                                                                                                                            | Sections with no data (for example triangulation without OMDb) are hidden                                                                                                                                                                                        |
+| UC6  | Toggle metric / scope             | Buttons in a chart                  | `MetricToggle`, runtime scope, season scale, keyword cloud or bars switch the derived data                                                                                                                                                                                     | none                                                                                                                                                                                                                                                             |
+| UC7  | Inspect a country, film or person | Click on map, bar or node           | `selectByLabel` and chart state show a `FilmList` or detail                                                                                                                                                                                                                    | Click again clears the selection                                                                                                                                                                                                                                 |
+| UC8  | Compare rating sources            | OMDb key present                    | Radar, contrarian, Metacritic gap and correlation charts                                                                                                                                                                                                                       | Without `OMDB_API_KEY` the endpoint returns all-null and the charts are hidden                                                                                                                                                                                   |
+| UC9  | Get recommendations               | Section renders                     | `pickDiverseSeeds` and `pickGenreSeeds` feed `/api/recommend`, with retries `1.5s, 3.5s, 7s` while records are `pending`                                                                                                                                                       | When no seed's list can be read the answer is empty and the section shows nothing to recommend. Watchlist can be included or excluded                                                                                                                            |
+| UC10 | Watch year in review              | December, or demo                   | `deckYear` then `buildYear` then `buildDeck`. Frames play on a timer or by keys. Gate frame opens the extras                                                                                                                                                                   | Years under 10 films are not eligible. The current year is held back until December                                                                                                                                                                              |
+| UC11 | Save a share card                 | Share button in the deck            | `storyCard` or `summaryCard` draws to canvas, `deliver` uses the Web Share API or downloads a PNG                                                                                                                                                                              | User cancels the share sheet and nothing is saved. Canvas failure throws "picture could not be rendered"                                                                                                                                                         |
+| UC12 | Switch theme                      | `ThemeSwitch`                       | Choose Catppuccin flavor and accent, stored in `localStorage`                                                                                                                                                                                                                  | Falls back to the system theme                                                                                                                                                                                                                                   |
+| UC13 | Deploy                            | Build with `DEPLOY_TARGET`          | Cloudflare: Worker, assets, D1. Node: Docker with local SQLite                                                                                                                                                                                                                 | none                                                                                                                                                                                                                                                             |
+| UC14 | Configure                         | `.env` / Worker vars                | `TMDB_API_KEY`, `SESSION_SECRET`, optional `TVDB_API_KEY`, `OMDB_API_KEY`, `FETCH_BUDGET`, `CACHE_DB_PATH`                                                                                                                                                                     | Missing `SESSION_SECRET` makes API routes return 500. Missing TMDB key makes lookups fail                                                                                                                                                                        |
+| UC15 | Load from a username              | Submit `UsernameForm`               | `fetchFeed` calls `/api/feed/[username]`, `mergeFeed([], feed)` builds the films, profile holds only the username, `source = 'feed'`, then the UC1 enrichment steps. The page notes that only recent entries are shown and offers "Upload an export"                           | Invalid name: 400. Unknown member: 404. Letterboxd unreachable or refusing: 502. A feed with no film items gives "no diary entries". No watchlist, tags or undated watches                                                                                       |
+| UC16 | Top up from the RSS feed          | After UC1 parsing, or after UC3     | `fetchFeed(profile.username)`, then `mergeFeed` adds viewings not yet on record. On UC3, `refreshFromFeed` enriches only the films the feed introduced, `collectionsFor` sizes new franchises, and the snapshot is saved again. A status line says how many entries were added | A full feed (50 film items) that starts after the newest saved viewing sets `feedGap` and asks for a fresh export. A failed request leaves the library as it was, with a short note on UC3                                                                       |
 
 ## 14. Class diagram: client ingest, state and persistence
 
@@ -617,63 +774,80 @@ classDiagram
     direction LR
 
     class PageComponent {
+        view: stats / watchlist / releases
+        onMount: demo or library.restore()
+    }
+    class Library {
         phase: idle / working / ready
-        stage: films / ratings
-        data: LetterboxdData
+        progress: Progress
+        error: string?
         films: EnrichedFilm[]
-        progress: done, total
-        watchlistIds: number[]
+        watchlist: WatchlistFilm[]
         collections: CollectionParts[]
-        remember: boolean
+        profile: Profile?
         source: export / feed
+        remember: boolean
+        saveError: string?
         feedNote: string?
         feedGap: boolean
-        +handleFile(file)
-        +handleUsername(username)
-        -analyse(load)
-        -withFeed(parsed)
-        +syncFeed()
-        +persist()
-        +toggleRemember(on)
+        includeWatchlist: boolean
+        recommendExclude (derived)
+        offersExport (derived)
+        displayName (derived)
+        +loadFile(file)
+        +loadUsername(username)
+        +restore()
+        +startOver()
+        +setRemember(on)
+        -syncFeed()
+        -analyse(source, load)
+        -setFilms(films, known)
+        -persist()
     }
     class Parse {
         +parseExport(zipBytes) LetterboxdData
     }
+    class FilmRecord {
+        +filmKey(name, year)
+        +blankFilm(uri, name, year) Film
+        +blankProfile(username) Profile
+    }
     class Rss {
         +FEED_FILM_LIMIT = 50
         +parseFeed(xml) FeedEntry[]
-        +mergeFeed(library, feed, makeFilm) FeedMerge
+        +mergeFeed(library, feed) FeedMerge
         +feedHasGap(library, feed) boolean
     }
     class FeedMerge {
-        films: F[]
-        newFilms: F[]
+        library: F[]
+        newFilms: Film[]
         addedEntries: number
     }
     class Pipeline {
-        +fetchFeed(username) FeedEntry[]
-        +enrichLibrary(films, watchlist, report) EnrichedLibrary
+        +loadExport(bytes) LetterboxdData
+        +loadFeed(username) LetterboxdData
+        +enrichLibrary(films, watchlist, report)
         +collectionsFor(films, known) CollectionParts[]
-        +refreshFromFeed(library, feed) FeedRefresh
+        +refreshFromFeed(library, feed)
     }
     class UsernameForm {
         onsubmit(username)
     }
-    class EnrichClient {
+    class ApiClient {
         +enrichFilms(items, onProgress)
-        +enrichOmdb(imdbIds, onProgress)
+        +enrichOmdb(imdbIds, onProgress) Map
         +fetchCollections(ids)
+        +providersFetcher(region) Fetcher
+        +fetchReleaseDates(ids) Map
+        +fetchRecords(ids) Map
+        +fetchUpcoming(region, kinds, people)
+        +fetchFeed(username) FeedEntry[]
+        +fetchRecommendations(seeds, exclude)
         -runRounds(options)
-        -postBatch(url, body, label)
+        -batchFetcher(endpoint) Fetcher
+        -postJson(url, body, label)
     }
-    class RoundsOptions {
-        items: T[]
-        send(batch) BatchResponse
-        keep(index, result)
-        onProgress(done, total)
-        firstRoundSize
-    }
-    class BatchResponse {
+    class BatchAnswer {
         results: R[]
         pending: number[]
     }
@@ -685,13 +859,13 @@ classDiagram
     class Snapshot {
         films
         watchlist
-        watchlistIds
+        watchlistIds? (old snapshots; ignored)
         profile
         collections
-        source?
+        source
     }
-    class Collections {
-        +getOrCreate(map, key, make)
+    class WatchRegion {
+        code (saved when set)
     }
     class FileDrop {
         onfile(file)
@@ -701,25 +875,26 @@ classDiagram
         error
         onchange(on)
     }
-    class ThemeSwitch {
-    }
 
-    FileDrop --> PageComponent : onfile
-    UsernameForm --> PageComponent : onsubmit
-    RememberToggle --> PageComponent : onchange
-    PageComponent ..> Parse
-    PageComponent ..> Rss
-    PageComponent ..> Pipeline
-    PageComponent ..> Store
-    Pipeline ..> EnrichClient
+    PageComponent *-- Library : setLibrary (context)
+    FileDrop --> Library : loadFile
+    UsernameForm --> Library : loadUsername
+    RememberToggle --> Library : setRemember
+    Library ..> Pipeline
+    Library ..> Store
+    Pipeline ..> Parse
     Pipeline ..> Rss
+    Pipeline ..> ApiClient
+    Parse ..> FilmRecord
+    Rss ..> FilmRecord
     Rss ..> FeedMerge
-    Rss ..> Collections
-    Parse ..> Collections
-    EnrichClient *-- RoundsOptions
-    EnrichClient ..> BatchResponse
+    ApiClient ..> BatchAnswer
     Store *-- Snapshot
 ```
+
+`WatchRegion` (`region/region.svelte.ts`) is the one country preference the watchlist and the
+release calendar share; `RegionSelect` sets it and it saves itself. The watchlist reloads its saved
+services whenever the region changes, from either view.
 
 ## 15. Class diagram: visualization data structures
 
@@ -728,9 +903,11 @@ classDiagram
     direction TB
 
     class BarDatum {
+        key: personKey / collection id / label
         label
         count
         avg
+        highlight?: count
         films
     }
     class HeatmapGrid {
@@ -768,11 +945,6 @@ classDiagram
         target
         shared: string[]
     }
-    class NetworkOptions {
-        castDepth
-        minShared
-        maxNodes
-    }
     class CountryStat {
         code
         name
@@ -781,14 +953,29 @@ classDiagram
         ratedCount
         avg
     }
+    class RatingSource {
+        key: yours / tmdb / imdb / rt / metacritic
+        label
+        of(film) 0-100 or null
+    }
     class RatingGap {
         film
+        yours
+        source
         gap
     }
-    class Streak {
-        days
-        start
-        end
+    class Selection {
+        selected
+        isSelected(key)
+        toggle(key)
+    }
+    class Picker {
+        search
+        rows / overflow
+        selected
+        atCap
+        toggle(key)
+        color(i)
     }
     class Seed {
         tmdbId
@@ -806,16 +993,19 @@ classDiagram
     HeatmapGrid *-- HeatCell
     NetworkGraph *-- NetworkNode
     NetworkGraph *-- NetworkEdge
-    NetworkOptions ..> NetworkGraph : buildNetwork
     EnrichedFilm <.. BarDatum : grouped from
     EnrichedFilm <.. CountryStat : aggregateCountries
     EnrichedFilm <.. HeatCell : bucketsByDay
-    EnrichedFilm <.. NetworkNode
-    EnrichedFilm <.. RatingGap : ratingGaps
+    EnrichedFilm <.. NetworkNode : buildNetwork
+    RatingSource ..> RatingGap : gapsTo (0-100), starGapsTo (stars)
+    Selection ..> BarDatum : by key
+    Selection ..> HeatCell : by key
+    Selection ..> CountryStat : by code
+    Selection ..> NetworkNode : by film uri
     Seed ..> Recommendation : /api/recommend
 ```
 
-## 16. Class diagram: Wrapped deck, verdicts and share cards
+## 16. Class diagram: year core, deck, verdicts and share cards
 
 ```mermaid
 classDiagram
@@ -842,45 +1032,24 @@ classDiagram
         +cast() BarDatum[]
         +genres() BarDatum[]
     }
-    class Recap {
-        year
-        films
-        watches
-        hours
-        avg
-        top
-        topGenre
-        topDirector
-        topActor
-        mostObscure
-        mostPopular
-        streak
-        gap
-        countries
-        languages
+    class Year {
         library: Library
         personality: Personality
-        partial
     }
-    class Wrapped {
+    class DeckInput {
         viewer
-        days
-        perMonth
-        busiestMonth
-        busiestDay
-        first
-        last
-        topGenres
-        topDirectors
-        topActors
-        topCountries
-        topLanguages
-        longest
-        oldest
-        medianYear
-        rewatches
-        over
-        under
+    }
+    class Facts {
+        +hours(library)
+        +topRated(library)
+        +countries(library)
+        +languages(library)
+        +perMonth(library)
+        +streak(library)
+        +mostObscure(library)
+        +freshness(library)
+        +languageShare(library)
+        ...
     }
     class Personality {
         title
@@ -901,9 +1070,7 @@ classDiagram
         recentYears
     }
     class Rule {
-        id
         title
-        fallback
         +when(traits) boolean
         +detail(traits) string
     }
@@ -919,7 +1086,7 @@ classDiagram
     }
     class SceneBuilder {
         rank: number
-        +build(wrapped) Scene
+        +build(input) Scene
     }
     class Scene {
         id
@@ -955,6 +1122,15 @@ classDiagram
         label
         value
     }
+    class Look {
+        ACCENTS
+        POSTER_ROW
+        CARD_POSTERS
+        DENSE_BARS
+        TRAY_TURN_MS
+        gateStyle
+        +drawGate(ctx, box)
+    }
     class Palette {
         room
         screen
@@ -970,24 +1146,28 @@ classDiagram
         +draw(y)
     }
     class Cards {
-        +storyCard(scene, data, palette)
-        +summaryCard(data, palette)
+        +storyCard(scene, input, palette)
+        +summaryCard(input, palette)
+        +statColumns(stats, measure)
     }
     class Canvas {
-        +paletteFrom(element)
-        +ensureFonts()
+        +paletteFrom(element) colours + font stacks
+        +ensureFonts(faces)
         +deliver(canvas, filename)
     }
 
     LibraryInput ..> Library : buildLibrary
-    Recap *-- Library
-    Recap *-- Personality
-    Recap <|-- Wrapped
+    Year *-- Library
+    Year *-- Personality
+    Year <|-- DeckInput
+    Facts ..> Library : read
     Library ..> Traits : buildTraits
-    Traits ..> Rule : evaluated by
+    Traits ..> Facts : read
+    Traits ..> Rule : RULES, first match wins
     Rule ..> Personality : verdictFor
-    Rule ..> NearMiss : fallback case
-    Wrapped ..> SceneBuilder
+    Traits ..> NearMiss : no rule matched
+    DeckInput ..> SceneBuilder
+    SceneBuilder ..> Facts
     SceneBuilder ..> Scene
     Deck o-- Scene
     Scene *-- SceneBody
@@ -998,61 +1178,72 @@ classDiagram
     Cards ..> Palette
     Cards *-- Block
     Cards ..> Canvas
+    Cards ..> Look
 ```
 
 ## 17. Svelte component hierarchy
 
 ```mermaid
 flowchart TD
-    layout["+layout.svelte<br/>global css, theme"] --> page["+page.svelte"]
+    layout["+layout.svelte<br/>global css, theme"] --> page["+page.svelte<br/>sets Library + SectionRegistry contexts"]
 
     page --> FileDrop
     page --> UsernameForm
     page --> RememberToggle
     page --> ThemeSwitch
     page --> SectionNav
-    page --> StatTiles
+    page --> SummaryTiles --> StatTiles
     page --> WrappedEntry
+    page --> Unmatched
 
-    subgraph sections["Sections"]
-        WorldMap
-        Columns
-        RankedBars
-        FilmList
-        Heatmap
-        MetricToggle
-        Scatter
-        Quadrants
-        KeywordCloud
-        Network
-        Mosaic
-        Milestones
-        PeopleTimeline
-        YearRecap
-        Recommendations
-        CountryRec
-        PickerList
+    subgraph sections["dashboard/sections (each renders one Section)"]
+        WorldSection --> WorldMap --> CountryRec
+        RatingsSection --> Columns & RatingGaps
+        CriticsSection --> RatingRadar & RatingContrarian & MetacriticDisagreement & RatingCorrelation
+        WhenSection --> Heatmap
+        LengthSection --> Scatter
+        QuadrantsSection --> Quadrants
+        ThemesSection --> KeywordCloud
+        PeopleTimelineSection --> PeopleTimeline
+        NetworkSection --> Network
+        MosaicSection --> Mosaic
+        MilestonesSection --> Milestones
+        RecapSection --> YearRecap
+        others["Recent, Years, Lag, Runtime, Rewatches,<br/>Genres, Franchises, Obscurity, People"] --> RankedBars
     end
-
-    subgraph triangulation["Rating triangulation (needs OMDb)"]
-        RatingGaps
-        RatingRadar
-        RatingContrarian
-        MetacriticDisagreement
-        RatingCorrelation
-    end
-
     page --> sections
-    page --> triangulation
-    Recommendations --> CountryRec
-    WorldMap --> FilmList
-    RankedBars --> FilmList
+    page --> Recommendations
+
+    subgraph kit["viz/chart + shared"]
+        PlotFrame
+        Tooltip
+        Axes
+        DataTable
+        FilmLink
+        RampLegend
+        PickerList
+        FilmList
+        GapList
+        PosterGrid
+        ColourSortButton
+    end
+    Scatter & Quadrants & PeopleTimeline --> PlotFrame
+    PlotFrame & WorldMap & Network & RatingRadar --> Tooltip
+    Heatmap & WorldMap & Network & RatingCorrelation --> RampLegend
+    RatingRadar & PeopleTimeline --> PickerList
+    Mosaic --> PosterGrid & ColourSortButton
+
+    page --> Watchlist --> PosterWall --> PosterGrid
+    page --> ReleaseCalendar --> KindPicker & CalendarMonth & RecommendControls
 
     WrappedEntry --> Wrapped["Wrapped.svelte<br/>dialog, timer, keyboard"]
     Wrapped --> Frame["Frame.svelte<br/>renders one Scene"]
     Wrapped --> rain["rain.ts backdrop"]
     Wrapped --> cards["cards.ts share card"]
 ```
+
+YearRecap renders its own `<section id="recap">`; RecapSection lists that element in the registry
+instead of wrapping it in a second section.
 
 ## 18. Activity: parsing and merging the export
 
@@ -1065,7 +1256,7 @@ flowchart TD
     D --> F
     E --> F{watched.csv present?}
     F -- no --> X([throw: not a Letterboxd export])
-    F -- yes --> G[for each watched row:<br/>get or create Film by name + year]
+    F -- yes --> G[for each watched row:<br/>get or create blankFilm by filmKey name + year]
     G --> H[ratings.csv: set film.rating]
     H --> I[likes/films.csv: liked = true]
     I --> J[diary.csv: push date + DiaryEntry,<br/>set rewatch, collect tags]
@@ -1079,14 +1270,13 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    lib[Library] --> t[buildTraits<br/>rhythm, ratings, taste, habit numbers]
-    t --> r[rulesInOrder<br/>fixed ORDER: archivist ... regular]
+    lib[Library] --> t[buildTraits<br/>reads the facts: rhythm, ratings, taste, habit]
+    t --> r[RULES<br/>one ordered list: archivist ... optimist]
     r --> m[keep rules whose when traits is true]
-    m --> w[winner = first match]
-    w --> f{winner is fallback<br/>The Regular?}
-    f -- no --> o["alsoTrue = next 2 non-fallback matches"]
+    m --> f{any match?}
+    f -- yes --> o["winner = first match<br/>alsoTrue = next 2 matches"]
     o --> p1([Personality title + detail + alsoTrue])
-    f -- yes --> n[nearestMiss:<br/>probe the rule that came closest]
+    f -- no --> n[The Regular + nearestMiss:<br/>probe the rule that came closest]
     n --> p2([Personality with<br/>widest margin vs threshold])
 ```
 
@@ -1094,9 +1284,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    w[Wrapped data] --> s[SEQUENCE of 38 scene builders<br/>in narrative order, each with a rank]
-    s --> b[run every builder]
-    b --> nn[drop builders that returned null<br/>not enough data for that fact]
+    y["deckYear(films, now)<br/>December, or ?demo in dev"] --> by["buildYear → Year<br/>null under ten films"]
+    by --> w["DeckInput = Year + viewer"]
+    w --> s[SEQUENCE of 36 scene builders<br/>in narrative order, each with a rank]
+    s --> b[run every builder: call its facts,<br/>apply its own MIN_* gate]
+    b --> nn[drop builders that returned null<br/>not enough data for that frame]
     nn --> sort[sort by rank, keep top DECK_CAP = 20 ids]
     sort --> main[main: kept scenes in narrative order]
     sort --> extras[extras: scenes the cap pushed out]
@@ -1121,14 +1313,15 @@ sequenceDiagram
     participant N as Browser share / download
 
     U->>W: click Share
-    W->>V: paletteFrom(element)
+    W->>V: paletteFrom(element): colours and --font-* stacks
     alt last frame
-        W->>K: summaryCard(data, palette)
+        W->>K: summaryCard(input, palette)
     else any other frame
-        W->>K: storyCard(scene, data, palette)
+        W->>K: storyCard(scene, input, palette)
     end
-    K->>V: ensureFonts()
-    K->>K: measure blocks, centre stack, draw on 1080x1920 canvas
+    K->>V: ensureFonts(palette.faces)
+    K->>K: measure blocks, centre stack, draw on the card canvas
+    K->>K: drawGate: the same dust, hair and lens falloff as the slide (look.ts)
     K->>V: loadImage(poster urls)
     K-->>W: HTMLCanvasElement
     W->>V: deliver(canvas, filename)
@@ -1149,23 +1342,27 @@ sequenceDiagram
     participant B as Browser
     participant H as hooks.server.ts
     participant S as session.ts
+    participant L as ratelimit.ts
     participant A as /api route
 
     B->>H: GET / (page load)
-    H->>S: verifySessionToken(secret, cookie)
-    alt missing, expired or bad signature
-        H->>S: mintSessionToken(secret)
-        S-->>H: expiry.hmacSha256
-        H-->>B: Set-Cookie lv_session httpOnly, sameSite lax, 6h
+    H->>S: issueSession(cookies)
+    alt SESSION_SECRET set and cookie missing, expired or badly signed
+        S-->>B: Set-Cookie lv_session (expiry.hmacSha256) httpOnly, sameSite lax, 6h
     end
-    B->>A: POST /api/enrich + cookie
-    A->>S: requireSession(cookies)
+    B->>H: POST /api/enrich + cookie
+    H->>S: requireSession(cookies)
     alt SESSION_SECRET not set
         S-->>B: 500
     else cookie invalid
         S-->>B: 403 reload the page
     else ok
-        A-->>B: continue to rate limit, validation, lookup
+        H->>L: checkRateLimit(event, route id)
+        alt limiter bound and over its limit
+            L-->>B: 429
+        else
+            H->>A: resolve: validation, lookup
+        end
     end
 ```
 
@@ -1178,7 +1375,7 @@ sequenceDiagram
     participant W2 as worker 2
     participant API as /api batch endpoint
 
-    Note over R: round 0 uses batches of 50 (35 for collections)
+    Note over R: round 0: 50 for enrich, 35 for one-fetch-per-item endpoints (sized from DEFAULT_FETCH_BUDGET)
     R->>W1: batch A
     R->>W2: batch B
     par
@@ -1210,35 +1407,38 @@ are skipped. It cannot be paged back.
 sequenceDiagram
     autonumber
     actor U as User
-    participant P as +page.svelte
+    participant P as library.svelte.ts
     participant PI as pipeline.ts
+    participant AP as api/endpoints.ts
     participant F as /api/feed
     participant L as letterboxd.com
     participant S as store.ts
 
     alt username entered (UC15)
-        U->>P: submit UsernameForm
-        P->>PI: fetchFeed(username)
-        PI->>F: GET + lv_session cookie
+        U->>P: loadUsername(username)
+        P->>PI: loadFeed(username)
+        PI->>AP: fetchFeed(username)
+        AP->>F: GET + lv_session cookie
         F->>L: GET /username/rss/
         L-->>F: RSS XML
         F->>F: parseFeed(xml)
-        F-->>PI: {entries: FeedEntry[]}
-        P->>P: mergeFeed([], feed), source = feed
-        P->>PI: enrichLibrary + collectionsFor (as in section 3)
+        F-->>AP: {entries: FeedEntry[]}
+        PI->>PI: mergeFeed([], feed).newFilms, blankProfile(username)
+        PI-->>P: LetterboxdData, source = feed
+        P->>PI: enrichLibrary, then #setFilms (as in section 3)
     else snapshot restored (UC3, then UC16)
-        P->>S: loadSnapshot()
+        P->>S: restore(): loadSnapshot()
         S-->>P: films, profile.username, source
         P->>P: phase = ready (charts render at once)
-        P->>PI: fetchFeed(profile.username)
-        PI->>F: GET
-        F-->>PI: FeedEntry[]
+        P->>AP: fetchFeed(profile.username)
+        AP->>F: GET
+        F-->>AP: FeedEntry[]
         P->>PI: refreshFromFeed(films, feed)
         PI->>PI: feedHasGap, mergeFeed
         PI->>PI: enrichLibrary(newFilms only)
-        PI-->>P: {films, addedEntries, gap}
+        PI-->>P: {films: library + new, addedEntries, gap}
         opt addedEntries > 0
-            P->>PI: collectionsFor(films, collections)
+            P->>P: #setFilms: collectionsFor(films, collections)
             P->>S: saveSnapshot() if remembered
         end
     end
@@ -1251,10 +1451,10 @@ flowchart TD
     A([library films, feed entries newest first]) --> G{"feed full (50 film items) and<br/>oldest feed date after<br/>newest saved viewing?"}
     G -- yes --> GAP[gap = true:<br/>ask for a fresh export]
     G -- no --> M
-    GAP --> M[copy every film,<br/>key by name + year]
+    GAP --> M[copy every film,<br/>key by filmKey name + year]
     M --> R[walk feed oldest first]
     R --> K{film with this<br/>name + year known?}
-    K -- no --> N[makeFilm: blank Film<br/>with canonical /film/slug/ uri]
+    K -- no --> N[blankFilm with canonical<br/>/film/slug/ uri, kept apart as new]
     K -- yes --> E
     N --> E[liked = true if memberLike,<br/>review text if a review item]
     E --> RT{entry date at or after<br/>film's latest viewing?}
@@ -1265,7 +1465,7 @@ flowchart TD
     D -- no --> P[push date + DiaryEntry,<br/>set rewatch, addedEntries++]
     P --> NEXT{more entries?}
     NEXT -- yes --> R
-    NEXT -- no --> OUT([FeedMerge: films, newFilms, addedEntries])
+    NEXT -- no --> OUT([FeedMerge: library, newFilms, addedEntries])
 ```
 
 The feed never removes anything. Ratings changed or entries deleted on Letterboxd after the export
@@ -1280,8 +1480,10 @@ come from an export.
    what it can from cache and fetches the rest from TMDB under a per-request `FetchBudget`
    (Workers' 50-subrequest limit). Anything cut off is returned in `pending` and the client's
    `runRounds` re-queues it, so large libraries still finish in one visit.
-3. **Cache once, share across users.** Hits live in `movies`, known misses in `misses` (30-day TTL).
-   Cache keys carry a `SCHEMA` generation; old generations are swept on first read.
+3. **Cache once, share across users.** A (name, year) match lives in `matches`, a known miss in
+   `misses` (30-day TTL), and each record once by id in `tmdb_records`. Record keys carry the
+   `RECORD_SCHEMA` generation from `types.ts`, as does the browser snapshot key; old generations
+   are swept on first read.
 4. **Add ratings and franchises.** IMDb ids from TMDB drive `/api/omdb-enrich`; collection ids drive
    `/api/collections` so "five of six" can be said.
 5. **Visualize.** `+page.svelte` derives every chart's data from `EnrichedFilm[]` with pure
@@ -1291,5 +1493,5 @@ come from an export.
    `mergeFeed` folds its 50 newest entries into the library after an upload and on each return
    visit, and a username alone is enough to build a small library. `feedHasGap` asks for a fresh
    export when the feed no longer overlaps what was saved.
-8. **Abuse guard.** `hooks.server.ts` issues an HMAC-signed session cookie on page loads; API routes
-   require it, plus an optional Cloudflare rate limiter.
+8. **Abuse guard.** `hooks.server.ts` issues an HMAC-signed session cookie on page loads and
+   requires it on every API route, plus an optional Cloudflare rate limiter per route.

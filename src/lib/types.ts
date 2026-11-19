@@ -1,6 +1,3 @@
-/** TMDB names every franchise "<name> Collection"; the suffix reads as noise in a list or a sentence. */
-export const collectionName = (raw: string): string => raw.replace(/ Collection$/, '');
-
 /** One diary row. Letterboxd records a rating per viewing, not just a current rating per film. */
 export interface DiaryEntry {
 	date: string;
@@ -67,7 +64,15 @@ export interface CollectionParts {
 	total: number;
 }
 
-/** Compact metadata record stored in the server cache and returned by /api/enrich. */
+/**
+ * Generation of the TmdbMovie shape. Bump it when the shape or meaning of a record changes: the
+ * server's record cache and the browser's saved snapshot both carry it, so neither serves records
+ * built under the old shape. A bump refetches records by id; the server's (name, year) matches
+ * are versioned on their own.
+ */
+export const RECORD_SCHEMA = 'v6';
+
+/** Compact metadata record, as /api/enrich and /api/records answer it. */
 export interface TmdbMovie {
 	/** Negative ids are TheTVDB ids (mediaType 'tv' with no TMDB match). */
 	tmdbId: number;
@@ -163,6 +168,13 @@ export const offersKey = (item: ProviderRequestItem): string => `${item.mediaTyp
 /** TMDB ids are positive; TheTVDB records are stored under negative ids, which TMDB never knows. */
 export const isTmdbId = (id: number): boolean => id > 0;
 
+/** TMDB ids of the items matched to a real TMDB record, skipping TheTVDB-only ones. */
+export function tmdbIdsOf(items: { tmdb: TmdbMovie | null }[]): number[] {
+	return items.flatMap((item) =>
+		item.tmdb && isTmdbId(item.tmdb.tmdbId) ? [item.tmdb.tmdbId] : []
+	);
+}
+
 /** An upcoming film found by TMDB discover, before its full record is fetched. */
 export interface UpcomingCandidate {
 	tmdbId: number;
@@ -174,3 +186,61 @@ export interface UpcomingCandidate {
 /** A film TMDB holds as a movie, the only kind with recommendations and release dates. */
 export const isTmdbMovie = (tmdb: TmdbMovie | null | undefined): tmdb is TmdbMovie =>
 	tmdb?.mediaType === 'movie' && isTmdbId(tmdb.tmdbId);
+
+/** The release channels the calendar can filter by, in filter order. */
+export const RELEASE_KINDS = ['theatrical', 'digital', 'physical'] as const;
+
+export type ReleaseKind = (typeof RELEASE_KINDS)[number];
+
+/** Every country's dated releases for one film: `[kind, YYYY-MM-DD]` pairs per ISO country. */
+export type FilmReleases = Record<string, [ReleaseKind, string][]>;
+
+/** A film /api/recommend suggests. */
+export interface Recommendation {
+	tmdbId: number;
+	title: string;
+	year: number | null;
+	posterPath: string | null;
+	countries: string[];
+	/** This film's record could not load yet; re-request to fill it. */
+	pending: boolean;
+}
+
+/** Most items one batch request may carry, on every batch endpoint. */
+export const MAX_BATCH = 100;
+
+/**
+ * Upstream fetches one API request may spend unless the server sets FETCH_BUDGET. The client
+ * sizes its batches against it.
+ */
+export const DEFAULT_FETCH_BUDGET = 40;
+
+/** Seeds /api/recommend reads; it ignores any past this many. */
+export const MAX_SEEDS = 25;
+
+/** What every batch endpoint answers: one result per request item, in request order. */
+export interface BatchAnswer<V> {
+	results: (V | null)[];
+	/** Indices of the request the client should send again. */
+	pending: number[];
+}
+
+/** An ISO 3166-1 alpha-2 country code, as the region endpoints take it. */
+export const REGION_PATTERN = /^[A-Z]{2}$/;
+
+/** One film item of a member's RSS feed, as /api/feed answers it: a diary entry, or a review with its viewing. */
+export interface FeedEntry {
+	/** Canonical film page, without the member or the repeat-viewing suffix. */
+	uri: string;
+	name: string;
+	year: number | null;
+	/** ISO watch date; null for a review logged without one. */
+	date: string | null;
+	rating: number | null;
+	rewatch: boolean;
+	liked: boolean;
+	review: string | null;
+}
+
+/** A Letterboxd username, as Letterboxd allows them. */
+export const USERNAME_PATTERN = /^[A-Za-z0-9_]{2,30}$/;

@@ -1,86 +1,51 @@
 import type { EnrichedFilm } from '$lib/types';
+import {
+	extremes,
+	gapsTo,
+	IMDB,
+	ROTTEN_TOMATOES,
+	type RatingGap,
+	type RatingSource
+} from '$lib/film/ratings';
 
-export interface ContrarianGap {
-	film: EnrichedFilm;
-	/** Both 0-100: your stars ×20 against the source's own scale. */
-	yours: number;
-	source: number;
-	gap: number;
-}
-
-export interface ContrarianSource {
-	key: 'rt' | 'imdb';
+interface ContrarianSource {
+	key: RatingSource['key'];
 	label: string;
 	/** Mean signed gap (yours − source) across films both rated; null with no overlap. */
 	avgGap: number | null;
 	/** Mean absolute gap across films both rated; null with no overlap. */
 	meanAbsGap: number | null;
 	count: number;
-	over: ContrarianGap[];
-	under: ContrarianGap[];
+	over: RatingGap[];
+	under: RatingGap[];
 }
 
 const TOP_N = 5;
 
-function gapsFor(
-	films: EnrichedFilm[],
-	sourceOf: (film: EnrichedFilm) => number | null
-): ContrarianGap[] {
-	const gaps: ContrarianGap[] = [];
-	for (const film of films) {
-		if (film.rating === null) continue;
-		const source = sourceOf(film);
-		if (source === null) continue;
-		const yours = film.rating * 20;
-		gaps.push({ film, yours, source, gap: yours - source });
-	}
-	return gaps;
-}
+const mean = (values: number[]): number | null =>
+	values.length === 0 ? null : values.reduce((sum, v) => sum + v, 0) / values.length;
 
-function summarize(
-	key: ContrarianSource['key'],
-	label: string,
-	gaps: ContrarianGap[]
-): ContrarianSource {
-	const sorted = [...gaps].sort((a, b) => b.gap - a.gap);
-	const avgGap = gaps.length === 0 ? null : gaps.reduce((sum, g) => sum + g.gap, 0) / gaps.length;
-	const meanAbsGap =
-		gaps.length === 0 ? null : gaps.reduce((sum, g) => sum + Math.abs(g.gap), 0) / gaps.length;
+function summarize(source: RatingSource, label: string, films: EnrichedFilm[]): ContrarianSource {
+	const gaps = gapsTo(films, source);
 	return {
-		key,
+		key: source.key,
 		label,
-		avgGap,
-		meanAbsGap,
+		avgGap: mean(gaps.map((g) => g.gap)),
+		meanAbsGap: mean(gaps.map((g) => Math.abs(g.gap))),
 		count: gaps.length,
-		over: sorted.slice(0, TOP_N).filter((g) => g.gap > 0),
-		under: sorted
-			.slice(-TOP_N)
-			.filter((g) => g.gap < 0)
-			.reverse()
+		...extremes(gaps, TOP_N)
 	};
 }
 
 /** Your signed gap against Rotten Tomatoes critics and IMDb users, kept separate. */
 export function contrarianSources(films: EnrichedFilm[]): ContrarianSource[] {
 	return [
-		summarize(
-			'rt',
-			'Rotten Tomatoes critics',
-			gapsFor(films, (f) => f.omdb?.rottenTomatoes ?? null)
-		),
-		summarize(
-			'imdb',
-			'IMDb audiences',
-			gapsFor(films, (f) => (f.omdb?.imdbRating != null ? f.omdb.imdbRating * 10 : null))
-		)
+		summarize(ROTTEN_TOMATOES, 'Rotten Tomatoes critics', films),
+		summarize(IMDB, 'IMDb audiences', films)
 	];
 }
 
 /** A single magnitude of disagreement: the mean absolute gap across every source with overlap. */
 export function contrarianScore(sources: ContrarianSource[]): number | null {
-	const known = sources.filter(
-		(s): s is ContrarianSource & { meanAbsGap: number } => s.meanAbsGap !== null
-	);
-	if (known.length === 0) return null;
-	return known.reduce((sum, s) => sum + s.meanAbsGap, 0) / known.length;
+	return mean(sources.flatMap((s) => (s.meanAbsGap === null ? [] : [s.meanAbsGap])));
 }

@@ -1,34 +1,21 @@
 <script lang="ts" generics="T extends { key: string; name: string }">
 	import type { Snippet } from 'svelte';
+	import type { Picker } from './picker.svelte';
 
 	let {
+		picker,
 		searchId,
 		searchLabel,
 		placeholder,
-		search = $bindable(),
-		chips,
-		listRows,
-		listOverflow,
-		atCap,
 		optionsAriaLabel,
-		isSelected,
-		toggle,
-		colorVar,
 		chipContent,
 		optionMeta
 	}: {
+		picker: Picker<T>;
 		searchId: string;
 		searchLabel: string;
 		placeholder: string;
-		search: string;
-		chips: T[];
-		listRows: T[];
-		listOverflow: number;
-		atCap: boolean;
 		optionsAriaLabel: string;
-		isSelected: (key: string) => boolean;
-		toggle: (key: string) => void;
-		colorVar: (index: number) => string;
 		chipContent?: Snippet<[T]>;
 		optionMeta?: Snippet<[T]>;
 	} = $props();
@@ -36,19 +23,23 @@
 
 <div class="picker">
 	<label class="search-label" for={searchId}>{searchLabel}</label>
-	<input id={searchId} type="text" {placeholder} bind:value={search} />
+	<input id={searchId} type="text" {placeholder} bind:value={picker.search} />
 
-	{#if chips.length > 0}
+	{#if picker.selected.length > 0}
 		<ul class="chips">
-			{#each chips as chip, i (chip.key)}
+			{#each picker.selected as chip, i (chip.key)}
 				<li class="chip">
-					<span class="dot" style="background: {colorVar(i)}" aria-hidden="true"></span>
+					<span class="dot" style="background: {picker.color(i)}" aria-hidden="true"></span>
 					{#if chipContent}
 						{@render chipContent(chip)}
 					{:else}
 						<span>{chip.name}</span>
 					{/if}
-					<button type="button" aria-label="Remove {chip.name}" onclick={() => toggle(chip.key)}>
+					<button
+						type="button"
+						aria-label="Remove {chip.name}"
+						onclick={() => picker.toggle(chip.key)}
+					>
 						×
 					</button>
 				</li>
@@ -57,14 +48,15 @@
 	{/if}
 
 	<ul class="options" role="group" aria-label={optionsAriaLabel}>
-		{#each listRows as option (option.key)}
+		{#each picker.rows as option (option.key)}
+			{@const blocked = !picker.isSelected(option.key) && picker.atCap}
 			<li>
-				<label class:disabled={!isSelected(option.key) && atCap}>
+				<label class:disabled={blocked}>
 					<input
 						type="checkbox"
-						checked={isSelected(option.key)}
-						disabled={!isSelected(option.key) && atCap}
-						onchange={() => toggle(option.key)}
+						checked={picker.isSelected(option.key)}
+						disabled={blocked}
+						onchange={() => picker.toggle(option.key)}
 					/>
 					<span class="name">{option.name}</span>
 					{#if optionMeta}{@render optionMeta(option)}{/if}
@@ -74,8 +66,8 @@
 			<li class="empty">No match.</li>
 		{/each}
 	</ul>
-	{#if listOverflow > 0}
-		<p class="note">+{listOverflow} more</p>
+	{#if picker.overflow > 0}
+		<p class="note">+{picker.overflow} more</p>
 	{/if}
 </div>
 

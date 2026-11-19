@@ -1,71 +1,38 @@
 <script lang="ts">
-	import { webHref } from './href';
-	import { colorVar as paletteColorVar, filterOptions, toggleSelection } from './picker';
+	import { fixed } from '$lib/format';
+	import DataTable from './chart/DataTable.svelte';
+	import Tooltip from './chart/Tooltip.svelte';
+	import { createPicker } from './picker.svelte';
 	import PickerList from './PickerList.svelte';
-	import { RADAR_AXES, radarRows, type RadarRow } from './ratingRadar';
+	import { radarRows, type RadarRow } from './ratingRadar';
+	import { SOURCES } from '$lib/film/ratings';
 	import type { EnrichedFilm } from '$lib/types';
 
 	let { films }: { films: EnrichedFilm[] } = $props();
 
 	const MARGIN = { top: 24, right: 16, bottom: 16, left: 16 };
 	const TICKS = [0, 25, 50, 75, 100];
-	const SEARCH_LIMIT = 40;
-	const MAX_SELECTED = 8;
-	/** Contrast-sorted, same idea as PeopleTimeline's palette: distinct at a glance against Latte and Mocha alike. */
-	const PALETTE = [
-		'--ctp-mauve',
-		'--ctp-teal',
-		'--ctp-sapphire',
-		'--ctp-maroon',
-		'--ctp-peach',
-		'--ctp-flamingo',
-		'--ctp-sky',
-		'--ctp-lavender'
-	];
 
 	let width = $state(0);
 	let hovered: RadarRow | null = $state(null);
 	let hoverPos = $state({ x: 0, y: 0 });
-	let search = $state('');
-	let selectedKeys: string[] = $state([]);
 
 	const height = 340;
 	const rows = $derived(radarRows(films));
-	const selectedSet = $derived(new Set(selectedKeys));
-	const atCap = $derived(selectedKeys.length >= MAX_SELECTED);
-
 	const options = $derived(
 		[...rows]
 			.map((r) => ({ key: r.film.uri, name: r.film.name }))
 			.sort((a, b) => a.name.localeCompare(b.name))
 	);
-	const filtered = $derived(filterOptions(options, search, SEARCH_LIMIT));
-	const listRows = $derived(filtered.rows);
-	const listOverflow = $derived(filtered.overflow);
-	const chips = $derived(
-		selectedKeys
-			.map((key) => options.find((o) => o.key === key))
-			.filter((o): o is { key: string; name: string } => o !== undefined)
-	);
-
-	function toggle(key: string) {
-		selectedKeys = toggleSelection(selectedKeys, key, atCap);
-	}
-
-	function colorVar(index: number): string {
-		return paletteColorVar(PALETTE, index);
-	}
+	const picker = createPicker(() => options);
 
 	/** Selected films get a stable color by selection order; everyone else uses the plain accent. */
-	function selectionColor(row: RadarRow): string | null {
-		const index = selectedKeys.indexOf(row.film.uri);
-		return index === -1 ? null : colorVar(index);
-	}
+	const selectionColor = (row: RadarRow): string | null => picker.colorOf(row.film.uri);
 
 	function isDimmed(row: RadarRow): boolean {
 		if (hovered === row) return false;
 		if (hovered !== null) return true;
-		return selectedSet.size > 0 && !selectedSet.has(row.film.uri);
+		return picker.selected.length > 0 && !picker.isSelected(row.film.uri);
 	}
 
 	const plot = $derived({
@@ -74,7 +41,7 @@
 	});
 
 	function axisX(index: number): number {
-		const span = RADAR_AXES.length - 1;
+		const span = SOURCES.length - 1;
 		return MARGIN.left + (span === 0 ? 0 : (index / span) * plot.w);
 	}
 
@@ -89,12 +56,10 @@
 			.join(' ');
 	}
 
-	function formatValue(v: number | null): string {
-		return v === null ? '—' : v.toFixed(0);
-	}
+	const formatValue = (v: number | null): string => fixed(v, 0);
 
 	function describeRow(row: RadarRow): string {
-		return RADAR_AXES.map((axis, i) => `${axis.label} ${formatValue(row.values[i])}`).join(', ');
+		return SOURCES.map((axis, i) => `${axis.label} ${formatValue(row.values[i])}`).join(', ');
 	}
 
 	function onEnter(row: RadarRow, event: PointerEvent | FocusEvent) {
@@ -107,18 +72,11 @@
 </script>
 
 <PickerList
+	{picker}
 	searchId="radar-search"
 	searchLabel="Highlight specific films"
 	placeholder="Type a title…"
-	bind:search
-	{chips}
-	{listRows}
-	{listOverflow}
-	{atCap}
 	optionsAriaLabel="Films"
-	isSelected={(key) => selectedSet.has(key)}
-	{toggle}
-	{colorVar}
 />
 
 <div class="wrap" bind:clientWidth={width}>
@@ -130,7 +88,7 @@
 			role="img"
 			aria-label="Parallel coordinates comparing your rating against TMDB, IMDb, Rotten Tomatoes and Metacritic, all normalized to 0-100, for {rows.length} films"
 		>
-			{#each RADAR_AXES as axis, i (axis.key)}
+			{#each SOURCES as axis, i (axis.key)}
 				<line
 					class="axis"
 					x1={axisX(i)}
@@ -147,7 +105,7 @@
 					class="axis-label"
 					x={axisX(i)}
 					y={MARGIN.top - 8}
-					text-anchor={i === 0 ? 'start' : i === RADAR_AXES.length - 1 ? 'end' : 'middle'}
+					text-anchor={i === 0 ? 'start' : i === SOURCES.length - 1 ? 'end' : 'middle'}
 				>
 					{axis.label}
 				</text>
@@ -158,7 +116,7 @@
 					class="line"
 					class:dim={isDimmed(row)}
 					class:active={hovered === row}
-					class:selected={selectedSet.has(row.film.uri)}
+					class:selected={picker.isSelected(row.film.uri)}
 					style={selectionColor(row) ? `stroke: ${selectionColor(row)};` : ''}
 					points={pointsOf(row)}
 					role="button"
@@ -173,52 +131,30 @@
 		</svg>
 
 		{#if hovered}
-			<div class="tooltip" style="left: {hoverPos.x}px; top: {hoverPos.y}px">
+			<Tooltip x={hoverPos.x} y={hoverPos.y} frameWidth={width}>
 				<strong>{hovered.film.name}</strong>
 				<div class="rows">
-					{#each RADAR_AXES as axis, i (axis.key)}
+					{#each SOURCES as axis, i (axis.key)}
 						<span>{axis.label}</span>
 						<span data-numeric>{formatValue(hovered.values[i])}</span>
 					{/each}
 				</div>
-			</div>
+			</Tooltip>
 		{/if}
 	{:else}
 		<p class="empty">Not enough rated films with an external rating to plot.</p>
 	{/if}
 </div>
 
-<details>
-	<summary>View as table</summary>
-	<div class="scroll">
-		<table>
-			<thead>
-				<tr>
-					<th>Film</th>
-					{#each RADAR_AXES as axis (axis.key)}
-						<th class="num">{axis.label}</th>
-					{/each}
-				</tr>
-			</thead>
-			<tbody>
-				{#each [...rows].sort( (a, b) => a.film.name.localeCompare(b.film.name) ) as row (row.film.uri)}
-					<tr>
-						<td>
-							{#if webHref(row.film.uri)}
-								<a href={webHref(row.film.uri)} target="_blank" rel="noopener">{row.film.name}</a>
-							{:else}
-								{row.film.name}
-							{/if}
-						</td>
-						{#each row.values as v, i (RADAR_AXES[i].key)}
-							<td class="num" data-numeric>{formatValue(v)}</td>
-						{/each}
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-</details>
+<DataTable
+	columns={[
+		{ label: 'Film' },
+		...SOURCES.map((source) => ({ label: source.label, numeric: true }))
+	]}
+	rows={[...rows].sort((a, b) => a.film.name.localeCompare(b.film.name))}
+	key={(row) => row.film.uri}
+	cells={(row) => [{ film: row.film }, ...row.values.map(formatValue)]}
+/>
 
 <style>
 	.wrap {
@@ -263,16 +199,7 @@
 		outline: 2px solid var(--focus);
 		outline-offset: 2px;
 	}
-	.tooltip {
-		position: absolute;
-		padding: 8px;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border);
-		font-size: var(--text-sm);
-		pointer-events: none;
-		z-index: 1;
-	}
-	.tooltip .rows {
+	.rows {
 		display: grid;
 		grid-template-columns: auto auto;
 		gap: 0 12px;
@@ -281,35 +208,5 @@
 	}
 	.empty {
 		color: var(--fg-muted);
-	}
-	details {
-		margin-top: 12px;
-	}
-	summary {
-		cursor: pointer;
-		color: var(--fg-secondary);
-		font-size: var(--text-sm);
-	}
-	.scroll {
-		overflow-x: auto;
-	}
-	table {
-		border-collapse: collapse;
-		margin-top: 8px;
-		font-size: var(--text-sm);
-		width: 100%;
-	}
-	th,
-	td {
-		padding: 4px 12px;
-		border-bottom: 1px solid var(--border);
-		text-align: left;
-		white-space: nowrap;
-	}
-	thead tr {
-		background: var(--bg-secondary);
-	}
-	.num {
-		text-align: right;
 	}
 </style>

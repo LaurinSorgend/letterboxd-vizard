@@ -1,153 +1,184 @@
-import { combinedVoteCount, type BarDatum } from '$lib/viz/stats';
-import { alsoTrueLine } from '$lib/viz/verdicts';
-import type { Wrapped } from '../wrapped';
-import { datePair, longDate } from '../facts/dates';
-import { barsFrom, count, plural, posterOf, runtimeLabel, stars } from './shared';
-import type { Accent, Scene } from './shared';
+import { alsoTrueLine } from '$lib/year/verdict';
+import { isRunning } from '$lib/year/library';
+import { releaseYear } from '$lib/film/release';
+import { busiestMonth, perMonth } from '$lib/year/facts/months';
+import { busiestDay, streak } from '$lib/year/facts/timing';
+import {
+	averageRating,
+	countries,
+	hours,
+	languages,
+	rewatches,
+	topRated
+} from '$lib/year/facts/totals';
+import {
+	longest,
+	medianReleaseYear,
+	mostObscure,
+	mostPopular,
+	oldest
+} from '$lib/year/facts/extremes';
+import { votes } from '$lib/film/votes';
+import { crowdGap } from '$lib/year/facts/critics';
+import type { BarDatum } from '$lib/film/tally';
+import { billedIn, LABELS, ratingsAcross, TOP_FILMS } from '../labels';
+import { datePair, longDate, monthInitial, monthName } from './prose';
+import { count, plural, runtimeLabel, starCaption, stars } from '$lib/format';
+import { barsFrom, posterOf, posterRow } from './shared';
+import type { Accent } from '../look';
+import type { DeckInput, Scene } from './shared';
 
-export function titleScene(data: Wrapped): Scene {
-	const who = data.viewer ? `${data.viewer}, ` : '';
+export function titleScene({ library, viewer }: DeckInput): Scene {
+	const who = viewer ? `${viewer}, ` : '';
+	const { year } = library;
 	return {
 		id: 'title',
 		accent: 'neutral',
-		label: 'Your year in cinema',
-		value: String(data.year),
+		label: LABELS.title,
+		value: String(year),
 		valueKind: 'number',
-		note: data.partial
-			? `${who}${data.year} is still running. Here is the year so far, one frame at a time.`
-			: `${who}here is ${data.year}, one frame at a time.`,
+		note: isRunning(library)
+			? `${who}${year} is still running. Here is the year so far, one frame at a time.`
+			: `${who}here is ${year}, one frame at a time.`,
 		stats: [
-			{ label: 'Films', value: String(data.films.length) },
-			{ label: 'Hours', value: count(data.hours) },
-			{ label: 'Average', value: stars(data.avg) }
+			{ label: 'Films', value: String(library.slice.length) },
+			{ label: 'Hours', value: count(hours(library)) },
+			{ label: 'Average', value: stars(averageRating(library)) }
 		],
 		backdrop: 'rain',
 		body: { kind: 'none' }
 	};
 }
 
-export function countScene(data: Wrapped): Scene {
+export function countScene({ library }: DeckInput): Scene {
+	const entries = library.dates.length;
+	const returns = rewatches(library);
 	return {
 		id: 'count',
 		accent: 'amber',
-		label: 'Films watched',
-		value: count(data.films.length),
+		label: LABELS.films,
+		value: count(library.slice.length),
 		valueKind: 'number',
 		note:
-			data.rewatches > 0
-				? `${plural(data.watches, 'diary entry', 'diary entries')}, of which ${plural(data.rewatches, 'was', 'were')} a return visit.`
-				: `${plural(data.watches, 'diary entry', 'diary entries')}, every one of them a first watch.`,
+			returns > 0
+				? `${plural(entries, 'diary entry', 'diary entries')}, of which ${plural(returns, 'was', 'were')} a return visit.`
+				: `${plural(entries, 'diary entry', 'diary entries')}, every one of them a first watch.`,
 		stats: [
-			{ label: 'Entries', value: count(data.watches) },
-			{ label: 'Rewatches', value: count(data.rewatches) },
-			{ label: 'Rated', value: count(data.films.filter((film) => film.rating !== null).length) }
+			{ label: 'Entries', value: count(entries) },
+			{ label: 'Rewatches', value: count(returns) },
+			{
+				label: 'Rated',
+				value: count(library.slice.filter((film) => film.rating !== null).length)
+			}
 		],
 		body: { kind: 'none' }
 	};
 }
 
-export function hoursScene(data: Wrapped): Scene | null {
+export function hoursScene({ library }: DeckInput): Scene | null {
+	const total = hours(library);
 	// Runtimes come from TMDB, so a library that never matched has nothing to total and the
 	// frame disappears rather than headlining a zero.
-	if (data.hours === 0) return null;
-	const weeks = data.partial ? Math.max(1, data.library.now.getMonth() + 1) * 4.35 : 52;
+	if (total === 0) return null;
+	const days = Math.round(total / 24);
+	const weeks = isRunning(library) ? (library.now.getMonth() + 1) * 4.35 : 52;
 	return {
 		id: 'hours',
 		accent: 'gold',
 		label: 'Hours in the dark',
-		value: count(data.hours),
+		value: count(total),
 		valueKind: 'number',
-		note: `${data.days > 0 ? plural(data.days, 'day') : plural(data.hours, 'hour')} end to end, if you never stopped to sleep.`,
+		note: `${days > 0 ? plural(days, 'day') : plural(total, 'hour')} end to end, if you never stopped to sleep.`,
 		stats: [
-			{ label: 'Per week', value: (data.hours / weeks).toFixed(1) },
-			{ label: 'Days', value: String(data.days) }
+			{ label: 'Per week', value: (total / weeks).toFixed(1) },
+			{ label: 'Days', value: String(days) }
 		],
 		body: { kind: 'none' }
 	};
 }
 
-export function monthScene(data: Wrapped): Scene | null {
-	if (!data.busiestMonth) return null;
-	const active = data.perMonth.filter((count) => count > 0);
-	const quietest = Math.min(...active);
+export function monthScene({ library }: DeckInput): Scene | null {
+	const peak = busiestMonth(library);
+	if (!peak) return null;
+	const months = perMonth(library);
+	const active = months.filter((count) => count > 0);
+	const name = monthName(peak.month);
 	return {
 		id: 'months',
 		accent: 'cyan',
 		label: 'Your busiest month',
-		value: data.busiestMonth.name,
+		value: name,
 		valueKind: 'name',
-		note: `${plural(data.busiestMonth.count, 'entry', 'entries')} in ${data.busiestMonth.name}. Your quietest active month managed ${quietest}.`,
+		note: `${plural(peak.count, 'entry', 'entries')} in ${name}. Your quietest active month managed ${Math.min(...active)}.`,
 		stats: [{ label: 'Months active', value: String(active.length) }],
 		body: {
 			kind: 'bars',
-			bars: data.perMonth.map((count, month) => ({
-				label: new Date(Date.UTC(2000, month, 1)).toLocaleDateString('en', {
-					month: 'narrow',
-					timeZone: 'UTC'
-				}),
+			bars: months.map((count, month) => ({
+				label: monthInitial(month),
 				value: String(count),
-				share: count / data.busiestMonth!.count
+				share: count / peak.count
 			}))
 		}
 	};
 }
 
-export function streakScene(data: Wrapped): Scene | null {
-	if (!data.streak) return null;
-	const day = data.busiestDay;
-	const [from, to] = datePair(data.streak.start, data.streak.end, data.year);
+export function streakScene({ library }: DeckInput): Scene | null {
+	const run = streak(library);
+	if (!run) return null;
+	const day = busiestDay(library);
+	const [from, to] = datePair(run.start, run.end, library.year);
 	return {
 		id: 'streak',
 		accent: 'cyan',
-		label: 'Longest streak',
-		value: String(data.streak.days),
+		label: LABELS.streak,
+		value: String(run.days),
 		valueKind: 'number',
 		note: `Consecutive days with something logged, from ${from} to ${to}.`,
 		stats: day
 			? [
 					{ label: 'Heaviest day', value: String(day.count) },
-					{ label: 'On', value: longDate(day.date, data.year) }
+					{ label: 'On', value: longDate(day.date, library.year) }
 				]
 			: [],
-		body: day
-			? { kind: 'posters', posters: day.films.slice(0, 6).map((film) => posterOf(film, '')) }
-			: { kind: 'none' }
+		body: day ? { kind: 'posters', posters: posterRow(day.films, () => '') } : { kind: 'none' }
 	};
 }
 
-export function topFilmsScene(data: Wrapped): Scene | null {
-	if (data.top.length === 0) return null;
+export function topFilmsScene({ library }: DeckInput): Scene | null {
+	const top = topRated(library).slice(0, TOP_FILMS);
+	if (top.length === 0) return null;
 	return {
 		id: 'top',
 		accent: 'oxblood',
-		label: 'Your five best',
-		value: data.top[0].name,
+		label: LABELS.top,
+		value: top[0].name,
 		valueKind: 'name',
 		note: '',
-		stats: [{ label: 'Your average', value: stars(data.avg) }],
+		stats: [{ label: 'Your average', value: stars(averageRating(library)) }],
 		body: {
 			kind: 'posters',
-			posters: data.top.map((film) => posterOf(film, film.rating ? `★ ${film.rating}` : ''))
+			posters: posterRow(top, (film) => starCaption(film.rating))
 		}
 	};
 }
 
-export function genreScene(data: Wrapped): Scene | null {
-	const top = data.topGenres[0];
+export function genreScene({ library }: DeckInput): Scene | null {
+	const genres = library.genres().slice(0, 5);
+	const top = genres[0];
 	if (!top) return null;
 	return {
 		id: 'genre',
 		accent: 'forest',
-		label: 'Genre of the year',
+		label: LABELS.genre,
 		value: top.label,
 		valueKind: 'name',
 		note: `${plural(top.count, 'film')}${top.avg !== null ? `, averaging ${stars(top.avg)}` : ''}.`,
 		stats: [],
-		body: { kind: 'bars', bars: barsFrom(data.topGenres) }
+		body: { kind: 'bars', bars: barsFrom(genres) }
 	};
 }
 
-export function personScene(
+function personScene(
 	id: string,
 	accent: Accent,
 	label: string,
@@ -166,149 +197,155 @@ export function personScene(
 		stats: people.slice(1).map((person) => ({ label: person.label, value: String(person.count) })),
 		body: {
 			kind: 'posters',
-			posters: top.films
-				.slice(0, 6)
-				.map((film) => posterOf(film, film.rating ? `★ ${film.rating}` : ''))
+			posters: posterRow(top.films, (film) => starCaption(film.rating))
 		}
 	};
 }
 
-export function directorScene(data: Wrapped): Scene | null {
+export function directorScene({ library }: DeckInput): Scene | null {
 	return personScene(
 		'director',
 		'indigo',
-		'Director of the year',
+		LABELS.director,
 		(person) =>
 			`${count(person.count)} of their films this year${person.avg !== null ? `, averaging ${stars(person.avg)}` : ''}.`,
-		data.topDirectors
+		library.directors().slice(0, 3)
 	);
 }
 
-export function actorScene(data: Wrapped): Scene | null {
+export function actorScene({ library }: DeckInput): Scene | null {
 	return personScene(
 		'actor',
 		'indigo',
-		'On screen most',
-		(person) => `Billed in ${count(person.count)} of your films.`,
-		data.topActors
+		LABELS.actor,
+		(person) => billedIn(person.count),
+		library.cast().slice(0, 3)
 	);
 }
 
-export function reachScene(data: Wrapped): Scene | null {
-	if (data.countries === 0) return null;
+export function reachScene({ library }: DeckInput): Scene | null {
+	const places = countries(library);
+	if (places.length === 0) return null;
+	const spoken = languages(library);
+	const top = places.slice(0, 3);
 	return {
 		id: 'reach',
 		accent: 'cyan',
 		label: 'How far you travelled',
-		value: String(data.countries),
+		value: String(places.length),
 		valueKind: 'number',
-		note: `Countries of production, across ${plural(data.languages, 'original language')}.`,
-		stats: data.topLanguages.map((language) => ({
+		note: `Countries of production, across ${plural(spoken.length, 'original language')}.`,
+		stats: spoken.slice(0, 3).map((language) => ({
 			label: language.label,
 			value: String(language.count)
 		})),
 		body: {
 			kind: 'bars',
-			bars: data.topCountries.map((country) => ({
+			bars: top.map((country) => ({
 				label: country.name,
 				value: String(country.count),
-				share: country.count / (data.topCountries[0]?.count || 1)
+				share: country.count / top[0].count
 			}))
 		}
 	};
 }
 
-export function eraScene(data: Wrapped): Scene | null {
-	if (data.medianYear === null || !data.oldest) return null;
-	const oldestYear = data.oldest.tmdb?.year ?? data.oldest.year;
+export function eraScene({ library }: DeckInput): Scene | null {
+	const median = medianReleaseYear(library);
+	const first = oldest(library);
+	if (median === null || !first) return null;
+	const oldestYear = releaseYear(first);
 	return {
 		id: 'era',
 		accent: 'gold',
 		label: 'Your median release year',
-		value: String(data.medianYear),
+		value: String(median),
 		valueKind: 'number',
-		note: `Half of what you watched came out before ${data.medianYear}. The oldest was ${data.oldest.name}, from ${oldestYear}.`,
-		stats: [{ label: 'Years back', value: String(data.year - data.medianYear) }],
-		body: { kind: 'posters', posters: [posterOf(data.oldest, String(oldestYear ?? ''))] }
+		note: `Half of what you watched came out before ${median}. The oldest was ${first.name}, from ${oldestYear}.`,
+		stats: [{ label: 'Years back', value: String(library.year - median) }],
+		body: { kind: 'posters', posters: [posterOf(first, String(oldestYear ?? ''))] }
 	};
 }
 
-export function longestScene(data: Wrapped): Scene | null {
-	const runtime = data.longest?.tmdb?.runtime;
-	if (!data.longest || !runtime) return null;
+export function longestScene({ library }: DeckInput): Scene | null {
+	const film = longest(library);
+	const runtime = film?.tmdb?.runtime;
+	if (!film || !runtime) return null;
+	const year = releaseYear(film);
 	return {
 		id: 'longest',
 		accent: 'amber',
 		label: 'The longest sitting',
 		value: runtimeLabel(runtime),
 		valueKind: 'number',
-		note: `${data.longest.name}${data.longest.tmdb?.year ? ` (${data.longest.tmdb.year})` : ''} ran ${plural(runtime, 'minute')}.`,
+		note: `${film.name}${year ? ` (${year})` : ''} ran ${plural(runtime, 'minute')}.`,
 		stats: [{ label: 'Minutes', value: String(runtime) }],
-		body: { kind: 'posters', posters: [posterOf(data.longest, runtimeLabel(runtime))] }
+		body: { kind: 'posters', posters: [posterOf(film, runtimeLabel(runtime))] }
 	};
 }
 
-export function gapScene(data: Wrapped): Scene | null {
-	if (!data.over) return null;
-	const { film, yours, tmdb, gap } = data.over;
+export function gapScene({ library }: DeckInput): Scene | null {
+	const { over, under } = crowdGap(library);
+	if (!over) return null;
+	const { film, yours, source: tmdb, gap } = over;
 	return {
 		id: 'gap',
 		accent: 'magenta',
-		label: 'You against the crowd',
+		label: LABELS.crowd,
 		value: `+${gap.toFixed(1)}`,
 		valueKind: 'number',
-		note: `You gave ${film.name} ★ ${yours} where the crowd settled on ★ ${tmdb.toFixed(1)}. Nobody else has to agree.`,
-		stats: data.under
+		note: `You gave ${film.name} ${starCaption(yours)} where the crowd settled on ${stars(tmdb)}. Nobody else has to agree.`,
+		stats: under
 			? [
-					{ label: 'Crowd favourite', value: data.under.film.name },
-					{ label: 'You gave it', value: `★ ${data.under.yours}` }
+					{ label: 'Crowd favourite', value: under.film.name },
+					{ label: 'You gave it', value: starCaption(under.yours) }
 				]
 			: [],
-		body: { kind: 'posters', posters: [posterOf(film, `★ ${yours}`)] }
+		body: { kind: 'posters', posters: [posterOf(film, starCaption(yours))] }
 	};
 }
 
-export function deepCutScene(data: Wrapped): Scene | null {
-	if (!data.mostObscure) return null;
-	const votes = combinedVoteCount(data.mostObscure);
-	if (votes === 0) return null;
+export function deepCutScene({ library }: DeckInput): Scene | null {
+	const deepest = mostObscure(library);
+	if (!deepest) return null;
+	const popular = mostPopular(library);
 	return {
 		id: 'deep-cut',
 		accent: 'magenta',
-		label: 'Deepest cut',
-		value: data.mostObscure.name,
+		label: LABELS.deepCut,
+		value: deepest.name,
 		valueKind: 'name',
-		note: `${plural(votes, 'rating', 'ratings')} across TMDB and IMDb. You were one of them.`,
-		stats: data.mostPopular
+		note: `${ratingsAcross(votes(deepest))}. You were one of them.`,
+		stats: popular
 			? [
-					{ label: 'Biggest crowd', value: data.mostPopular.name },
-					{ label: 'Ratings', value: count(combinedVoteCount(data.mostPopular)) }
+					{ label: LABELS.biggestCrowd, value: popular.name },
+					{ label: 'Ratings', value: count(votes(popular)) }
 				]
 			: [],
-		body: { kind: 'posters', posters: [posterOf(data.mostObscure, count(votes))] }
+		body: { kind: 'posters', posters: [posterOf(deepest, count(votes(deepest)))] }
 	};
 }
 
-export function verdictScene(data: Wrapped): Scene {
+export function verdictScene({ personality }: DeckInput): Scene {
 	return {
 		id: 'verdict',
 		accent: 'oxblood',
-		label: `Your ${data.year}, in one word`,
-		value: data.personality.title,
+		label: LABELS.verdict,
+		value: personality.title,
 		valueKind: 'name',
-		note: data.personality.detail,
+		note: personality.detail,
 		stats: [],
-		footnote: alsoTrueLine(data.personality) ?? undefined,
+		footnote: alsoTrueLine(personality) ?? undefined,
 		body: { kind: 'none' }
 	};
 }
 
-export function summaryScene(data: Wrapped): Scene {
+export function summaryScene({ library }: DeckInput): Scene {
 	return {
 		id: 'summary',
 		accent: 'neutral',
 		label: 'Take it with you',
-		value: String(data.year),
+		value: String(library.year),
 		valueKind: 'number',
 		note: 'One picture with the whole year on it. Save it, or send it straight on.',
 		stats: [],

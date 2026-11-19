@@ -1,17 +1,14 @@
-import type { ReleaseKind } from '$lib/releases/dates';
-import type { UpcomingCandidate } from '$lib/types';
+import { RELEASE_LOOKBACK_DAYS, shiftDays } from '$lib/dates';
+import type { ReleaseKind, UpcomingCandidate } from '$lib/types';
+import { DAY_MS } from '$lib/math';
 import type { FetchBudget } from './budget';
+import { jsonCache } from './cache';
+import { yearOf } from '$lib/dates';
+import { releaseTypesOf } from './releases';
 import { tmdbGet } from './tmdb';
 
 const HORIZON_DAYS = 90;
-const PRIMARY_LOOKBACK_DAYS = 730;
 const MIN_POPULARITY = 1.5;
-
-const RELEASE_TYPES: Record<ReleaseKind, string> = {
-	theatrical: '2|3',
-	digital: '4',
-	physical: '5'
-};
 
 interface DiscoverResult {
 	id: number;
@@ -19,12 +16,6 @@ interface DiscoverResult {
 	release_date?: string;
 	poster_path?: string | null;
 	popularity?: number;
-}
-
-function shiftDays(day: string, days: number): string {
-	const date = new Date(`${day}T00:00:00Z`);
-	date.setUTCDate(date.getUTCDate() + days);
-	return date.toISOString().slice(0, 10);
 }
 
 /** TMDB discover query for one release kind in one region, `today` being YYYY-MM-DD in UTC. */
@@ -37,10 +28,10 @@ export function discoverParams(
 ): Record<string, string> {
 	const params: Record<string, string> = {
 		region,
-		with_release_type: RELEASE_TYPES[kind],
+		with_release_type: releaseTypesOf(kind),
 		'release_date.gte': today,
 		'release_date.lte': shiftDays(today, HORIZON_DAYS),
-		'primary_release_date.gte': shiftDays(today, -PRIMARY_LOOKBACK_DAYS),
+		'primary_release_date.gte': shiftDays(today, -RELEASE_LOOKBACK_DAYS),
 		sort_by: 'popularity.desc',
 		include_adult: 'false',
 		include_video: 'false',
@@ -52,16 +43,15 @@ export function discoverParams(
 }
 
 function toCandidate(result: DiscoverResult): UpcomingCandidate {
-	const year = Number.parseInt(result.release_date?.slice(0, 4) ?? '', 10);
 	return {
 		tmdbId: result.id,
 		title: result.title ?? '',
-		year: Number.isFinite(year) ? year : null,
+		year: yearOf(result.release_date),
 		posterPath: result.poster_path ?? null
 	};
 }
 
-/** One page of films with a release of `kind` in `region` within the next 90 days. */
+/** One page of films with a release of `kind` in `region` before the horizon. */
 export async function discoverUpcoming(
 	budget: FetchBudget,
 	region: string,
@@ -79,3 +69,10 @@ export async function discoverUpcoming(
 		.filter((r) => r.poster_path && (r.popularity ?? 0) >= MIN_POPULARITY)
 		.map(toCandidate);
 }
+
+/** The popular pages per region and kind; the upcoming slate shifts daily. */
+export const popularCache = jsonCache<string, UpcomingCandidate[]>({
+	table: 'upcoming',
+	key: 'cache_key',
+	ttlMs: DAY_MS
+});

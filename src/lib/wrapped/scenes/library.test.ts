@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { film, tmdb, watched } from '$lib/testing/fixtures';
-import { buildWrapped } from '../wrapped';
+import { deckOf } from '$lib/testing/year';
 import {
 	breadthScene,
 	collectionScene,
@@ -62,7 +62,7 @@ const agedWatchlist = agedDates.map((added, i) => ({
 describe('writingScene', () => {
 	it('counts words and names the longest review', () => {
 		const films = [...base({ review: 'a b c' }, 3), ...base({}, 9)];
-		const scene = writingScene(buildWrapped(films, 2025)!);
+		const scene = writingScene(deckOf(films, 2025));
 		expect(scene).toMatchObject({ id: 'words', value: '9' });
 		expect(scene?.stats.find((stat) => stat.label === 'Reviews')?.value).toBe('3');
 	});
@@ -74,7 +74,7 @@ describe('writingScene', () => {
 			film({ ...watched(['2025-03-01']), review: 'another one here' }),
 			...base({}, 9)
 		];
-		const scene = writingScene(buildWrapped(films, 2025)!);
+		const scene = writingScene(deckOf(films, 2025));
 		expect(scene?.value).toBe('10');
 		expect(scene?.note).toBe('3 reviews, 10 words. The longest ran to 5 words, on Talkative.');
 		expect(scene?.stats).toEqual([
@@ -86,24 +86,19 @@ describe('writingScene', () => {
 
 	it('drops out with too few reviews', () => {
 		const films = [...base({ review: 'one two' }, 2), ...base({}, 10)];
-		expect(writingScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(writingScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('drops out rather than headline a zero when every review is empty of words', () => {
 		const films = [...base({ review: '   ' }, 3), ...base({}, 9)];
-		expect(writingScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(writingScene(deckOf(films, 2025))).toBeNull();
 	});
 });
 
 describe('watchlistScene', () => {
-	it('turns the queue into a number of years', () => {
-		const scene = watchlistScene(buildWrapped(base({}, 20), 2025, { watchlist })!);
+	it('turns the queue into a number of years, citing the same figures in the note and stats', () => {
+		const scene = watchlistScene(deckOf(base({}, 20), 2025, { watchlist }));
 		expect(scene).toMatchObject({ id: 'watchlist', value: '2.0' });
-		expect(scene?.note).toContain('40');
-	});
-
-	it('cites the same watched figure in the note and the stats', () => {
-		const scene = watchlistScene(buildWrapped(base({}, 20), 2025, { watchlist })!);
 		expect(scene?.note).toBe(
 			'40 films on your watchlist. At 20 a year, and assuming you never add another, that is 2.0 years of viewing.'
 		);
@@ -114,31 +109,8 @@ describe('watchlistScene', () => {
 		]);
 	});
 
-	it('names the film that has waited longest', () => {
-		const scene = watchlistAgeScene(buildWrapped(base({}, 20), 2025, { watchlist, now })!);
-		expect(scene).toMatchObject({ id: 'watchlist-age', valueKind: 'name', value: 'Queued 6' });
-		expect(scene?.note).toBe(
-			'You added it on 1 January 2019 and have not watched it since. That is 7.0 years of good intentions.'
-		);
-		expect(scene?.stats).toEqual([
-			{ label: 'Added', value: '1 January 2019' },
-			{ label: 'Waiting', value: '7.0 years' },
-			{ label: 'Median age', value: '7.0 years' }
-		]);
-	});
-
-	it('computes the median across every dated entry, not just the oldest', () => {
-		const scene = watchlistAgeScene(
-			buildWrapped(base({}, 20), 2025, { watchlist: agedWatchlist, now })!
-		);
-		expect(scene?.value).toBe('Aged 25');
-		expect(scene?.stats.find((stat) => stat.label === 'Waiting')?.value).toBe('25 days');
-		expect(scene?.stats.find((stat) => stat.label === 'Median age')?.value).toBe('13 days');
-	});
-
 	it('drops out without a watchlist', () => {
-		expect(watchlistScene(buildWrapped(base({}, 20), 2025)!)).toBeNull();
-		expect(watchlistAgeScene(buildWrapped(base({}, 20), 2025)!)).toBeNull();
+		expect(watchlistScene(deckOf(base({}, 20), 2025))).toBeNull();
 	});
 
 	it('drops out when the queue is long enough but the year was too thin', () => {
@@ -148,7 +120,7 @@ describe('watchlistScene', () => {
 			year: 2000,
 			added: null
 		}));
-		expect(watchlistScene(buildWrapped(base({}, 11), 2025, { watchlist: thin })!)).toBeNull();
+		expect(watchlistScene(deckOf(base({}, 11), 2025, { watchlist: thin }))).toBeNull();
 	});
 
 	it('renders the maths on the full queue even when too few entries carry a date', () => {
@@ -170,11 +142,37 @@ describe('watchlistScene', () => {
 				added: null
 			}))
 		];
-		const scene = watchlistScene(buildWrapped(base({}, 20), 2025, { watchlist: mixedWatchlist })!);
+		const scene = watchlistScene(deckOf(base({}, 20), 2025, { watchlist: mixedWatchlist }));
 		expect(scene?.value).toBe('1.5');
 		expect(
-			watchlistAgeScene(buildWrapped(base({}, 20), 2025, { watchlist: mixedWatchlist, now })!)
+			watchlistAgeScene(deckOf(base({}, 20), 2025, { watchlist: mixedWatchlist, now }))
 		).toBeNull();
+	});
+});
+
+describe('watchlistAgeScene', () => {
+	it('names the film that has waited longest', () => {
+		const scene = watchlistAgeScene(deckOf(base({}, 20), 2025, { watchlist, now }));
+		expect(scene).toMatchObject({ id: 'watchlist-age', valueKind: 'name', value: 'Queued 6' });
+		expect(scene?.note).toBe(
+			'You added it on 1 January 2019 and have not watched it since. That is 7.0 years of good intentions.'
+		);
+		expect(scene?.stats).toEqual([
+			{ label: 'Added', value: '1 January 2019' },
+			{ label: 'Waiting', value: '7.0 years' },
+			{ label: 'Median age', value: '7.0 years' }
+		]);
+	});
+
+	it('computes the median across every dated entry, not just the oldest', () => {
+		const scene = watchlistAgeScene(deckOf(base({}, 20), 2025, { watchlist: agedWatchlist, now }));
+		expect(scene?.value).toBe('Aged 25');
+		expect(scene?.stats.find((stat) => stat.label === 'Waiting')?.value).toBe('25 days');
+		expect(scene?.stats.find((stat) => stat.label === 'Median age')?.value).toBe('13 days');
+	});
+
+	it('drops out without a watchlist', () => {
+		expect(watchlistAgeScene(deckOf(base({}, 20), 2025))).toBeNull();
 	});
 });
 
@@ -188,7 +186,7 @@ describe('breadthScene', () => {
 				film({ ...watched(['2025-08-01']), tmdb: tmdb({ directors: [person(i + 10)] }) })
 			)
 		];
-		const scene = breadthScene(buildWrapped(films, 2025)!);
+		const scene = breadthScene(deckOf(films, 2025));
 		expect(scene).toMatchObject({ id: 'breadth', value: '13' });
 		expect(scene?.note).toBe('13 directors across 16 films. You went back to one of them.');
 		expect(scene?.stats).toEqual([
@@ -200,14 +198,14 @@ describe('breadthScene', () => {
 
 	it('drops out when too few films have a credited director', () => {
 		const films = base({ tmdb: tmdb({ directors: [person(1)] }) }, 10);
-		expect(breadthScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(breadthScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('drops out when no director was returned to at least four times', () => {
 		const films = Array.from({ length: 16 }, (_, i) =>
 			film({ ...watched(['2025-08-01']), tmdb: tmdb({ directors: [person(i + 1)] }) })
 		);
-		expect(breadthScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(breadthScene(deckOf(films, 2025))).toBeNull();
 	});
 });
 
@@ -217,7 +215,7 @@ describe('likedScene', () => {
 			film({ ...watched(['2025-01-01']), name: 'Road House', liked: true, rating: 2.5 }),
 			...base({ liked: true, rating: 4.5 }, 11)
 		];
-		const scene = likedScene(buildWrapped(films, 2025)!);
+		const scene = likedScene(deckOf(films, 2025));
 		expect(scene).toMatchObject({ id: 'liked', value: 'Road House' });
 		// The winner is itself an under-four heart, so a lone one leaves no others to cite.
 		expect(scene?.note).toBe('You hearted it and gave it ★ 2.5.');
@@ -230,17 +228,17 @@ describe('likedScene', () => {
 
 	it('drops out when too few films were hearted', () => {
 		const films = [...base({ liked: true, rating: 3 }, 4), ...base({}, 8)];
-		expect(likedScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(likedScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('drops out when hearted films carry no rating', () => {
 		const films = [...base({ liked: true, rating: null }, 6), ...base({}, 6)];
-		expect(likedScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(likedScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('drops out when every hearted film already earned four stars or more', () => {
 		const films = [...base({ liked: true, rating: 4.5 }, 6), ...base({}, 6)];
-		expect(likedScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(likedScene(deckOf(films, 2025))).toBeNull();
 	});
 });
 
@@ -254,7 +252,7 @@ describe('collectionScene', () => {
 	it('says how many of the franchise the year covered', () => {
 		const films = [...alienFilms(), ...base({}, 7)];
 		const scene = collectionScene(
-			buildWrapped(films, 2025, { collections: [{ id: 8091, name: 'Alien', total: 6 }] })!
+			deckOf(films, 2025, { collections: [{ id: 8091, name: 'Alien', total: 6 }] })
 		);
 		expect(scene).toMatchObject({ id: 'collection', value: 'Alien' });
 		// The note sentence is capitalised, so it reads "Five", not the fixture-supplied "five".
@@ -278,7 +276,7 @@ describe('collectionScene', () => {
 			...base({}, 3)
 		];
 		const scene = collectionScene(
-			buildWrapped(films, 2025, { collections: [{ id: 8091, name: 'Alien', total: 20 }] })!
+			deckOf(films, 2025, { collections: [{ id: 8091, name: 'Alien', total: 20 }] })
 		);
 		expect(scene?.note).toBe(
 			'9 of the 20 films in the Alien collection, between 8 January and 8 September.'
@@ -290,7 +288,7 @@ describe('collectionScene', () => {
 
 	it('describes the set without a total when the franchise size is unknown', () => {
 		const films = [...alienFilms(), ...base({}, 7)];
-		const scene = collectionScene(buildWrapped(films, 2025)!);
+		const scene = collectionScene(deckOf(films, 2025));
 		expect(scene?.note).toBe(
 			'Five films from the Alien collection, between 8 February and 8 June.'
 		);
@@ -298,7 +296,7 @@ describe('collectionScene', () => {
 	});
 
 	it('drops out when no collection has enough films', () => {
-		expect(collectionScene(buildWrapped(base({}, 12), 2025)!)).toBeNull();
+		expect(collectionScene(deckOf(base({}, 12), 2025))).toBeNull();
 	});
 
 	it('drops out when the largest shared collection has fewer than three films', () => {
@@ -307,14 +305,14 @@ describe('collectionScene', () => {
 			film({ ...watched(['2025-03-08']), tmdb: tmdb({ collection: alien }) }),
 			...base({}, 10)
 		];
-		expect(collectionScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(collectionScene(deckOf(films, 2025))).toBeNull();
 	});
 });
 
 describe('tagScene', () => {
 	it('names the most-used tag', () => {
 		const films = [...base({ tags: ['cinema'] }, 8), ...base({ tags: ['drama'] }, 4)];
-		const scene = tagScene(buildWrapped(films, 2025)!);
+		const scene = tagScene(deckOf(films, 2025));
 		expect(scene).toMatchObject({ id: 'tag', value: 'cinema' });
 		// The 8 uses of "cinema" and the 12 tagged films overall are different populations; a
 		// fixture where every film shared one tag could not tell these two figures apart.
@@ -327,11 +325,11 @@ describe('tagScene', () => {
 	});
 
 	it('drops out when nothing was tagged', () => {
-		expect(tagScene(buildWrapped(base(), 2025)!)).toBeNull();
+		expect(tagScene(deckOf(base(), 2025))).toBeNull();
 	});
 
 	it('drops out when the most-used tag was not used enough', () => {
 		const films = [...base({ tags: ['cinema'] }, 4), ...base({}, 8)];
-		expect(tagScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(tagScene(deckOf(films, 2025))).toBeNull();
 	});
 });

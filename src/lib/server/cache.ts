@@ -1,366 +1,179 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import type { CollectionParts, OmdbRatings, TmdbMovie, UpcomingCandidate } from '$lib/types';
-import type { FetchBudget } from './budget';
-import type { WatchAvailability } from './providers';
-import type { FilmReleases } from '$lib/releases/dates';
-
-const MISS_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-/** TMDB's recommendations shift slowly, so a related list stays useful far longer than a week. */
-const RELATED_TTL_MS = 90 * 24 * 60 * 60 * 1000;
-/** Streaming catalogues change weekly, so availability goes stale within days. */
-const PROVIDERS_TTL_MS = 3 * 24 * 60 * 60 * 1000;
-const RELEASES_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const RECORDS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const UPCOMING_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** D1 allows at most 100 bound parameters per query. */
 const MAX_PARAMS = 100;
 
+/**
+ * Values stored by key in D1. Reads and writes go a chunk of keys at a time, so a whole batch costs
+ * a few queries rather than one per key; they are not counted against the fetch budget.
+ */
+export interface Cache<K, V> {
+	/** The fresh values stored for `keys`; stale and unknown keys are absent. */
+	getMany(db: D1Database, keys: K[]): Promise<Map<K, V>>;
+	putMany(db: D1Database, entries: [K, V][]): Promise<void>;
+}
+
+interface Table {
+	/** A table from schema.sql, with `key`, `data` and `fetched_at` columns. */
+	table: string;
+	key: string;
+	/**
+	 * Generation of what the table stores. Keys are stored under it, and on first use in an
+	 * isolate rows of any other generation are deleted, since nothing else ever deletes them.
+	 * Only for text keys.
+	 */
+	version?: string;
+}
+
+/** Every table a cache was declared on, for the test that holds them against schema.sql. */
+export const declaredTables = new Map<string, string[]>();
+
+function declare(table: string, columns: string[]): void {
+	declaredTables.set(table, columns);
+}
+
 function chunks<T>(list: T[], size: number): T[][] {
 	const out: T[][] = [];
-	for (let start = 0; start < list.length; start += size) {
-		out.push(list.slice(start, start + size));
-	}
+	for (let start = 0; start < list.length; start += size) out.push(list.slice(start, start + size));
 	return out;
 }
 
-/**
- * Bump SCHEMA when the shape or meaning of a cached TmdbMovie changes. Keys are built before
- * the media type is known, so a bump invalidates every record, when only one kind of record
- * changed, a targeted delete costs a great deal less than the re-warm a bump forces.
- */
-const SCHEMA = 'v6';
-
-export function cacheKey(name: string, year: number | null): string {
-	return `${SCHEMA}::${name.trim().toLowerCase()}::${year ?? ''}`;
-}
-
-let swept = false;
-
-/**
- * Drops rows left behind by superseded SCHEMA generations. Nothing else ever deletes, so
- * without this a bump strands its whole generation in the database permanently. Runs once
- * per isolate off the batch read that precedes any warm.
- */
-async function sweepOldGenerations(db: D1Database): Promise<void> {
-	if (swept) return;
-	swept = true;
-	const current = `${SCHEMA}::%`;
-	for (const table of ['movies', 'misses']) {
-		await db.prepare(`DELETE FROM ${table} WHERE cache_key NOT LIKE ?`).bind(current).run();
-	}
-}
-
-/**
- * Returns the cached movie, null for a known (fresh) miss, or undefined if unknown. Each of the
- * two lookups is a subrequest; when `budget` has none left it stops and reports the key unknown.
- */
-export async function getCached(
-	db: D1Database,
-	key: string,
-	budget?: FetchBudget
-): Promise<TmdbMovie | null | undefined> {
-	if (budget && !budget.tryTake()) return undefined;
-	const hit = await db
-		.prepare('SELECT data FROM movies WHERE cache_key = ?')
-		.bind(key)
-		.first<{ data: string }>();
-	if (hit) return JSON.parse(hit.data) as TmdbMovie;
-	if (budget && !budget.tryTake()) return undefined;
-	const miss = await db
-		.prepare('SELECT fetched_at FROM misses WHERE cache_key = ?')
-		.bind(key)
-		.first<{ fetched_at: number }>();
-	if (miss && Date.now() - miss.fetched_at < MISS_TTL_MS) return null;
-	return undefined;
-}
-
-export async function putCached(
-	db: D1Database,
-	key: string,
-	movie: TmdbMovie | null,
-	budget?: FetchBudget
-): Promise<void> {
-	if (budget && !budget.tryTake()) return;
-	if (movie) {
-		await db
-			.prepare(
-				'INSERT OR REPLACE INTO movies (cache_key, tmdb_id, data, fetched_at) VALUES (?, ?, ?, ?)'
-			)
-			.bind(key, movie.tmdbId, JSON.stringify(movie), Date.now())
-			.run();
-	} else {
-		await db
-			.prepare('INSERT OR REPLACE INTO misses (cache_key, fetched_at) VALUES (?, ?)')
-			.bind(key, Date.now())
-			.run();
-	}
-}
-
-/**
- * Cache lookup for many keys in a couple of queries: hits map to the movie,
- * fresh misses to null, unknown keys are absent.
- */
-export async function getCachedMany(
-	db: D1Database,
-	keys: string[]
-): Promise<Map<string, TmdbMovie | null>> {
-	await sweepOldGenerations(db);
-	const known = new Map<string, TmdbMovie | null>();
-	for (const chunk of chunks(keys, MAX_PARAMS)) {
-		const marks = chunk.map(() => '?').join(',');
-		const { results } = await db
-			.prepare(`SELECT cache_key, data FROM movies WHERE cache_key IN (${marks})`)
-			.bind(...chunk)
-			.all<{ cache_key: string; data: string }>();
-		for (const row of results) known.set(row.cache_key, JSON.parse(row.data) as TmdbMovie);
-	}
-
-	const unknown = keys.filter((key) => !known.has(key));
-	const cutoff = Date.now() - MISS_TTL_MS;
-	for (const chunk of chunks(unknown, MAX_PARAMS - 1)) {
-		const marks = chunk.map(() => '?').join(',');
-		const { results } = await db
-			.prepare(`SELECT cache_key FROM misses WHERE cache_key IN (${marks}) AND fetched_at > ?`)
-			.bind(...chunk, cutoff)
-			.all<{ cache_key: string }>();
-		for (const row of results) known.set(row.cache_key, null);
-	}
-	return known;
-}
-
-/** Multi-row upserts so a whole batch costs a handful of D1 subrequests. */
-export async function putCachedMany(
-	db: D1Database,
-	entries: [string, TmdbMovie | null][]
-): Promise<void> {
-	const now = Date.now();
-	const movies = entries.filter((entry): entry is [string, TmdbMovie] => entry[1] !== null);
-	const misses = entries.filter(([, movie]) => movie === null).map(([key]) => key);
-
-	for (const chunk of chunks(movies, Math.floor(MAX_PARAMS / 4))) {
-		const marks = chunk.map(() => '(?, ?, ?, ?)').join(',');
-		await db
-			.prepare(
-				`INSERT OR REPLACE INTO movies (cache_key, tmdb_id, data, fetched_at) VALUES ${marks}`
-			)
-			.bind(...chunk.flatMap(([key, movie]) => [key, movie.tmdbId, JSON.stringify(movie), now]))
-			.run();
-	}
-	for (const chunk of chunks(misses, Math.floor(MAX_PARAMS / 2))) {
-		const marks = chunk.map(() => '(?, ?)').join(',');
-		await db
-			.prepare(`INSERT OR REPLACE INTO misses (cache_key, fetched_at) VALUES ${marks}`)
-			.bind(...chunk.flatMap((key) => [key, now]))
-			.run();
-	}
-}
-
-export interface RelatedMovie {
-	tmdbId: number;
-	title: string;
-	year: number | null;
-	rating: number | null;
-	posterPath: string | null;
-}
-
-/**
- * A `(key, data, fetched_at)` table read for many keys at once, off-budget like `getCachedMany`:
- * a warm phase costs a subrequest per chunk rather than one per key. Table and column names are
- * literals from this module, never request data. Stale and unknown keys are absent.
- */
-async function getJsonCachedMany<T, K extends number | string = number>(
+/** The rows among `keys` written after `since`, a chunk of keys per query. */
+async function selectIn<Row>(
 	db: D1Database,
 	table: string,
-	key: string,
-	ids: K[],
-	ttl = RELATED_TTL_MS
-): Promise<Map<K, T>> {
-	const known = new Map<K, T>();
-	const cutoff = Date.now() - ttl;
-	for (const chunk of chunks(ids, MAX_PARAMS - 1)) {
+	columns: string[],
+	keys: unknown[],
+	since: number
+): Promise<Row[]> {
+	const [key] = columns;
+	const rows: Row[] = [];
+	// One parameter of each query goes to `since`.
+	for (const chunk of chunks(keys, MAX_PARAMS - 1)) {
 		const marks = chunk.map(() => '?').join(',');
 		const { results } = await db
 			.prepare(
-				`SELECT ${key} AS id, data FROM ${table} WHERE ${key} IN (${marks}) AND fetched_at > ?`
+				`SELECT ${columns.join(', ')} FROM ${table} WHERE ${key} IN (${marks}) AND fetched_at > ?`
 			)
-			.bind(...chunk, cutoff)
-			.all<{ id: K; data: string }>();
-		for (const row of results) known.set(row.id, JSON.parse(row.data) as T);
+			.bind(...chunk, since)
+			.all<Row>();
+		rows.push(...results);
 	}
-	return known;
+	return rows;
 }
 
-/** Multi-row upsert so a cold phase spends a couple of subrequests, not one per key. */
-async function putJsonCachedMany<T, K extends number | string = number>(
+/** Multi-row upserts, as many rows per query as the parameter limit allows. */
+async function insertRows(
 	db: D1Database,
 	table: string,
-	key: string,
-	entries: [K, T][]
+	columns: string[],
+	rows: unknown[][]
 ): Promise<void> {
-	const now = Date.now();
-	for (const chunk of chunks(entries, Math.floor(MAX_PARAMS / 3))) {
-		const marks = chunk.map(() => '(?, ?, ?)').join(',');
+	const row = `(${columns.map(() => '?').join(', ')})`;
+	for (const chunk of chunks(rows, Math.floor(MAX_PARAMS / columns.length))) {
 		await db
-			.prepare(`INSERT OR REPLACE INTO ${table} (${key}, data, fetched_at) VALUES ${marks}`)
-			.bind(...chunk.flatMap(([id, value]) => [id, JSON.stringify(value), now]))
+			.prepare(
+				`INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES ${chunk.map(() => row).join(',')}`
+			)
+			.bind(...chunk.flat())
 			.run();
 	}
 }
 
-export function getRelatedCachedMany(
-	db: D1Database,
-	tmdbIds: number[]
-): Promise<Map<number, RelatedMovie[]>> {
-	return getJsonCachedMany<RelatedMovie[]>(db, 'related', 'tmdb_id', tmdbIds);
+const swept = new Set<string>();
+
+async function sweep(db: D1Database, table: string, key: string, version: string): Promise<void> {
+	if (swept.has(table)) return;
+	swept.add(table);
+	await db.prepare(`DELETE FROM ${table} WHERE ${key} NOT LIKE ?`).bind(`${version}:%`).run();
 }
 
-export function putRelatedCachedMany(
-	db: D1Database,
-	entries: [number, RelatedMovie[]][]
-): Promise<void> {
-	return putJsonCachedMany(db, 'related', 'tmdb_id', entries);
+/** Stores keys under the table's version, and maps stored keys back to the asked ones. */
+function versioned<K>(version: string | undefined) {
+	const store = (key: K): unknown => (version === undefined ? key : `${version}:${key}`);
+	return { store, byStored: (keys: K[]) => new Map(keys.map((key) => [store(key), key])) };
 }
 
-export function getCollectionsCachedMany(
-	db: D1Database,
-	ids: number[]
-): Promise<Map<number, CollectionParts>> {
-	return getJsonCachedMany<CollectionParts>(db, 'collections', 'collection_id', ids);
-}
+const since = (ttlMs: number): number => (Number.isFinite(ttlMs) ? Date.now() - ttlMs : 0);
 
-/** A miss is not cached: a collection id only comes from a TmdbMovie that already carries one. */
-export function putCollectionsCachedMany(
-	db: D1Database,
-	entries: [number, CollectionParts | null][]
-): Promise<void> {
-	const hits = entries.filter((entry): entry is [number, CollectionParts] => entry[1] !== null);
-	return putJsonCachedMany(db, 'collections', 'collection_id', hits);
-}
-
-/** Watch availability keyed `movie:<id>` / `tv:<id>`, since TMDB numbers the two separately. */
-export function getProvidersCachedMany(
-	db: D1Database,
-	mediaKeys: string[]
-): Promise<Map<string, WatchAvailability>> {
-	return getJsonCachedMany<WatchAvailability, string>(
-		db,
-		'providers',
-		'media_key',
-		mediaKeys,
-		PROVIDERS_TTL_MS
-	);
-}
-
-export function putProvidersCachedMany(
-	db: D1Database,
-	entries: [string, WatchAvailability][]
-): Promise<void> {
-	return putJsonCachedMany(db, 'providers', 'media_key', entries);
-}
-
-/** Release dates per TMDB movie id; studios move and add dates often enough to refetch weekly. */
-export function getReleasesCachedMany(
-	db: D1Database,
-	tmdbIds: number[]
-): Promise<Map<number, FilmReleases>> {
-	return getJsonCachedMany<FilmReleases>(db, 'releases', 'tmdb_id', tmdbIds, RELEASES_TTL_MS);
-}
-
-export function putReleasesCachedMany(
-	db: D1Database,
-	entries: [number, FilmReleases][]
-): Promise<void> {
-	return putJsonCachedMany(db, 'releases', 'tmdb_id', entries);
-}
-
-/** Full TMDB records per movie id, for films not in the user's own export. */
-export function getRecordsCachedMany(
-	db: D1Database,
-	tmdbIds: number[]
-): Promise<Map<number, TmdbMovie>> {
-	return getJsonCachedMany<TmdbMovie>(db, 'records', 'tmdb_id', tmdbIds, RECORDS_TTL_MS);
-}
-
-export function putRecordsCachedMany(
-	db: D1Database,
-	entries: [number, TmdbMovie][]
-): Promise<void> {
-	return putJsonCachedMany(db, 'records', 'tmdb_id', entries);
-}
-
-/** TMDB discover results per query key; the upcoming slate shifts daily. */
-export function getUpcomingCachedMany(
-	db: D1Database,
-	keys: string[]
-): Promise<Map<string, UpcomingCandidate[]>> {
-	return getJsonCachedMany<UpcomingCandidate[], string>(
-		db,
-		'upcoming',
-		'cache_key',
-		keys,
-		UPCOMING_TTL_MS
-	);
-}
-
-export function putUpcomingCachedMany(
-	db: D1Database,
-	entries: [string, UpcomingCandidate[]][]
-): Promise<void> {
-	return putJsonCachedMany(db, 'upcoming', 'cache_key', entries);
+/**
+ * A JSON value per key, fresh for `ttlMs` (forever when unset). A null value is not stored: the
+ * key stays unknown and is looked up again next time.
+ */
+export function jsonCache<K extends string | number, V>({
+	table,
+	key,
+	version,
+	ttlMs = Infinity
+}: Table & { ttlMs?: number }): Cache<K, V> {
+	const columns = [key, 'data', 'fetched_at'];
+	declare(table, columns);
+	const keys = versioned<K>(version);
+	return {
+		async getMany(db, wanted) {
+			if (version !== undefined) await sweep(db, table, key, version);
+			const original = keys.byStored(wanted);
+			const rows = await selectIn<Record<string, unknown>>(
+				db,
+				table,
+				[key, 'data'],
+				[...original.keys()],
+				since(ttlMs)
+			);
+			return new Map(
+				rows.map((row) => [original.get(row[key]) as K, JSON.parse(row.data as string) as V])
+			);
+		},
+		async putMany(db, entries) {
+			const now = Date.now();
+			const rows = entries
+				.filter(([, value]) => value !== null)
+				.map(([id, value]) => [keys.store(id), JSON.stringify(value), now]);
+			await insertRows(db, table, columns, rows);
+		}
+	};
 }
 
 /**
- * OMDb ratings, keyed by IMDb id rather than the (name, year) cache key: the id is stable and
- * needs no SCHEMA generation, same shape as `movies`/`misses` otherwise.
+ * A JSON value per key, kept for good, plus remembered misses (null) that are looked up again
+ * once `missTtlMs` has passed: an upstream that found nothing may know the key later.
  */
-export async function getOmdbCachedMany(
-	db: D1Database,
-	imdbIds: string[]
-): Promise<Map<string, OmdbRatings | null>> {
-	const known = new Map<string, OmdbRatings | null>();
-	for (const chunk of chunks(imdbIds, MAX_PARAMS)) {
-		const marks = chunk.map(() => '?').join(',');
-		const { results } = await db
-			.prepare(`SELECT imdb_id, data FROM omdb WHERE imdb_id IN (${marks})`)
-			.bind(...chunk)
-			.all<{ imdb_id: string; data: string }>();
-		for (const row of results) known.set(row.imdb_id, JSON.parse(row.data) as OmdbRatings);
-	}
-
-	const unknown = imdbIds.filter((id) => !known.has(id));
-	const cutoff = Date.now() - MISS_TTL_MS;
-	for (const chunk of chunks(unknown, MAX_PARAMS - 1)) {
-		const marks = chunk.map(() => '?').join(',');
-		const { results } = await db
-			.prepare(`SELECT imdb_id FROM omdb_misses WHERE imdb_id IN (${marks}) AND fetched_at > ?`)
-			.bind(...chunk, cutoff)
-			.all<{ imdb_id: string }>();
-		for (const row of results) known.set(row.imdb_id, null);
-	}
-	return known;
-}
-
-export async function putOmdbCachedMany(
-	db: D1Database,
-	entries: [string, OmdbRatings | null][]
-): Promise<void> {
-	const now = Date.now();
-	const hits = entries.filter((entry): entry is [string, OmdbRatings] => entry[1] !== null);
-	const misses = entries.filter(([, ratings]) => ratings === null).map(([id]) => id);
-
-	for (const chunk of chunks(hits, Math.floor(MAX_PARAMS / 3))) {
-		const marks = chunk.map(() => '(?, ?, ?)').join(',');
-		await db
-			.prepare(`INSERT OR REPLACE INTO omdb (imdb_id, data, fetched_at) VALUES ${marks}`)
-			.bind(...chunk.flatMap(([id, ratings]) => [id, JSON.stringify(ratings), now]))
-			.run();
-	}
-	for (const chunk of chunks(misses, Math.floor(MAX_PARAMS / 2))) {
-		const marks = chunk.map(() => '(?, ?)').join(',');
-		await db
-			.prepare(`INSERT OR REPLACE INTO omdb_misses (imdb_id, fetched_at) VALUES ${marks}`)
-			.bind(...chunk.flatMap((id) => [id, now]))
-			.run();
-	}
+export function hitMissCache<K extends string, V>({
+	table,
+	missTable,
+	key,
+	version,
+	missTtlMs
+}: Table & { missTable: string; missTtlMs: number }): Cache<K, V | null> {
+	const hits = jsonCache<K, V | null>({ table, key, version });
+	const missColumns = [key, 'fetched_at'];
+	declare(missTable, missColumns);
+	const keys = versioned<K>(version);
+	return {
+		async getMany(db, wanted) {
+			const known = await hits.getMany(db, wanted);
+			if (version !== undefined) await sweep(db, missTable, key, version);
+			const original = keys.byStored(wanted.filter((id) => !known.has(id)));
+			const misses = await selectIn<Record<string, unknown>>(
+				db,
+				missTable,
+				[key],
+				[...original.keys()],
+				since(missTtlMs)
+			);
+			for (const row of misses) known.set(original.get(row[key]) as K, null);
+			return known;
+		},
+		async putMany(db, entries) {
+			await hits.putMany(db, entries);
+			const now = Date.now();
+			const misses = entries.filter(([, value]) => value === null);
+			await insertRows(
+				db,
+				missTable,
+				missColumns,
+				misses.map(([id]) => [keys.store(id), now])
+			);
+		}
+	};
 }

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { USERNAME_PATTERN } from '$lib/types';
+
 	let { onsubmit }: { onsubmit: (username: string) => void } = $props();
 	let username = $state('');
 </script>
@@ -7,7 +9,8 @@
 	class="username"
 	onsubmit={(e) => {
 		e.preventDefault();
-		if (username.trim()) onsubmit(username.trim());
+		const name = username.trim();
+		if (name) onsubmit(name);
 	}}
 >
 	<label for="lb-username">No export? Use your Letterboxd username</label>
@@ -19,7 +22,7 @@
 			autocomplete="username"
 			autocapitalize="none"
 			spellcheck="false"
-			pattern="[A-Za-z0-9_]{'{'}2,30{'}'}"
+			pattern={USERNAME_PATTERN.source.slice(1, -1)}
 			placeholder="username"
 			required
 		/>

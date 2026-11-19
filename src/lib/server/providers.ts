@@ -1,5 +1,15 @@
-import { OFFER_KINDS, type OfferKind, type RegionOffers } from '$lib/types';
+import { DAY_MS } from '$lib/math';
+import {
+	isTmdbId,
+	OFFER_KINDS,
+	offersKey,
+	type OfferKind,
+	type ProviderRequestItem,
+	type RegionOffers
+} from '$lib/types';
+import type { BatchLookup } from './batch';
 import type { FetchBudget } from './budget';
+import { jsonCache } from './cache';
 import { tmdbGet } from './tmdb';
 
 interface TmdbProvider {
@@ -52,7 +62,7 @@ export function regionOffers(availability: WatchAvailability, region: string): R
 }
 
 /** Watch availability in every country for one title: a single subrequest. */
-export async function fetchAvailability(
+async function fetchAvailability(
 	budget: FetchBudget,
 	kind: 'movie' | 'tv',
 	id: number
@@ -62,3 +72,23 @@ export async function fetchAvailability(
 	};
 	return compactAvailability(results ?? {});
 }
+
+export function isProviderItem(item: unknown): item is ProviderRequestItem {
+	const candidate = item as ProviderRequestItem | null;
+	return (
+		Number.isInteger(candidate?.tmdbId) &&
+		(candidate?.mediaType === 'movie' || candidate?.mediaType === 'tv')
+	);
+}
+
+/** Every country's offers per title. Streaming catalogues change weekly, so they keep for days. */
+export const availability: BatchLookup<ProviderRequestItem, string, WatchAvailability> = {
+	keyOf: (item) => (isTmdbId(item.tmdbId) ? offersKey(item) : null),
+	cache: jsonCache<string, WatchAvailability>({
+		table: 'providers',
+		key: 'media_key',
+		ttlMs: 3 * DAY_MS
+	}),
+	fetchOne: (budget, item) => fetchAvailability(budget, item.mediaType, item.tmdbId),
+	label: 'tmdb providers'
+};

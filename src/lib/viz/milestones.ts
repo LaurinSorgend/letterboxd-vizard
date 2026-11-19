@@ -1,7 +1,9 @@
-import { longestRun } from './stats';
+import { formatShort, starCaption } from '$lib/format';
+import { longestRun } from '$lib/math';
+import { releaseYear } from '$lib/film/release';
 import type { EnrichedFilm } from '$lib/types';
 
-export interface DiaryEvent {
+interface DiaryEvent {
 	film: EnrichedFilm;
 	date: string;
 }
@@ -15,8 +17,7 @@ export interface Milestone {
 	dateLabel?: string;
 }
 
-/** Every diary entry across every film, oldest first; ties break on name for stable order. */
-export function diaryEvents(films: EnrichedFilm[]): DiaryEvent[] {
+function diaryEvents(films: EnrichedFilm[]): DiaryEvent[] {
 	return films
 		.flatMap((film) => film.watchedDates.map((date) => ({ film, date })))
 		.sort((a, b) => a.date.localeCompare(b.date) || a.film.name.localeCompare(b.film.name));
@@ -88,25 +89,15 @@ function firstEventWhere(
 		: null;
 }
 
-/** Diary dates are calendar days with no time zone of their own, so format them as UTC. */
-export function formatShort(iso: string): string {
-	return new Date(iso).toLocaleDateString('en', {
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric',
-		timeZone: 'UTC'
-	});
-}
-
 function describeFilm(film: EnrichedFilm): string {
+	const year = releaseYear(film);
 	const parts = [
-		film.year ? String(film.year) : null,
-		film.rating !== null ? `★ ${film.rating}` : null
+		year ? String(year) : null,
+		film.rating !== null ? starCaption(film.rating) : null
 	];
 	return parts.filter((p): p is string => p !== null).join(' · ');
 }
 
-/** Every milestone reached in this library, oldest first. Empty if nothing has a diary date. */
 export function buildMilestones(films: EnrichedFilm[]): Milestone[] {
 	const events = diaryEvents(films);
 	if (events.length === 0) return [];

@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { imageUrl } from './images';
-	import { webHref } from './href';
-	import { formatShort } from './milestones';
+	import { imageUrl, webHref } from '$lib/film/links';
+	import { formatShort } from '$lib/format';
 	import type { RecentWatch } from './stats';
 
 	let { watches }: { watches: RecentWatch[] } = $props();

@@ -19,6 +19,7 @@
 			crossorigin
 		/>
 		<script>
+			// Inline so the theme lands before first paint; mirrors src/lib/theme.ts (theme.test.ts).
 			const legacy = localStorage.getItem('theme');
 			if (legacy) {
 				if (legacy === 'light') localStorage.setItem('flavor', 'latte');

@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { imageUrl } from '$lib/viz/images';
-	import { webHref } from '$lib/viz/href';
+	import { imageUrl } from '$lib/film/links';
 	import { monthGrid, type CalendarEntry } from './calendar';
 	import { KINDS } from './kinds';
 
@@ -23,13 +22,6 @@
 		const why = entry.film.recommended ? ` · recommended: ${entry.film.recommended.reason}` : '';
 		return `${entry.film.name}: ${KINDS[entry.kind].label.toLowerCase()} release${elsewhere}${why}`;
 	}
-
-	function entryHref(entry: CalendarEntry): string | null {
-		const { uri, tmdb, recommended } = entry.film;
-		const href = webHref(uri);
-		if (href || !recommended || !tmdb) return href;
-		return `https://www.themoviedb.org/movie/${tmdb.tmdbId}`;
-	}
 </script>
 
 <ol class="grid">
@@ -50,8 +42,7 @@
 					<span class="long">{dayLabel(day.date)}</span>
 				</span>
 				<ul>
-					{#each day.entries as entry (`${entry.film.tmdb?.tmdbId ?? entry.film.uri}-${entry.kind}`)}
-						{@const href = entryHref(entry)}
+					{#each day.entries as entry (`${entry.film.key}-${entry.kind}`)}
 						{@const poster = imageUrl(entry.film.tmdb?.posterPath ?? null, 'w92')}
 						<li
 							class="entry"
@@ -61,8 +52,8 @@
 						>
 							{#if poster}<img src={poster} alt="" loading="lazy" />{/if}
 							<span class="text">
-								{#if href}
-									<a {href} target="_blank" rel="noopener">{entry.film.name}</a>
+								{#if entry.film.href}
+									<a href={entry.film.href} target="_blank" rel="noopener">{entry.film.name}</a>
 								{:else}
 									{entry.film.name}
 								{/if}

@@ -1,19 +1,31 @@
 import { browser } from '$app/environment';
-import type { CollectionParts, EnrichedFilm, Profile, WatchlistFilm } from '$lib/types';
+import {
+	RECORD_SCHEMA,
+	type CollectionParts,
+	type EnrichedFilm,
+	type Profile,
+	type WatchlistFilm
+} from '$lib/types';
 
-/** Bump when the snapshot shape changes so stale data is ignored, not misread. */
-const KEY = 'letterboxd-vizard:snapshot:v6';
 const PREFIX = 'letterboxd-vizard:snapshot:';
+/**
+ * Carries RECORD_SCHEMA, so a snapshot of old records is ignored rather than misread. A change to
+ * the snapshot's own shape needs a new key too: add a suffix after the schema.
+ */
+const KEY = `${PREFIX}${RECORD_SCHEMA}`;
+
+/** Where a library started: a full export, or only the RSS feed. */
+export type LibrarySource = 'export' | 'feed';
 
 /** The analysed result kept on the user's device so repeat visits skip re-uploading. */
-export interface Snapshot {
+interface Snapshot {
 	films: EnrichedFilm[];
 	watchlist: WatchlistFilm[];
-	watchlistIds: number[];
+	/** Written by older builds; derived from `watchlist` now, so ignored on read and no longer saved. */
+	watchlistIds?: number[];
 	profile: Profile | null;
 	collections: CollectionParts[];
-	/** Where the library started: a full export, or only the RSS feed. */
-	source: 'export' | 'feed';
+	source: LibrarySource;
 }
 
 /** Drops snapshots left by superseded KEY generations; they are dead weight against the quota. */

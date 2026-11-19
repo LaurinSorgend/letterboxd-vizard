@@ -1,15 +1,15 @@
 <script lang="ts" module>
-	import { fetchReleaseDates } from '$lib/ingest/enrich';
-	import { CachedLookup } from '$lib/ingest/lookup.svelte';
+	import { fetchReleaseDates } from '$lib/api/endpoints';
+	import { CachedLookup, followLookup } from '$lib/api/lookup.svelte';
 
 	/** Every country's dates per film, so switching country never asks the server again. */
 	const lookup = new CachedLookup((id: number) => id, fetchReleaseDates);
 </script>
 
 <script lang="ts">
+	import { noun } from '$lib/format';
 	import RegionSelect from '$lib/region/RegionSelect.svelte';
-	import { initialRegion } from '$lib/region/region';
-	import type { EnrichedFilm, WatchlistFilm } from '$lib/types';
+	import { region as watchRegion } from '$lib/region/region.svelte';
 	import {
 		calendarEntries,
 		clampMonth,
@@ -17,12 +17,17 @@
 		monthKey,
 		nextReleaseMonth,
 		shiftMonth,
-		sortEntries,
 		upcomingCandidates,
+		watchlistCalendarFilm,
 		type CalendarFilm
 	} from './calendar';
-	import { RELEASE_KINDS, type ReleaseKind } from './dates';
-	import { KINDS } from './kinds';
+	import {
+		RELEASE_KINDS,
+		type EnrichedFilm,
+		type ReleaseKind,
+		type WatchlistFilm
+	} from '$lib/types';
+	import KindPicker from './KindPicker.svelte';
 	import CalendarMonth from './CalendarMonth.svelte';
 	import RecommendControls from './RecommendControls.svelte';
 
@@ -31,14 +36,10 @@
 	const today = localToday();
 	const thisMonth = monthKey(today);
 	const from = `${thisMonth}-01`;
-	let region = $state(initialRegion());
+	const region = $derived(watchRegion.code);
 	let kinds: ReleaseKind[] = $state([...RELEASE_KINDS]);
 	let picked = $state(thisMonth);
-	let recommendation = $state<{
-		region: string;
-		kinds: ReleaseKind[];
-		films: CalendarFilm[];
-	} | null>(null);
+	let recommendation = $state<{ region: string; films: CalendarFilm[] } | null>(null);
 
 	const recommended = $derived(recommendation?.region === region ? recommendation.films : []);
 	const candidates = $derived([
@@ -47,12 +48,10 @@
 			...recommended.flatMap((film) => (film.tmdb ? [film.tmdb.tmdbId] : []))
 		])
 	]);
-	const unresolved = $derived(lookup.loading ? 0 : lookup.missing(candidates));
+	const unresolved = $derived(lookup.unresolved(candidates));
+	const watchlistFilms = $derived(watchlist.map(watchlistCalendarFilm));
 	const entries = $derived(
-		sortEntries([
-			...calendarEntries(watchlist, lookup.values, region, kinds, from),
-			...calendarEntries(recommended, lookup.values, region, recommendation?.kinds ?? [], from)
-		])
+		calendarEntries([...watchlistFilms, ...recommended], lookup.values, region, kinds, from)
 	);
 	const upcoming = $derived(
 		entries.filter((entry) => entry.date >= today && !entry.film.recommended)
@@ -69,47 +68,36 @@
 		})
 	);
 
-	$effect(() => {
-		const controller = new AbortController();
-		void lookup.load(candidates, controller.signal);
-		return () => controller.abort();
-	});
+	followLookup(
+		() => lookup,
+		() => candidates
+	);
 </script>
 
 <div class="form-controls">
 	<div class="controls">
-		<RegionSelect label="Release dates for" {region} onchange={(next) => (region = next)} />
-		<fieldset>
-			<legend>Release types</legend>
-			{#each RELEASE_KINDS as kind (kind)}
-				<label style:--kind-colour={KINDS[kind].colour}>
-					<input type="checkbox" value={kind} bind:group={kinds} />
-					<span class="swatch" aria-hidden="true"></span>
-					{KINDS[kind].label}
-				</label>
-			{/each}
-		</fieldset>
+		<RegionSelect label="Release dates for" />
+		<KindPicker legend="Release types" bind:kinds />
 		<RecommendControls {films} {watchlist} {region} onresult={(r) => (recommendation = r)} />
 	</div>
 
 	<p class="summary" role="status">
 		{#if lookup.loading}
-			Looking up release dates… <span class="num">{lookup.progress.done}</span> /
-			<span class="num">{lookup.progress.total}</span>
+			Looking up release dates… <span data-numeric>{lookup.progress.done}</span> /
+			<span data-numeric>{lookup.progress.total}</span>
 		{:else if upcoming.length === 0}
 			{#if watchlist.length > 0}
 				Nothing on your watchlist has a release of the picked types coming up.
 			{/if}
 		{:else}
-			<span class="num">{upcoming.length}</span>
-			{upcoming.length === 1 ? 'upcoming release' : 'upcoming releases'} across
-			<span class="num">{new Set(upcoming.map((e) => e.film.tmdb?.tmdbId ?? e.film.uri)).size}</span
-			>
+			<span data-numeric>{upcoming.length}</span>
+			{noun(upcoming.length, 'upcoming release')} across
+			<span data-numeric>{new Set(upcoming.map((e) => e.film.key)).size}</span>
 			watchlist films.
 		{/if}
 		{#if unresolved > 0}
-			Could not look up <span class="num">{unresolved}</span>
-			{unresolved === 1 ? 'film' : 'films'}.
+			Could not look up <span data-numeric>{unresolved}</span>
+			{noun(unresolved, 'film')}.
 		{/if}
 	</p>
 
@@ -149,42 +137,6 @@
 		align-items: end;
 		margin-bottom: 16px;
 	}
-	fieldset {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px 16px;
-		border: none;
-		margin: 0;
-		padding: 0;
-	}
-	legend {
-		padding: 0;
-		margin-bottom: 4px;
-		font-size: var(--text-sm);
-		color: var(--fg-secondary);
-	}
-	fieldset label {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: var(--text-sm);
-		cursor: pointer;
-	}
-	fieldset input {
-		accent-color: var(--accent);
-		margin: 0;
-	}
-	.swatch {
-		width: 10px;
-		height: 10px;
-		background: var(--kind-colour);
-	}
-	.summary {
-		margin: 0 0 12px;
-		font-size: var(--text-sm);
-		color: var(--fg-secondary);
-	}
-	.num,
 	.count {
 		font-family: var(--font-mono);
 	}
@@ -203,10 +155,5 @@
 	.count {
 		font-size: var(--text-sm);
 		color: var(--fg-secondary);
-	}
-	.credit {
-		margin-top: 16px;
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
 	}
 </style>

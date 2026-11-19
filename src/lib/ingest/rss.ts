@@ -1,22 +1,11 @@
-import { getOrCreate } from '$lib/collections';
-import type { Film } from '$lib/types';
+import { getOrCreate } from '$lib/maps';
+import { latestWatch } from '$lib/film/diary';
+import { letterboxdFilmUrl } from '$lib/film/links';
+import type { FeedEntry, Film } from '$lib/types';
+import { blankFilm, filmKey } from './film';
 
 /** Letterboxd's profile feed holds this many film items at most, with no way to page back. */
 export const FEED_FILM_LIMIT = 50;
-
-/** One film item of a member's RSS feed: a diary entry, or a review with its viewing. */
-export interface FeedEntry {
-	/** Canonical film page, without the member or the repeat-viewing suffix. */
-	uri: string;
-	name: string;
-	year: number | null;
-	/** ISO watch date; null for a review logged without one. */
-	date: string | null;
-	rating: number | null;
-	rewatch: boolean;
-	liked: boolean;
-	review: string | null;
-}
 
 const ENTITIES: Record<string, string> = {
 	amp: '&',
@@ -53,7 +42,7 @@ function reviewText(description: string | null): string | null {
 
 function canonicalUri(link: string | null): string {
 	const slug = link?.match(/\/film\/([^/]+)\//)?.[1];
-	return slug ? `https://letterboxd.com/film/${slug}/` : (link ?? '');
+	return slug ? letterboxdFilmUrl(slug) : (link ?? '');
 }
 
 function parseItem(item: string): FeedEntry | null {
@@ -81,36 +70,21 @@ export function parseFeed(xml: string): FeedEntry[] {
 		.filter((entry): entry is FeedEntry => entry !== null);
 }
 
-/** What merging a feed changed: films it introduced, and how many viewings it added in all. */
-export interface FeedMerge<F extends Film> {
-	films: F[];
-	newFilms: F[];
+/**
+ * What merging a feed changed: the library's films with the feed's viewings applied, the films
+ * the feed introduced, and how many viewings it added in all.
+ */
+interface FeedMerge<F extends Film> {
+	library: F[];
+	newFilms: Film[];
 	addedEntries: number;
-}
-
-function blankFilm(entry: FeedEntry): Film {
-	return {
-		uri: entry.uri,
-		name: entry.name,
-		year: entry.year,
-		rating: null,
-		liked: false,
-		review: null,
-		watchedDates: [],
-		entries: [],
-		rewatch: false,
-		tags: []
-	};
-}
-
-function latestDate(film: Film): string {
-	return film.watchedDates.reduce((max, date) => (date > max ? date : max), '');
 }
 
 function applyEntry(film: Film, entry: FeedEntry): boolean {
 	if (entry.liked) film.liked = true;
 	if (entry.review) film.review = entry.review;
-	if (entry.rating !== null && (entry.date ?? '') >= latestDate(film)) film.rating = entry.rating;
+	if (entry.rating !== null && (entry.date ?? '') >= (latestWatch(film) ?? ''))
+		film.rating = entry.rating;
 	if (!entry.date || film.watchedDates.includes(entry.date)) return false;
 	film.watchedDates.push(entry.date);
 	film.entries.push({ date: entry.date, rating: entry.rating, rewatch: entry.rewatch });
@@ -119,33 +93,26 @@ function applyEntry(film: Film, entry: FeedEntry): boolean {
 }
 
 /**
- * Folds feed entries into a library, matching films by name and year as the export parser
- * does. A viewing already on record for the same date is not counted twice. Films are copied,
- * never mutated; `makeFilm` shapes the films the feed introduces.
+ * Folds feed entries into a library, matching films as the export parser does. A viewing already
+ * on record for the same date is not counted twice. Films are copied, never mutated.
  */
-export function mergeFeed<F extends Film>(
-	library: F[],
-	feed: FeedEntry[],
-	makeFilm: (film: Film) => F
-): FeedMerge<F> {
-	const byKey = new Map<string, F>();
+export function mergeFeed<F extends Film>(library: F[], feed: FeedEntry[]): FeedMerge<F> {
+	const known = new Map<string, F>();
 	for (const film of library) {
-		byKey.set(`${film.name}::${film.year}`, {
+		known.set(filmKey(film.name, film.year), {
 			...film,
 			watchedDates: [...film.watchedDates],
 			entries: [...film.entries]
 		});
 	}
-	const known = new Set(byKey.keys());
+	const added = new Map<string, Film>();
 	let addedEntries = 0;
 	for (const entry of [...feed].reverse()) {
-		const film = getOrCreate(byKey, `${entry.name}::${entry.year}`, () =>
-			makeFilm(blankFilm(entry))
-		);
+		const key = filmKey(entry.name, entry.year);
+		const film = known.get(key) ?? getOrCreate(added, key, () => blankFilm(entry));
 		if (applyEntry(film, entry)) addedEntries += 1;
 	}
-	const newFilms = [...byKey].filter(([key]) => !known.has(key)).map(([, film]) => film);
-	return { films: [...byKey.values()], newFilms, addedEntries };
+	return { library: [...known.values()], newFilms: [...added.values()], addedEntries };
 }
 
 /**
@@ -157,7 +124,7 @@ export function feedHasGap(library: Film[], feed: FeedEntry[]): boolean {
 	if (feed.length < FEED_FILM_LIMIT || dated.length === 0) return false;
 	const oldestInFeed = dated.reduce((min, date) => (date < min ? date : min));
 	const newestKnown = library.reduce((max, film) => {
-		const latest = latestDate(film);
+		const latest = latestWatch(film) ?? '';
 		return latest > max ? latest : max;
 	}, '');
 	return newestKnown !== '' && oldestInFeed > newestKnown;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { FEED_FILM_LIMIT, feedHasGap, mergeFeed, parseFeed, type FeedEntry } from './rss';
-import type { Film } from '$lib/types';
+import { FEED_FILM_LIMIT, feedHasGap, mergeFeed, parseFeed } from './rss';
+import { film as fixtureFilm } from '$lib/testing/fixtures';
+import type { FeedEntry, Film } from '$lib/types';
 
 const REVIEW_ITEM = `<item>
 	<title>Stalker, 1979 - ★★★★½</title>
@@ -28,20 +29,8 @@ const WATCH_ITEM = `<item>
 
 const LIST_ITEM = `<item><title>Favourites</title><guid isPermaLink="false">letterboxd-list-3</guid></item>`;
 
-function film(overrides: Partial<Film>): Film {
-	return {
-		uri: 'https://boxd.it/a',
-		name: 'Stalker',
-		year: 1979,
-		rating: 4,
-		liked: false,
-		review: null,
-		watchedDates: [],
-		entries: [],
-		rewatch: false,
-		tags: [],
-		...overrides
-	};
+function film(over: Partial<Film>): Film {
+	return fixtureFilm({ name: 'Stalker', year: 1979, rating: 4, ...over });
 }
 
 function entry(date: string, name = 'Stalker'): FeedEntry {
@@ -76,8 +65,6 @@ describe('parseFeed', () => {
 });
 
 describe('mergeFeed', () => {
-	const asIs = (f: Film) => f;
-
 	it('adds a new viewing to a known film without mutating the library', () => {
 		const library = [
 			film({
@@ -85,11 +72,11 @@ describe('mergeFeed', () => {
 				entries: [{ date: '2020-01-01', rating: 4, rewatch: false }]
 			})
 		];
-		const merged = mergeFeed(library, [entry('2026-09-30')], asIs);
+		const merged = mergeFeed(library, [entry('2026-09-30')]);
 		expect(merged.addedEntries).toBe(1);
 		expect(merged.newFilms).toHaveLength(0);
-		expect(merged.films[0].watchedDates).toEqual(['2020-01-01', '2026-09-30']);
-		expect(merged.films[0].rating).toBe(3);
+		expect(merged.library[0].watchedDates).toEqual(['2020-01-01', '2026-09-30']);
+		expect(merged.library[0].rating).toBe(3);
 		expect(library[0].watchedDates).toEqual(['2020-01-01']);
 	});
 
@@ -100,18 +87,18 @@ describe('mergeFeed', () => {
 				entries: [{ date: '2026-09-30', rating: 3, rewatch: false }]
 			})
 		];
-		expect(mergeFeed(library, [entry('2026-09-30')], asIs).addedEntries).toBe(0);
+		expect(mergeFeed(library, [entry('2026-09-30')]).addedEntries).toBe(0);
 	});
 
 	it('keeps the current rating when the feed entry is older than the latest viewing', () => {
 		const library = [film({ rating: 5, watchedDates: ['2026-10-01'] })];
-		expect(mergeFeed(library, [entry('2026-09-01')], asIs).films[0].rating).toBe(5);
+		expect(mergeFeed(library, [entry('2026-09-01')]).library[0].rating).toBe(5);
 	});
 
 	it('creates films the library does not have', () => {
-		const merged = mergeFeed([], [entry('2026-09-30', 'Mirror')], asIs);
+		const merged = mergeFeed([], [entry('2026-09-30', 'Mirror')]);
 		expect(merged.newFilms.map((f) => f.name)).toEqual(['Mirror']);
-		expect(merged.films[0].entries).toEqual([{ date: '2026-09-30', rating: 3, rewatch: false }]);
+		expect(merged.newFilms[0].entries).toEqual([{ date: '2026-09-30', rating: 3, rewatch: false }]);
 	});
 });
 

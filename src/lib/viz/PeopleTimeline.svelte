@@ -1,11 +1,14 @@
 <script lang="ts">
-	import { formatShort } from './milestones';
-	import { colorVar as paletteColorVar, filterOptions, toggleSelection } from './picker';
+	import { formatHours, formatShort, noun } from '$lib/format';
+	import { createPicker } from './picker.svelte';
 	import PickerList from './PickerList.svelte';
+	import Axes from './chart/Axes.svelte';
+	import DataTable from './chart/DataTable.svelte';
+	import PlotFrame from './chart/PlotFrame.svelte';
+	import { extent, MARGIN, niceStep, plotArea } from './chart/plot';
 	import {
 		buildSeries,
 		defaultSelectionKeys,
-		MAX_SELECTED,
 		personOptions,
 		type PersonOption,
 		type PersonSeries,
@@ -15,50 +18,20 @@
 
 	let { films }: { films: EnrichedFilm[] } = $props();
 
-	const MARGIN = { top: 12, right: 12, bottom: 34, left: 40 };
-	/** How close the pointer must come, in screen pixels, before a point claims the tooltip. */
-	const HOVER_REACH = 22;
-	/** Candidate x-axis steps in years; the first that keeps the axis under ten ticks wins. */
+	/** Candidate x-axis steps in years. */
 	const YEAR_STEPS = [1, 2, 5, 10, 20, 25];
-	/** Candidate y-axis steps in hours, same idea. */
+	/** Candidate y-axis steps in hours. */
 	const HOUR_STEPS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
-	const SEARCH_LIMIT = 40;
 
-	let wrapper: HTMLElement | undefined = $state();
 	let width = $state(0);
-	let search = $state('');
-	let selectedKeys: string[] = $state([]);
-	let seeded = false;
-	let hover: { series: PersonSeries; point: SeriesPoint } | null = $state(null);
-	let hoverPos = $state({ x: 0, y: 0 });
+	type Hover = { series: PersonSeries; point: SeriesPoint };
+	let hover: Hover | null = $state(null);
 
 	const height = $derived(Math.min(420, Math.max(280, width * 0.5)));
 	const options = $derived(personOptions(films));
-
-	/* Seeds the default top-2/top-2 selection once options first exist, same one-shot idea as
-	   reading page.url.searchParams once on mount rather than re-deriving on every change. */
-	$effect(() => {
-		if (!seeded && options.length > 0) {
-			selectedKeys = defaultSelectionKeys(films);
-			seeded = true;
-		}
-	});
-
-	const filtered = $derived(filterOptions(options, search, SEARCH_LIMIT));
-	const listRows = $derived(filtered.rows);
-	const listOverflow = $derived(filtered.overflow);
-
-	const selected = $derived(
-		selectedKeys
-			.map((key) => options.find((o) => o.key === key))
-			.filter((o): o is PersonOption => o !== undefined)
-	);
-	const series = $derived(selected.map((option) => buildSeries(option)));
-	const atCap = $derived(selectedKeys.length >= MAX_SELECTED);
-
-	function toggle(key: string) {
-		selectedKeys = toggleSelection(selectedKeys, key, atCap);
-	}
+	const picker = createPicker(() => options, defaultSelectionKeys);
+	const series = $derived(picker.selected.map((option) => buildSeries(option)));
+	const colorVar = picker.color;
 
 	const allPoints = $derived(
 		series.flatMap((s) => s.points.map((point) => ({ series: s, point })))
@@ -68,18 +41,11 @@
 	    would keep nudging the axis on every reactive pass. */
 	const now = Date.now();
 
-	/* Spread as a loop, not Math.max(...points): a large library would overflow the argument list.
-	   Max always includes `now`, so the axis runs through to today even when the most recent
-	   watch was a while ago, rather than stopping cold at the last plotted point. */
+	/* Includes `now`, so the axis runs through to today even when the most recent watch was a
+	   while ago, rather than stopping cold at the last plotted point. */
 	const dateExtent = $derived.by(() => {
-		let min = Infinity;
-		let max = now;
-		for (const { point } of allPoints) {
-			const t = Date.parse(point.date);
-			if (t < min) min = t;
-			if (t > max) max = t;
-		}
-		return allPoints.length > 0 ? { min, max } : { min: 0, max: 0 };
+		const dates = extent(allPoints.map(({ point }) => Date.parse(point.date)));
+		return dates ? { min: dates.min, max: Math.max(dates.max, now) } : { min: 0, max: 0 };
 	});
 
 	const yearExtent = $derived(
@@ -91,10 +57,7 @@
 				}
 	);
 
-	const yearStep = $derived(
-		YEAR_STEPS.find((s) => (yearExtent.max - yearExtent.min) / s <= 9) ??
-			YEAR_STEPS[YEAR_STEPS.length - 1]
-	);
+	const yearStep = $derived(niceStep(yearExtent.max - yearExtent.min, YEAR_STEPS));
 
 	const yearDomain = $derived({
 		min: Math.floor(yearExtent.min / yearStep) * yearStep,
@@ -113,16 +76,11 @@
 		series.reduce((max, s) => Math.max(max, s.points[s.points.length - 1]?.cumulativeHours ?? 0), 0)
 	);
 
-	const hourStep = $derived(
-		HOUR_STEPS.find((s) => maxHours / s <= 9) ?? HOUR_STEPS[HOUR_STEPS.length - 1]
-	);
+	const hourStep = $derived(niceStep(maxHours, HOUR_STEPS));
 
 	const hourDomain = $derived(Math.max(hourStep, Math.ceil(maxHours / hourStep) * hourStep));
 
-	const plot = $derived({
-		w: Math.max(1, width - MARGIN.left - MARGIN.right),
-		h: Math.max(1, height - MARGIN.top - MARGIN.bottom)
-	});
+	const plot = $derived(plotArea(width, height));
 
 	function pxMs(ms: number): number {
 		const span = timeDomain.max - timeDomain.min || 1;
@@ -137,15 +95,16 @@
 		return MARGIN.top + ((hourDomain - hours) / hourDomain) * plot.h;
 	}
 
-	const yearTicks = $derived.by(() => {
-		const ticks: number[] = [];
-		for (let y = yearDomain.min; y <= yearDomain.max; y += yearStep) ticks.push(y);
+	const xTicks = $derived.by(() => {
+		const ticks: { x: number; label: string }[] = [];
+		for (let y = yearDomain.min; y <= yearDomain.max; y += yearStep)
+			ticks.push({ x: px(`${y}-01-01`), label: String(y) });
 		return ticks;
 	});
 
-	const hourTicks = $derived.by(() => {
-		const ticks: number[] = [];
-		for (let h = 0; h <= hourDomain; h += hourStep) ticks.push(h);
+	const yTicks = $derived.by(() => {
+		const ticks: { y: number; label: string }[] = [];
+		for (let h = 0; h <= hourDomain; h += hourStep) ticks.push({ y: py(h), label: `${h}h` });
 		return ticks;
 	});
 
@@ -171,70 +130,19 @@
 		return d;
 	}
 
-	function onMove(event: PointerEvent) {
-		if (!wrapper) return;
-		const box = wrapper.getBoundingClientRect();
-		const x = event.clientX - box.left;
-		const y = event.clientY - box.top;
-		let best: { series: PersonSeries; point: SeriesPoint } | null = null;
-		let bestDistance = HOVER_REACH;
-		for (const candidate of allPoints) {
-			const distance = Math.hypot(
-				px(candidate.point.date) - x,
-				py(candidate.point.cumulativeHours) - y
-			);
-			if (distance < bestDistance) {
-				bestDistance = distance;
-				best = candidate;
-			}
-		}
-		hover = best;
-		if (best) {
-			hoverPos = {
-				x: Math.min(px(best.point.date) + 12, Math.max(0, box.width - 200)),
-				y: py(best.point.cumulativeHours) + 12
-			};
-		}
-	}
-
-	function formatHours(hours: number): string {
-		return hours >= 10 ? `${Math.round(hours)}h` : `${hours.toFixed(1)}h`;
-	}
-
-	/** One per MAX_SELECTED slot; contrast-sorted so neighbours stay distinct against Latte and Mocha alike. */
-	const PALETTE = [
-		'--ctp-mauve',
-		'--ctp-teal',
-		'--ctp-sapphire',
-		'--ctp-maroon',
-		'--ctp-peach',
-		'--ctp-flamingo',
-		'--ctp-sky',
-		'--ctp-rosewater'
-	];
-
-	function colorVar(index: number): string {
-		return paletteColorVar(PALETTE, index);
-	}
+	const xy = ({ point }: Hover): [number, number] => [px(point.date), py(point.cumulativeHours)];
 </script>
 
 <PickerList
+	{picker}
 	searchId="ptl-search"
 	searchLabel="Search actors and directors"
 	placeholder="Type a name…"
-	bind:search
-	chips={series.map((s) => s.option)}
-	{listRows}
-	{listOverflow}
-	{atCap}
 	optionsAriaLabel="Actors and directors"
-	isSelected={(key) => selectedKeys.includes(key)}
-	{toggle}
-	{colorVar}
 >
 	{#snippet chipContent(option: PersonOption)}
 		{#if option.href}
-			<a href={option.href} target="_blank" rel="noopener">{option.name}</a>
+			<a class="person" href={option.href} target="_blank" rel="noopener">{option.name}</a>
 		{:else}
 			<span>{option.name}</span>
 		{/if}
@@ -242,7 +150,7 @@
 	{/snippet}
 	{#snippet optionMeta(option: PersonOption)}
 		<span class="meta" data-numeric
-			>{option.role} · {option.count} film{option.count === 1 ? '' : 's'}</span
+			>{option.role} · {option.count} {noun(option.count, 'film')}</span
 		>
 	{/snippet}
 </PickerList>
@@ -252,132 +160,81 @@
 {:else if allPoints.length === 0}
 	<p class="empty-chart">None of the selected people's films have a known runtime to plot.</p>
 {:else}
-	<div class="wrap" bind:this={wrapper} bind:clientWidth={width}>
-		{#if width > 0}
-			<svg
-				{width}
-				{height}
-				viewBox="0 0 {width} {height}"
-				role="img"
-				aria-label="Cumulative hours watched over time for {series
-					.map((s) => s.option.name)
-					.join(', ')}"
-				onpointermove={onMove}
-				onpointerleave={() => (hover = null)}
-			>
-				{#each hourTicks as h (h)}
-					<line class="grid" x1={MARGIN.left} x2={width - MARGIN.right} y1={py(h)} y2={py(h)} />
-					<text
-						class="tick"
-						data-numeric
-						x={MARGIN.left - 6}
-						y={py(h)}
-						text-anchor="end"
-						dy="0.32em"
-					>
-						{h}h
-					</text>
-				{/each}
+	<PlotFrame
+		bind:width
+		{height}
+		label="Cumulative hours watched over time for {series.map((s) => s.option.name).join(', ')}"
+		points={allPoints}
+		{xy}
+		bind:hover
+	>
+		<Axes {width} {height} {yTicks} {xTicks} baseline={py(0)} xLabel="Year" />
 
-				<line class="axis" x1={MARGIN.left} x2={width - MARGIN.right} y1={py(0)} y2={py(0)} />
-				{#each yearTicks as y (y)}
-					<text
-						class="tick"
-						data-numeric
-						x={px(`${y}-01-01`)}
-						y={height - MARGIN.bottom + 16}
-						text-anchor="middle"
-					>
-						{y}
-					</text>
-				{/each}
-				<text
-					class="axis-label"
-					x={(MARGIN.left + width - MARGIN.right) / 2}
-					y={height - 4}
-					text-anchor="middle"
-				>
-					Year
-				</text>
-
-				{#each series as s, i (s.option.key)}
-					{#if s.points.length > 0}
-						<path class="line" d={pathFor(s)} style="stroke: {colorVar(i)}" />
-						{@const last = s.points[s.points.length - 1]}
-						<circle
-							class="end"
-							cx={px(last.date)}
-							cy={py(last.cumulativeHours)}
-							r="4"
-							style="fill: {colorVar(i)}"
-						/>
-					{/if}
-				{/each}
-
-				{#if hover}
-					{@const i = series.indexOf(hover.series)}
-					<circle
-						class="dot active"
-						cx={px(hover.point.date)}
-						cy={py(hover.point.cumulativeHours)}
-						r="5"
-						style="fill: {colorVar(i)}"
-					/>
-				{/if}
-			</svg>
-
-			{#if hover}
-				<div class="tooltip" style="left: {hoverPos.x}px; top: {hoverPos.y}px">
-					<strong>{hover.series.option.name}</strong>
-					<div>{hover.point.event.film.name}</div>
-					<div data-numeric>
-						{formatShort(hover.point.date)} · {formatHours(hover.point.cumulativeHours)} total
-					</div>
-				</div>
+		{#each series as s, i (s.option.key)}
+			{#if s.points.length > 0}
+				<path class="line" d={pathFor(s)} style="stroke: {colorVar(i)}" />
+				{@const last = s.points[s.points.length - 1]}
+				<circle
+					class="end"
+					cx={px(last.date)}
+					cy={py(last.cumulativeHours)}
+					r="4"
+					style="fill: {colorVar(i)}"
+				/>
 			{/if}
-		{/if}
-	</div>
+		{/each}
 
-	<details>
-		<summary>View as table</summary>
-		<table>
-			<thead>
-				<tr>
-					<th>Person</th>
-					<th>Role</th>
-					<th class="num">Events plotted</th>
-					<th class="num">Total hours</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each series as s (s.option.key)}
-					<tr>
-						<td>{s.option.name}</td>
-						<td>{s.option.role}</td>
-						<td class="num" data-numeric>{s.points.length}</td>
-						<td class="num" data-numeric
-							>{formatHours(s.points[s.points.length - 1]?.cumulativeHours ?? 0)}</td
-						>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</details>
+		{#if hover}
+			{@const [cx, cy] = xy(hover)}
+			<circle
+				class="dot active"
+				{cx}
+				{cy}
+				r="5"
+				style="fill: {colorVar(series.indexOf(hover.series))}"
+			/>
+		{/if}
+
+		{#snippet tooltip({ series: s, point })}
+			<strong>{s.option.name}</strong>
+			<div>{point.event.film.name}</div>
+			<div data-numeric>
+				{formatShort(point.date)} · {formatHours(point.cumulativeHours)} total
+			</div>
+		{/snippet}
+	</PlotFrame>
+
+	<DataTable
+		columns={[
+			{ label: 'Person' },
+			{ label: 'Role' },
+			{ label: 'Events plotted', numeric: true },
+			{ label: 'Total hours', numeric: true }
+		]}
+		rows={series}
+		key={(s) => s.option.key}
+		cells={(s) => [
+			s.option.name,
+			s.option.role,
+			s.points.length,
+			formatHours(s.points[s.points.length - 1]?.cumulativeHours ?? 0)
+		]}
+	/>
 {/if}
 
 <style>
-	:global(.chip) a {
+	.person {
 		color: var(--accent);
 		text-decoration: none;
 	}
-	:global(.chip) a:hover {
+	.person:hover {
 		text-decoration: underline;
 	}
-	:global(.chip) .role {
+	.role {
 		color: var(--fg-muted);
 		font-size: var(--text-2xs);
 	}
-	:global(.options) .meta {
+	.meta {
 		color: var(--fg-muted);
 		font-size: var(--text-2xs);
 		white-space: nowrap;
@@ -385,28 +242,6 @@
 	.empty-chart {
 		color: var(--fg-secondary);
 		font-size: var(--text-sm);
-	}
-	.wrap {
-		position: relative;
-	}
-	svg {
-		display: block;
-		max-width: 100%;
-		touch-action: pan-y;
-	}
-	.grid {
-		stroke: var(--border);
-	}
-	.axis {
-		stroke: var(--border-strong);
-	}
-	.tick {
-		fill: var(--fg-muted);
-		font-size: var(--text-2xs);
-	}
-	.axis-label {
-		fill: var(--fg-secondary);
-		font-size: var(--text-2xs);
 	}
 	.line {
 		fill: none;
@@ -419,40 +254,5 @@
 	.dot.active {
 		stroke: var(--fg);
 		stroke-width: 2;
-	}
-	.tooltip {
-		position: absolute;
-		width: 190px;
-		padding: 8px;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border);
-		font-size: var(--text-sm);
-		pointer-events: none;
-		z-index: 1;
-	}
-	details {
-		margin-top: 12px;
-	}
-	summary {
-		cursor: pointer;
-		color: var(--fg-secondary);
-		font-size: var(--text-sm);
-	}
-	table {
-		border-collapse: collapse;
-		margin-top: 8px;
-		font-size: var(--text-sm);
-	}
-	th,
-	td {
-		padding: 4px 12px;
-		border-bottom: 1px solid var(--border);
-		text-align: left;
-	}
-	thead tr {
-		background: var(--bg-secondary);
-	}
-	.num {
-		text-align: right;
 	}
 </style>

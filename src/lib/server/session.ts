@@ -1,8 +1,9 @@
 import { error, type Cookies } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 
-export const SESSION_COOKIE = 'lv_session';
-export const SESSION_TTL_SECONDS = 6 * 60 * 60;
+const SESSION_COOKIE = 'lv_session';
+const SESSION_TTL_SECONDS = 6 * 60 * 60;
 
 const ALGO = { name: 'HMAC', hash: 'SHA-256' };
 
@@ -23,8 +24,8 @@ function fromHex(hex: string): Uint8Array<ArrayBuffer> {
 	return bytes;
 }
 
-/** Mints a cookie value proving it was issued by this server, valid until SESSION_TTL_SECONDS from now. */
-export async function mintSessionToken(secret: string): Promise<string> {
+/** A cookie value proving it was issued by this server, valid until SESSION_TTL_SECONDS from now. */
+async function mintSessionToken(secret: string): Promise<string> {
 	const expires = Date.now() + SESSION_TTL_SECONDS * 1000;
 	const signature = await crypto.subtle.sign(
 		ALGO,
@@ -34,11 +35,7 @@ export async function mintSessionToken(secret: string): Promise<string> {
 	return `${expires}.${toHex(signature)}`;
 }
 
-/** Verifies a session cookie value: correctly signed by this server and not yet expired. */
-export async function verifySessionToken(
-	secret: string,
-	token: string | undefined
-): Promise<boolean> {
+async function verifySessionToken(secret: string, token: string | undefined): Promise<boolean> {
 	if (!token) return false;
 	const [expiresRaw, signatureHex] = token.split('.');
 	const expires = Number(expiresRaw);
@@ -49,6 +46,22 @@ export async function verifySessionToken(
 		fromHex(signatureHex),
 		new TextEncoder().encode(expiresRaw)
 	);
+}
+
+/**
+ * Sets a fresh session cookie on a page load unless a valid one is already there. Without a
+ * SESSION_SECRET nothing is issued, and every API call fails in `requireSession` instead.
+ */
+export async function issueSession(cookies: Cookies): Promise<void> {
+	if (!env.SESSION_SECRET) return;
+	if (await verifySessionToken(env.SESSION_SECRET, cookies.get(SESSION_COOKIE))) return;
+	cookies.set(SESSION_COOKIE, await mintSessionToken(env.SESSION_SECRET), {
+		path: '/',
+		httpOnly: true,
+		sameSite: 'lax',
+		secure: !dev,
+		maxAge: SESSION_TTL_SECONDS
+	});
 }
 
 /**

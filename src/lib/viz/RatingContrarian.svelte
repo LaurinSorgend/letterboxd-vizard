@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { contrarianScore, contrarianSources } from './contrarian';
-	import { webHref } from './href';
+	import GapList from './GapList.svelte';
 	import MetricToggle from './MetricToggle.svelte';
 	import type { EnrichedFilm } from '$lib/types';
 
@@ -60,33 +60,13 @@
 	bind:value={sourceKey}
 />
 
-<div class="gaps">
-	{#each lists as list (list.title)}
-		<div>
-			<h3>{list.title}</h3>
-			<ul>
-				{#each list.rows as row (row.film.uri)}
-					<li>
-						<a
-							class="name"
-							href={webHref(row.film.uri) ?? undefined}
-							target="_blank"
-							rel="noopener"
-							title={row.film.name}
-						>
-							{row.film.name}
-						</a>
-						<span class="nums" data-numeric>
-							you <strong>{row.yours.toFixed(0)}</strong> · them
-							<strong>{row.source.toFixed(0)}</strong>
-						</span>
-					</li>
-				{:else}
-					<li class="empty">No films diverge this way yet.</li>
-				{/each}
-			</ul>
-		</div>
-	{/each}
+<div class="lists">
+	<GapList {lists} empty="No films diverge this way yet.">
+		{#snippet nums(row)}
+			you <strong>{row.yours.toFixed(0)}</strong> · them
+			<strong>{row.source.toFixed(0)}</strong>
+		{/snippet}
+	</GapList>
 </div>
 
 <style>
@@ -99,7 +79,7 @@
 	}
 	.headline .num {
 		color: var(--accent);
-		font-weight: 700;
+		font-weight: 500;
 	}
 	.sub {
 		margin: 4px 0 0;
@@ -116,8 +96,11 @@
 	}
 	.breakdown li {
 		display: flex;
+		justify-content: space-between;
 		gap: 8px;
 		align-items: baseline;
+		padding: 4px 0;
+		border-bottom: 1px solid var(--border);
 		font-size: var(--text-sm);
 	}
 	.breakdown .label {
@@ -127,44 +110,7 @@
 	.breakdown .count {
 		color: var(--fg-muted);
 	}
-	.gaps {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-		gap: 24px;
+	.lists {
 		margin-top: 16px;
-	}
-	h3 {
-		margin: 0 0 8px;
-	}
-	ul {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-	li {
-		display: flex;
-		justify-content: space-between;
-		gap: 12px;
-		padding: 4px 0;
-		border-bottom: 1px solid var(--border);
-		font-size: var(--text-sm);
-	}
-	.name {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		color: var(--accent);
-		text-decoration: none;
-	}
-	.name:hover {
-		text-decoration: underline;
-	}
-	.nums {
-		color: var(--fg-secondary);
-		white-space: nowrap;
-	}
-	.empty {
-		color: var(--fg-muted);
-		border-bottom: none;
 	}
 </style>

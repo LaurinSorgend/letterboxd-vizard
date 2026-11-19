@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { imageUrl } from '$lib/viz/images';
+	import { imageUrl } from '$lib/film/links';
 	import type { ServiceCount } from './filter';
 
 	let {
 		counts,
-		loading = false,
+		loading,
 		selected = $bindable()
 	}: {
 		counts: ServiceCount[];
 		/** True while offers are still arriving, so an empty list is not yet an answer. */
-		loading?: boolean;
+		loading: boolean;
 		selected: number[];
 	} = $props();
 

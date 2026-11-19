@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { metacriticGaps, type MetacriticGap } from './stats';
-	import { webHref } from './href';
+	import { extremes, gapsTo, METACRITIC, type RatingGap } from '$lib/film/ratings';
+	import FilmLink from './chart/FilmLink.svelte';
 	import type { EnrichedFilm } from '$lib/types';
+
+	const TOP_N = 10;
 
 	let { films }: { films: EnrichedFilm[] } = $props();
 
-	const gaps = $derived(metacriticGaps(films));
+	const gaps = $derived(extremes(gapsTo(films, METACRITIC), TOP_N));
 	const lists = $derived([
 		{ title: "You loved it, critics didn't", rows: gaps.over },
 		{ title: "Critics loved it, you didn't", rows: gaps.under }
@@ -14,7 +16,7 @@
 		Math.max(1, ...gaps.over.map((g) => g.gap), ...gaps.under.map((g) => -g.gap))
 	);
 
-	function barWidth(gap: MetacriticGap): number {
+	function barWidth(gap: RatingGap): number {
 		return (Math.abs(gap.gap) / max) * 100;
 	}
 </script>
@@ -26,11 +28,9 @@
 			<div class="chart">
 				{#each list.rows as row (row.film.uri)}
 					<span class="lab" title={row.film.name}>
-						<a href={webHref(row.film.uri) ?? undefined} target="_blank" rel="noopener">
-							{row.film.name}
-						</a>
+						<FilmLink film={row.film} title={null} />
 					</span>
-					<span class="track" title="you {row.yours.toFixed(0)} · Metacritic {row.metascore}">
+					<span class="track" title="you {row.yours.toFixed(0)} · Metacritic {row.source}">
 						<span class="bar" style="width: {barWidth(row)}%"></span>
 						<span class="val" data-numeric>{Math.abs(row.gap).toFixed(0)}</span>
 					</span>
@@ -64,11 +64,11 @@
 		white-space: nowrap;
 		max-width: 200px;
 	}
-	.lab a {
+	.lab :global(a) {
 		color: var(--fg-secondary);
 		text-decoration: none;
 	}
-	.lab a:hover {
+	.lab :global(a:hover) {
 		text-decoration: underline;
 		color: var(--accent);
 	}

@@ -12,6 +12,7 @@ export interface Palette {
 	accent: string;
 	/** The dye shift the whole frame took, already carrying its own alpha. */
 	cast: string;
+	faces: Faces;
 }
 
 /** A measured piece of the card, so a stack can be centred before anything is painted. */
@@ -20,23 +21,38 @@ export interface Block {
 	draw: (y: number) => void;
 }
 
-const FACE = {
-	value: '400 {size}px "Mazius Display Extra Italic", Georgia, serif',
-	label: '700 {size}px Ronzino, Arial, sans-serif',
-	body: '400 {size}px Ronzino, Arial, sans-serif',
-	mono: '500 {size}px "Fira Code", monospace'
-} as const;
+/** The card's typefaces, read off the page like its colours, so the card sets the slide's type. */
+export interface Faces {
+	sans: string;
+	mono: string;
+	accent: string;
+}
 
-export function font(face: keyof typeof FACE, size: number): string {
-	return FACE[face].replace('{size}', String(size));
+/** Stacks for a page whose custom properties could not be read. */
+const FALLBACK_FACES: Faces = {
+	sans: 'Ronzino, Arial, sans-serif',
+	mono: '"Fira Code", monospace',
+	accent: '"Mazius Display Extra Italic", Georgia, serif'
+};
+
+const FACE = {
+	value: { weight: 400, family: 'accent' },
+	label: { weight: 500, family: 'sans' },
+	body: { weight: 400, family: 'sans' },
+	mono: { weight: 500, family: 'mono' }
+} as const satisfies Record<string, { weight: number; family: keyof Faces }>;
+
+export function font(faces: Faces, face: keyof typeof FACE, size: number): string {
+	const { weight, family } = FACE[face];
+	return `${weight} ${size}px ${faces[family]}`;
 }
 
 /** The faces the cards paint with. Canvas silently falls back without this. */
-export async function ensureFonts(): Promise<void> {
+export async function ensureFonts(faces: Faces): Promise<void> {
 	if (!('fonts' in document)) return;
 	await Promise.all(
-		(['value', 'label', 'body', 'mono'] as const).map((face) =>
-			document.fonts.load(font(face, 64)).catch(() => [])
+		(Object.keys(FACE) as (keyof typeof FACE)[]).map((face) =>
+			document.fonts.load(font(faces, face, 64)).catch(() => [])
 		)
 	);
 }
@@ -44,6 +60,7 @@ export async function ensureFonts(): Promise<void> {
 export function paletteFrom(element: Element): Palette {
 	const style = getComputedStyle(element);
 	const read = (name: string) => style.getPropertyValue(name).trim();
+	const stack = (name: string, fallback: string) => read(name).replace(/\s+/g, ' ') || fallback;
 	return {
 		room: read('--w-room'),
 		screen: read('--w-screen'),
@@ -52,7 +69,12 @@ export function paletteFrom(element: Element): Palette {
 		line: read('--w-line'),
 		stamp: read('--w-stamp'),
 		accent: read('--w-accent') || read('--w-ink'),
-		cast: read('--w-cast') || 'transparent'
+		cast: read('--w-cast') || 'transparent',
+		faces: {
+			sans: stack('--font-sans', FALLBACK_FACES.sans),
+			mono: stack('--font-mono', FALLBACK_FACES.mono),
+			accent: stack('--font-accent', FALLBACK_FACES.accent)
+		}
 	};
 }
 
@@ -91,48 +113,6 @@ export function grain(ctx: CanvasRenderingContext2D, width: number, height: numb
 	ctx.restore();
 }
 
-/** Lens falloff, dust and one hair: the gate's own marks, printed on every card. */
-export function gateMarks(
-	ctx: CanvasRenderingContext2D,
-	box: { x: number; y: number; width: number; height: number }
-): void {
-	const { x, y, width, height } = box;
-	const centre = ctx.createRadialGradient(
-		x + width / 2,
-		y + height * 0.42,
-		0,
-		x + width / 2,
-		y + height / 2,
-		Math.max(width, height) * 0.78
-	);
-	centre.addColorStop(0, 'rgba(255, 250, 232, 0.13)');
-	centre.addColorStop(0.5, 'rgba(255, 250, 232, 0)');
-	centre.addColorStop(1, 'rgba(24, 16, 6, 0.22)');
-	ctx.fillStyle = centre;
-	ctx.fillRect(x, y, width, height);
-
-	const specks: [number, number, number, number][] = [
-		[0.18, 0.27, 3.2, 0.5],
-		[0.74, 0.16, 2.6, 0.36],
-		[0.61, 0.84, 3.8, 0.45],
-		[0.33, 0.69, 2.3, 0.3],
-		[0.88, 0.57, 2.9, 0.4]
-	];
-	for (const [fx, fy, radius, alpha] of specks) {
-		ctx.beginPath();
-		ctx.arc(x + width * fx, y + height * fy, radius, 0, Math.PI * 2);
-		ctx.fillStyle = `rgba(20, 14, 6, ${alpha})`;
-		ctx.fill();
-	}
-
-	ctx.save();
-	ctx.translate(x + width * 0.87, y + height * 0.07);
-	ctx.rotate(0.23);
-	ctx.fillStyle = 'rgba(20, 14, 6, 0.42)';
-	ctx.fillRect(0, 0, 2, height * 0.24);
-	ctx.restore();
-}
-
 export function wrap(
 	ctx: CanvasRenderingContext2D,
 	text: string,
@@ -164,6 +144,7 @@ export function wrap(
 /** Shrinks a display value until it fits the measure, so long titles never run off the card. */
 export function fitFont(
 	ctx: CanvasRenderingContext2D,
+	faces: Faces,
 	text: string,
 	maxWidth: number,
 	start: number,
@@ -171,11 +152,11 @@ export function fitFont(
 ): number {
 	let size = start;
 	while (size > floor) {
-		ctx.font = font('value', size);
+		ctx.font = font(faces, 'value', size);
 		if (ctx.measureText(text).width <= maxWidth) break;
 		size -= 4;
 	}
-	ctx.font = font('value', size);
+	ctx.font = font(faces, 'value', size);
 	return size;
 }
 
@@ -205,7 +186,7 @@ export function posterBox(
 		ctx.fillStyle = rgba(palette.ink, 0.1);
 		ctx.fillRect(x, y, width, height);
 		ctx.fillStyle = palette.muted;
-		ctx.font = font('body', 20);
+		ctx.font = font(palette.faces, 'body', 20);
 		ctx.textAlign = 'center';
 		wrap(ctx, name, width - 16, 4).forEach((line, i) => {
 			ctx.fillText(line, x + width / 2, y + height / 2 + i * 24);

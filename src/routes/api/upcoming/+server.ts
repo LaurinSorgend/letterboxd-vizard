@@ -1,12 +1,13 @@
 import { json, error } from '@sveltejs/kit';
-import { FetchBudget, FETCHES_PER_REQUEST } from '$lib/server/budget';
-import { getUpcomingCachedMany, putUpcomingCachedMany } from '$lib/server/cache';
-import { getDb } from '$lib/server/db';
-import { discoverUpcoming } from '$lib/server/discover';
-import { checkRateLimit } from '$lib/server/ratelimit';
-import { requireSession } from '$lib/server/session';
-import { RELEASE_KINDS, type ReleaseKind } from '$lib/releases/dates';
-import type { UpcomingCandidate } from '$lib/types';
+import { requestContext } from '$lib/server/batch';
+import type { FetchBudget } from '$lib/server/budget';
+import { discoverUpcoming, popularCache } from '$lib/server/discover';
+import {
+	REGION_PATTERN,
+	RELEASE_KINDS,
+	type ReleaseKind,
+	type UpcomingCandidate
+} from '$lib/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { RequestHandler } from './$types';
 
@@ -26,7 +27,7 @@ function parseBody(body: { region?: unknown; kinds?: unknown; people?: unknown }
 	const people = body?.people ?? [];
 	const valid =
 		typeof region === 'string' &&
-		/^[A-Z]{2}$/.test(region) &&
+		REGION_PATTERN.test(region) &&
 		Array.isArray(kinds) &&
 		kinds.length > 0 &&
 		kinds.every((k) => (RELEASE_KINDS as readonly unknown[]).includes(k)) &&
@@ -77,14 +78,14 @@ async function popularCandidates(
 	{ region, kinds }: UpcomingBody
 ): Promise<UpcomingCandidate[]> {
 	const keyOf = (kind: ReleaseKind) => `${region}:${kind}:${POPULAR_PAGES}`;
-	const cached = await getUpcomingCachedMany(db, kinds.map(keyOf));
+	const cached = await popularCache.getMany(db, kinds.map(keyOf));
 	const missing = kinds.filter((kind) => !cached.has(keyOf(kind)));
 	const fetched = await Promise.all(missing.map((kind) => fetchPopular(budget, region, kind)));
 	const toWrite: [string, UpcomingCandidate[]][] = [];
 	missing.forEach((kind, i) => {
 		if (fetched[i].complete) toWrite.push([keyOf(kind), fetched[i].candidates]);
 	});
-	if (toWrite.length > 0) await putUpcomingCachedMany(db, toWrite);
+	await popularCache.putMany(db, toWrite);
 	const fresh = new Map(missing.map((kind, i) => [kind, fetched[i].candidates]));
 	return kinds.flatMap((kind) => cached.get(keyOf(kind)) ?? fresh.get(kind) ?? []);
 }
@@ -106,13 +107,9 @@ async function peopleCandidates(
  * Body `{ region, kinds, people }`; answers films with an upcoming release of any of `kinds` in
  * `region`, the popular ones cached for a day plus uncached ones featuring any of `people`.
  */
-export const POST: RequestHandler = async ({ request, platform, cookies, getClientAddress }) => {
-	await requireSession(cookies);
-	await checkRateLimit(platform?.env?.RECOMMEND_LIMITER, getClientAddress());
-
+export const POST: RequestHandler = async ({ request, platform }) => {
 	const body = parseBody(await request.json().catch(() => null));
-	const db = await getDb(platform);
-	const budget = new FetchBudget(FETCHES_PER_REQUEST);
+	const { db, budget } = await requestContext(platform);
 	const [popular, personal] = await Promise.all([
 		popularCandidates(db, budget, body),
 		peopleCandidates(budget, body)

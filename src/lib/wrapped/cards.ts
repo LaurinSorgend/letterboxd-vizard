@@ -1,11 +1,12 @@
 import { count } from '$lib/format';
-import { imageUrl } from '$lib/viz/images';
-import { alsoTrueLine } from '$lib/viz/verdicts';
+import { averageRating, countries, hours, topRated } from '$lib/year/facts/totals';
+import { streak } from '$lib/year/facts/timing';
+import { imageUrl } from '$lib/film/links';
+import { alsoTrueLine } from '$lib/year/verdict';
 import {
 	ensureFonts,
 	fitFont,
 	font,
-	gateMarks,
 	grain,
 	loadImage,
 	posterBox,
@@ -14,8 +15,9 @@ import {
 	type Block,
 	type Palette
 } from './canvas';
-import type { Scene } from './scenes';
-import type { Wrapped } from './wrapped';
+import { CARD_POSTERS, drawGate, isDense } from './look';
+import { LABELS, TOP_FILMS } from './labels';
+import type { DeckInput, Scene, Stat } from './scenes/shared';
 
 /* A mounted transparency: dark mount all round, a deeper strip at the foot for the
  * stamp, and the lit field between them. `margin` is mount plus the field's own inset,
@@ -66,7 +68,7 @@ function finish(
 	url?: string
 ): void {
 	const field = fieldOf(size);
-	gateMarks(ctx, field);
+	drawGate(ctx, field);
 	ctx.save();
 	ctx.beginPath();
 	ctx.rect(field.x, field.y, field.width, field.height);
@@ -86,7 +88,7 @@ function stamp(
 ): void {
 	const field = fieldOf(size);
 	const centre = field.y + field.height + size.strip / 2;
-	ctx.font = font('mono', 26);
+	ctx.font = font(palette.faces, 'mono', 26);
 	ctx.fillStyle = palette.stamp;
 	ctx.fillText('LETTERBOXD VIZARD', size.mount, url ? centre - 30 : centre - 13);
 	if (url) {
@@ -101,11 +103,18 @@ function stamp(
 
 function valueBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette): Block {
 	const measure = STORY.width - STORY.margin * 2;
-	const size = fitFont(ctx, scene.value, measure, scene.valueKind === 'number' ? 240 : 128, 56);
+	const size = fitFont(
+		ctx,
+		palette.faces,
+		scene.value,
+		measure,
+		scene.valueKind === 'number' ? 240 : 128,
+		56
+	);
 	return {
 		height: size * 1.02,
 		draw: (y) => {
-			ctx.font = font('value', size);
+			ctx.font = font(palette.faces, 'value', size);
 			ctx.fillStyle = palette.accent;
 			ctx.fillText(scene.value, STORY.margin, y);
 		}
@@ -119,7 +128,7 @@ function labelBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palett
 			const width = Math.min(520, STORY.width - STORY.margin * 2);
 			ctx.fillStyle = palette.accent;
 			ctx.fillRect(STORY.margin, y, width, 6);
-			ctx.font = font('label', 54);
+			ctx.font = font(palette.faces, 'label', 54);
 			ctx.fillStyle = palette.ink;
 			ctx.fillText(scene.label, STORY.margin, y + 24);
 		}
@@ -127,19 +136,19 @@ function labelBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palett
 }
 
 function noteBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette): Block {
-	ctx.font = font('body', 36);
+	ctx.font = font(palette.faces, 'body', 36);
 	const lines = wrap(ctx, scene.note, STORY.width - STORY.margin * 2, 4);
 	const footnote = scene.footnote ?? '';
 	return {
 		height: lines.length * 50 + 16 + (footnote ? 44 : 0),
 		draw: (y) => {
-			ctx.font = font('body', 36);
+			ctx.font = font(palette.faces, 'body', 36);
 			ctx.fillStyle = palette.muted;
 			lines.forEach((line, i) => ctx.fillText(line, STORY.margin, y + i * 50));
 			if (!footnote) return;
-			ctx.font = font('mono', 26);
+			ctx.font = font(palette.faces, 'mono', 26);
 			ctx.fillStyle = palette.muted;
-			ctx.fillText(footnote.toUpperCase(), STORY.margin, y + lines.length * 50 + 12);
+			ctx.fillText(footnote, STORY.margin, y + lines.length * 50 + 12);
 		}
 	};
 }
@@ -153,7 +162,7 @@ function posterBlock(
 ): Block {
 	const measure = STORY.width - STORY.margin * 2;
 	const gap = 16;
-	const columns = Math.min(images.length, 5);
+	const columns = Math.min(images.length, CARD_POSTERS);
 	const width = columns === 1 ? 320 : (measure - gap * (columns - 1)) / columns;
 	const height = width * 1.5;
 	return {
@@ -163,7 +172,7 @@ function posterBlock(
 				const x = STORY.margin + i * (width + gap);
 				posterBox(ctx, image, names[i], { x, y, width, height }, palette);
 				if (!metas[i]) return;
-				ctx.font = font('mono', 26);
+				ctx.font = font(palette.faces, 'mono', 26);
 				ctx.fillStyle = palette.accent;
 				ctx.fillText(metas[i], x, y + height + 14);
 			});
@@ -177,7 +186,7 @@ function barBlock(
 	palette: Palette
 ): Block {
 	const measure = STORY.width - STORY.margin * 2;
-	if (bars.length > 6) {
+	if (isDense(bars)) {
 		const gap = 8;
 		const width = (measure - gap * (bars.length - 1)) / bars.length;
 		const tall = 190;
@@ -191,7 +200,7 @@ function barBlock(
 					ctx.fillRect(x, y + tall - filled, width, filled);
 					ctx.fillStyle = palette.line;
 					ctx.fillRect(x, y + tall, width, 2);
-					ctx.font = font('mono', 24);
+					ctx.font = font(palette.faces, 'mono', 24);
 					ctx.fillStyle = palette.muted;
 					ctx.textAlign = 'center';
 					ctx.fillText(bar.label, x + width / 2, y + tall + 14);
@@ -206,7 +215,7 @@ function barBlock(
 		draw: (y) => {
 			bars.forEach((bar, i) => {
 				const top = y + i * row;
-				ctx.font = font('body', 32);
+				ctx.font = font(palette.faces, 'body', 32);
 				ctx.fillStyle = palette.ink;
 				ctx.fillText(bar.label, STORY.margin, top);
 				const trackX = STORY.margin + 300;
@@ -216,7 +225,7 @@ function barBlock(
 				const filled = Math.max(4, trackWidth * bar.share);
 				ctx.fillStyle = palette.accent;
 				ctx.fillRect(trackX, top + 8, filled, 26);
-				ctx.font = font('mono', 28);
+				ctx.font = font(palette.faces, 'mono', 28);
 				ctx.fillStyle = palette.muted;
 				ctx.textAlign = 'right';
 				ctx.fillText(bar.value, STORY.width - STORY.margin, top + 6);
@@ -226,24 +235,49 @@ function barBlock(
 	};
 }
 
-export function statBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette): Block {
+const STAT_LABEL = 24;
+const STAT_VALUE = 40;
+
+export interface StatColumn {
+	x: number;
+	label: string;
+	value: string;
+}
+
+/**
+ * Where the first three stats sit, left to right: each column is as wide as its own label or
+ * value, whichever is wider, so a long label never prints over the next column.
+ */
+export function statColumns(
+	stats: Stat[],
+	measure: (text: string, size: number) => number
+): StatColumn[] {
+	let x = STORY.margin;
+	return stats.slice(0, 3).map((stat) => {
+		const value = stat.value.length > 18 ? `${stat.value.slice(0, 17)}…` : stat.value;
+		const column = { x, label: stat.label, value };
+		x += Math.max(measure(value, STAT_VALUE), measure(stat.label, STAT_LABEL), 200) + 48;
+		return column;
+	});
+}
+
+function statBlock(ctx: CanvasRenderingContext2D, scene: Scene, palette: Palette): Block {
+	const measure = (text: string, size: number) => {
+		ctx.font = font(palette.faces, 'mono', size);
+		return ctx.measureText(text).width;
+	};
 	return {
 		height: 118,
 		draw: (y) => {
 			ctx.fillStyle = palette.line;
 			ctx.fillRect(STORY.margin, y, STORY.width - STORY.margin * 2, 2);
-			let x = STORY.margin;
-			for (const stat of scene.stats.slice(0, 3)) {
-				const label = stat.label.toUpperCase();
-				ctx.font = font('mono', 24);
-				const labelWidth = ctx.measureText(label).width;
+			for (const column of statColumns(scene.stats, measure)) {
+				ctx.font = font(palette.faces, 'mono', STAT_LABEL);
 				ctx.fillStyle = palette.muted;
-				ctx.fillText(label, x, y + 24);
-				ctx.font = font('mono', 40);
+				ctx.fillText(column.label, column.x, y + 24);
+				ctx.font = font(palette.faces, 'mono', STAT_VALUE);
 				ctx.fillStyle = palette.ink;
-				const value = stat.value.length > 18 ? `${stat.value.slice(0, 17)}…` : stat.value;
-				ctx.fillText(value, x, y + 58);
-				x += Math.max(ctx.measureText(value).width, labelWidth, 200) + 48;
+				ctx.fillText(column.value, column.x, y + 58);
 			}
 		}
 	};
@@ -256,7 +290,7 @@ async function bodyBlock(
 ): Promise<Block | null> {
 	if (scene.body.kind === 'bars') return barBlock(ctx, scene.body.bars, palette);
 	if (scene.body.kind !== 'posters') return null;
-	const posters = scene.body.posters.slice(0, 5);
+	const posters = scene.body.posters.slice(0, CARD_POSTERS);
 	const images = await Promise.all(
 		posters.map((item) => loadImage(imageUrl(item.path, posters.length === 1 ? 'w500' : 'w342')))
 	);
@@ -269,13 +303,13 @@ async function bodyBlock(
 	);
 }
 
-/** One frame of the deck as a 1080×1920 story card. */
+/** One frame of the deck as a story card. */
 export async function storyCard(
 	scene: Scene,
-	data: Wrapped,
+	{ library, viewer }: DeckInput,
 	palette: Palette
 ): Promise<HTMLCanvasElement> {
-	await ensureFonts();
+	await ensureFonts(palette.faces);
 	const [canvas, ctx] = surface(STORY.width, STORY.height);
 	ground(ctx, STORY, palette);
 
@@ -297,20 +331,22 @@ export async function storyCard(
 		y += block.height + gap;
 	}
 
-	finish(ctx, STORY, palette, `${data.viewer ? `${data.viewer} · ` : ''}${data.year}`);
+	finish(ctx, STORY, palette, `${viewer ? `${viewer} · ` : ''}${library.year}`);
 	return canvas;
 }
 
-function summaryStats(data: Wrapped): { label: string; value: string }[] {
+function summaryStats({ library }: DeckInput): { label: string; value: string }[] {
+	const avg = averageRating(library);
+	const run = streak(library);
 	return [
-		{ label: 'FILMS', value: count(data.films.length) },
-		{ label: 'HOURS', value: count(data.hours) },
-		{ label: 'COUNTRIES', value: String(data.countries) },
-		{ label: 'AVERAGE', value: data.avg !== null ? `${data.avg.toFixed(1)}` : '—' },
-		{ label: 'GENRE', value: data.topGenres[0]?.label ?? '—' },
-		{ label: 'DIRECTOR', value: data.topDirectors[0]?.label ?? '—' },
-		{ label: 'ON SCREEN', value: data.topActors[0]?.label ?? '—' },
-		{ label: 'STREAK', value: data.streak ? `${data.streak.days} days` : '—' }
+		{ label: 'FILMS', value: count(library.slice.length) },
+		{ label: 'HOURS', value: count(hours(library)) },
+		{ label: 'COUNTRIES', value: String(countries(library).length) },
+		{ label: 'AVERAGE', value: avg !== null ? `${avg.toFixed(1)}` : '—' },
+		{ label: 'GENRE', value: library.genres()[0]?.label ?? '—' },
+		{ label: 'DIRECTOR', value: library.directors()[0]?.label ?? '—' },
+		{ label: 'ON SCREEN', value: library.cast()[0]?.label ?? '—' },
+		{ label: 'STREAK', value: run ? `${run.days} days` : '—' }
 	];
 }
 
@@ -325,10 +361,10 @@ function drawSummaryGrid(
 	stats.forEach((stat, i) => {
 		const x = POSTER.margin + (i % 2) * column;
 		const y = top + Math.floor(i / 2) * row;
-		ctx.font = font('mono', 22);
+		ctx.font = font(palette.faces, 'mono', 22);
 		ctx.fillStyle = palette.muted;
 		ctx.fillText(stat.label, x, y);
-		ctx.font = font('mono', 38);
+		ctx.font = font(palette.faces, 'mono', 38);
 		ctx.fillStyle = palette.ink;
 		const value = stat.value.length > 20 ? `${stat.value.slice(0, 19)}…` : stat.value;
 		ctx.fillText(value, x, y + 30);
@@ -336,60 +372,61 @@ function drawSummaryGrid(
 }
 
 /** The closing word, measured so it can be hung off the bottom rail rather than flowed into it. */
-function verdictBlock(ctx: CanvasRenderingContext2D, data: Wrapped, palette: Palette): Block {
+function verdictBlock(
+	ctx: CanvasRenderingContext2D,
+	{ personality }: DeckInput,
+	palette: Palette
+): Block {
 	const measure = POSTER.width - POSTER.margin * 2;
-	const title = fitFont(ctx, data.personality.title, measure, 84, 44);
-	ctx.font = font('body', 30);
-	const lines = wrap(ctx, data.personality.detail, measure, 2);
-	const runnerUp = alsoTrueLine(data.personality);
+	const title = fitFont(ctx, palette.faces, personality.title, measure, 84, 44);
+	ctx.font = font(palette.faces, 'body', 30);
+	const lines = wrap(ctx, personality.detail, measure, 2);
+	const runnerUp = alsoTrueLine(personality);
 	return {
 		height: 34 + title * 1.1 + lines.length * 40 + (runnerUp ? 34 : 0),
 		draw: (y) => {
-			ctx.font = font('mono', 22);
+			ctx.font = font(palette.faces, 'mono', 22);
 			ctx.fillStyle = palette.muted;
-			ctx.fillText('YOUR YEAR IN ONE WORD', POSTER.margin, y);
-			ctx.font = font('value', title);
+			ctx.fillText(LABELS.verdict.toUpperCase(), POSTER.margin, y);
+			ctx.font = font(palette.faces, 'value', title);
 			ctx.fillStyle = palette.accent;
-			ctx.fillText(data.personality.title, POSTER.margin, y + 34);
-			ctx.font = font('body', 30);
+			ctx.fillText(personality.title, POSTER.margin, y + 34);
+			ctx.font = font(palette.faces, 'body', 30);
 			ctx.fillStyle = palette.muted;
 			const body = y + 34 + title * 1.1;
 			lines.forEach((line, i) => ctx.fillText(line, POSTER.margin, body + i * 40));
 			if (!runnerUp) return;
-			ctx.font = font('mono', 22);
+			ctx.font = font(palette.faces, 'mono', 22);
 			ctx.fillStyle = palette.muted;
 			ctx.fillText(runnerUp, POSTER.margin, body + lines.length * 40);
 		}
 	};
 }
 
-/** The whole year on one 1080×1350 poster. */
-export async function summaryCard(data: Wrapped, palette: Palette): Promise<HTMLCanvasElement> {
-	await ensureFonts();
+/** The whole year on one poster. */
+export async function summaryCard(input: DeckInput, palette: Palette): Promise<HTMLCanvasElement> {
+	const { library, viewer } = input;
+	await ensureFonts(palette.faces);
 	const [canvas, ctx] = surface(POSTER.width, POSTER.height);
 	ground(ctx, POSTER, palette);
 	const measure = POSTER.width - POSTER.margin * 2;
 
 	let y = POSTER.mount + 56;
-	ctx.font = font('mono', 26);
+	ctx.font = font(palette.faces, 'mono', 26);
 	ctx.fillStyle = palette.muted;
-	ctx.fillText(
-		data.viewer ? `${data.viewer.toUpperCase()} · A YEAR IN CINEMA` : 'A YEAR IN CINEMA',
-		POSTER.margin,
-		y
-	);
+	ctx.fillText(viewer ? `${viewer} · A year in cinema` : 'A year in cinema', POSTER.margin, y);
 
 	y += 44;
-	const size = fitFont(ctx, String(data.year), measure, 176, 96);
+	const size = fitFont(ctx, palette.faces, String(library.year), measure, 176, 96);
 	ctx.fillStyle = palette.accent;
-	ctx.fillText(String(data.year), POSTER.margin, y);
+	ctx.fillText(String(library.year), POSTER.margin, y);
 	y += size * 1.05;
 
 	ctx.fillStyle = palette.accent;
 	ctx.fillRect(POSTER.margin, y, measure, 6);
 	y += 40;
 
-	const top = data.top.slice(0, 5);
+	const top = topRated(library).slice(0, TOP_FILMS);
 	if (top.length > 0) {
 		const images = await Promise.all(
 			top.map((film) => loadImage(imageUrl(film.tmdb?.posterPath ?? null, 'w342')))
@@ -409,14 +446,14 @@ export async function summaryCard(data: Wrapped, palette: Palette): Promise<HTML
 		y += height + 32;
 	}
 
-	const stats = summaryStats(data);
-	const verdict = verdictBlock(ctx, data, palette);
+	const stats = summaryStats(input);
+	const verdict = verdictBlock(ctx, input, palette);
 	const verdictTop = POSTER.height - POSTER.strip - 48 - verdict.height;
 	const rows = Math.ceil(stats.length / 2);
 	const row = Math.min(96, Math.max(72, (verdictTop - 20 - y) / rows));
 	drawSummaryGrid(ctx, stats, y, row, palette);
 	verdict.draw(verdictTop);
 
-	finish(ctx, POSTER, palette, String(data.year), SITE);
+	finish(ctx, POSTER, palette, String(library.year), SITE);
 	return canvas;
 }

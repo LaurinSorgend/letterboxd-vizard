@@ -5,332 +5,121 @@
 	import FileDrop from '$lib/FileDrop.svelte';
 	import RememberToggle from '$lib/RememberToggle.svelte';
 	import ThemeSwitch from '$lib/ThemeSwitch.svelte';
-	import WorldMap from '$lib/viz/WorldMap.svelte';
-	import Columns from '$lib/viz/Columns.svelte';
-	import RankedBars from '$lib/viz/RankedBars.svelte';
-	import RatingGaps from '$lib/viz/RatingGaps.svelte';
-	import RatingRadar from '$lib/viz/RatingRadar.svelte';
-	import RatingContrarian from '$lib/viz/RatingContrarian.svelte';
-	import MetacriticDisagreement from '$lib/viz/MetacriticDisagreement.svelte';
-	import RatingCorrelation from '$lib/viz/RatingCorrelation.svelte';
-	import Recommendations from '$lib/viz/Recommendations.svelte';
-	import StatTiles from '$lib/viz/StatTiles.svelte';
-	import SectionNav from '$lib/viz/SectionNav.svelte';
-	import Heatmap from '$lib/viz/Heatmap.svelte';
-	import Scatter from '$lib/viz/Scatter.svelte';
-	import Quadrants from '$lib/viz/Quadrants.svelte';
-	import KeywordCloud from '$lib/viz/KeywordCloud.svelte';
-	import Network from '$lib/viz/Network.svelte';
-	import Mosaic from '$lib/viz/Mosaic.svelte';
-	import Milestones from '$lib/viz/Milestones.svelte';
-	import PeopleTimeline from '$lib/viz/PeopleTimeline.svelte';
-	import RecentWatches from '$lib/viz/RecentWatches.svelte';
-	import YearRecap from '$lib/viz/YearRecap.svelte';
-	import WrappedEntry from '$lib/wrapped/WrappedEntry.svelte';
-	import { byKeyword } from '$lib/viz/keywords';
-	import MetricToggle from '$lib/viz/MetricToggle.svelte';
-	import {
-		bucketsByDay,
-		buildDailyHeatmap,
-		buildSeasonalHeatmap,
-		buildWeeklyHeatmap,
-		type HeatMetric,
-		type SeasonScale
-	} from '$lib/viz/heatmap';
-	import { effectiveCountries } from '$lib/viz/countries';
-	import { buildMilestones } from '$lib/viz/milestones';
-	import {
-		audienceBands,
-		avgRating,
-		byGenre,
-		byCollection,
-		byLanguage,
-		byPerson,
-		collectionShare,
-		formatDays,
-		likeTotals,
-		medianWatchLag,
-		mostRewatched,
-		obscurityShare,
-		ratingHistogram,
-		recentWatches,
-		releaseDecades,
-		runtimeBuckets,
-		totalRuntimeMinutes,
-		watchLag,
-		watchesPerYear
-	} from '$lib/viz/stats';
 	import UsernameForm from '$lib/UsernameForm.svelte';
-	import { parseExport } from '$lib/ingest/parse';
-	import { FEED_FILM_LIMIT, mergeFeed } from '$lib/ingest/rss';
-	import {
-		collectionsFor,
-		enrichLibrary,
-		fetchFeed,
-		refreshFromFeed,
-		type Progress
-	} from '$lib/ingest/pipeline';
-	import { clearSnapshot, loadSnapshot, saveSnapshot, type Snapshot } from '$lib/store';
-	import Watchlist from '$lib/watchlist/Watchlist.svelte';
+	import Section from '$lib/dashboard/Section.svelte';
+	import SectionNav from '$lib/dashboard/SectionNav.svelte';
+	import SummaryTiles from '$lib/dashboard/SummaryTiles.svelte';
+	import Unmatched from '$lib/dashboard/Unmatched.svelte';
+	import { SectionRegistry, setSections } from '$lib/dashboard/registry.svelte';
+	import CriticsSection from '$lib/dashboard/sections/CriticsSection.svelte';
+	import FranchisesSection from '$lib/dashboard/sections/FranchisesSection.svelte';
+	import GenresSection from '$lib/dashboard/sections/GenresSection.svelte';
+	import LagSection from '$lib/dashboard/sections/LagSection.svelte';
+	import LengthSection from '$lib/dashboard/sections/LengthSection.svelte';
+	import MilestonesSection from '$lib/dashboard/sections/MilestonesSection.svelte';
+	import MosaicSection from '$lib/dashboard/sections/MosaicSection.svelte';
+	import NetworkSection from '$lib/dashboard/sections/NetworkSection.svelte';
+	import ObscuritySection from '$lib/dashboard/sections/ObscuritySection.svelte';
+	import PeopleSection from '$lib/dashboard/sections/PeopleSection.svelte';
+	import PeopleTimelineSection from '$lib/dashboard/sections/PeopleTimelineSection.svelte';
+	import QuadrantsSection from '$lib/dashboard/sections/QuadrantsSection.svelte';
+	import RatingsSection from '$lib/dashboard/sections/RatingsSection.svelte';
+	import RecapSection from '$lib/dashboard/sections/RecapSection.svelte';
+	import RecentSection from '$lib/dashboard/sections/RecentSection.svelte';
+	import RewatchesSection from '$lib/dashboard/sections/RewatchesSection.svelte';
+	import RuntimeSection from '$lib/dashboard/sections/RuntimeSection.svelte';
+	import ThemesSection from '$lib/dashboard/sections/ThemesSection.svelte';
+	import WhenSection from '$lib/dashboard/sections/WhenSection.svelte';
+	import WorldSection from '$lib/dashboard/sections/WorldSection.svelte';
+	import YearsSection from '$lib/dashboard/sections/YearsSection.svelte';
+	import { Library, setLibrary } from '$lib/library.svelte';
+	import RecommendationsSection from '$lib/dashboard/sections/RecommendationsSection.svelte';
 	import ReleaseCalendar from '$lib/releases/ReleaseCalendar.svelte';
-	import type { CollectionParts, EnrichedFilm, LetterboxdData, WatchlistFilm } from '$lib/types';
+	import MetricToggle from '$lib/viz/MetricToggle.svelte';
+	import Watchlist from '$lib/watchlist/Watchlist.svelte';
+	import WrappedEntry from '$lib/wrapped/WrappedEntry.svelte';
 
-	type Phase = 'idle' | 'working' | 'ready';
-	let phase: Phase = $state('idle');
-	let stage: 'films' | 'ratings' = $state('films');
-	let data = $state<LetterboxdData | null>(null);
-	let films: EnrichedFilm[] = $state([]);
-	let progress = $state({ done: 0, total: 0 });
-	let errorMessage: string | null = $state(null);
-	let watchlistIds: number[] = $state([]);
-	let collections: CollectionParts[] = $state([]);
-	let includeWatchlist = $state(false);
-	let remember = $state(false);
-	let saveError: string | null = $state(null);
-	let source: NonNullable<Snapshot['source']> = $state('export');
-	let feedNote: string | null = $state(null);
-	let feedGap = $state(false);
-	let mainEl: HTMLElement | null = $state(null);
-	let watchlist: WatchlistFilm[] = $state([]);
+	const library = setLibrary(new Library());
+	setSections(new SectionRegistry());
+
 	const requestedView = page.url.searchParams.get('view');
 	let view: 'stats' | 'watchlist' | 'releases' = $state(
 		requestedView === 'watchlist' || requestedView === 'releases' ? requestedView : 'stats'
 	);
-
-	const unmatched = $derived(films.filter((f) => !f.tmdb));
-	const hasOmdb = $derived(films.some((f) => f.omdb));
-	const watchlistExclude = $derived(includeWatchlist ? [] : watchlistIds);
-
-	const initialMetric = page.url.searchParams.get('metric') === 'rating' ? 'rating' : 'count';
-	const presetCountry = page.url.searchParams.get('country');
-
-	const currentYear = new Date().getFullYear();
-	const dayBuckets = $derived(bucketsByDay(films));
-	const dailyHeatmap = $derived(buildDailyHeatmap(dayBuckets, currentYear));
-	const weeklyHeatmap = $derived(buildWeeklyHeatmap(dayBuckets));
-	let heatMetric: HeatMetric = $state('rating');
-	let seasonScale: SeasonScale = $state('genre');
-	const seasonalHeatmap = $derived(buildSeasonalHeatmap(films, seasonScale));
-
-	const recent = $derived(recentWatches(films));
-	const rewatched = $derived(mostRewatched(films));
-	const milestones = $derived(buildMilestones(films));
-	const franchises = $derived(byCollection(films));
-	const franchiseShare = $derived(collectionShare(films));
-	const themes = $derived(byKeyword(films));
-	let keywordView = $state<'cloud' | 'bars'>('cloud');
-	const likes = $derived(likeTotals(films));
-	const medianLag = $derived(medianWatchLag(films));
-	const obscure = $derived(obscurityShare(films));
-	let runtimeScope = $state<'films' | 'all'>('films');
-	const justFilms = $derived(films.filter((f) => f.tmdb?.mediaType !== 'tv'));
-	const hasSeries = $derived(films.some((f) => f.tmdb?.mediaType === 'tv' && f.tmdb.runtime));
-	const runtimes = $derived(runtimeBuckets(runtimeScope === 'all' ? films : justFilms));
-
-	const tiles = $derived.by(() => {
-		const avg = avgRating(films);
-		const hours = Math.round(totalRuntimeMinutes(films) / 60);
-		const countries = new Set(films.flatMap((f) => (f.tmdb ? effectiveCountries(f.tmdb) : [])));
-		return [
-			{ label: 'Films watched', value: String(films.length) },
-			{ label: 'Hours watched', value: hours.toLocaleString('en') },
-			{ label: 'Countries', value: String(countries.size) },
-			{ label: 'Your average rating', value: avg !== null ? avg.toFixed(2) + ' ★' : '—' },
-			{ label: 'Films hearted', value: String(likes.liked) }
-		];
-	});
+	const { stage, done, total } = $derived(library.progress);
 
 	onMount(async () => {
 		if (dev && page.url.searchParams.has('demo')) {
 			const response = await fetch('/demo-export.zip');
-			if (response.ok) handleFile(new File([await response.blob()], 'demo.zip'));
+			if (response.ok) library.loadFile(new File([await response.blob()], 'demo.zip'));
 			return;
 		}
-		const snapshot = loadSnapshot();
-		if (snapshot) {
-			films = snapshot.films;
-			watchlist = snapshot.watchlist;
-			watchlistIds = snapshot.watchlistIds;
-			collections = snapshot.collections;
-			data = { films: snapshot.films, watchlist: snapshot.watchlist, profile: snapshot.profile };
-			source = snapshot.source;
-			remember = true;
-			phase = 'ready';
-			void syncFeed();
-		}
+		library.restore();
 	});
-
-	const FEED_ONLY_NOTE = `Only your ${FEED_FILM_LIMIT} latest diary entries.`;
-
-	function entriesNote(count: number): string {
-		const added = `${count} new diary ${count === 1 ? 'entry' : 'entries'}.`;
-		return source === 'feed' ? `${added} ${FEED_ONLY_NOTE}` : added;
-	}
-
-	/** Tops a remembered library up with whatever the member logged since it was saved. */
-	async function syncFeed() {
-		const username = data?.profile?.username;
-		if (!username) return;
-		try {
-			const refresh = await refreshFromFeed(films, await fetchFeed(username));
-			feedGap = refresh.gap;
-			feedNote = refresh.gap
-				? 'Some diary entries are missing.'
-				: source === 'feed'
-					? FEED_ONLY_NOTE
-					: null;
-			if (refresh.addedEntries === 0) return;
-			films = refresh.films;
-			collections = await collectionsFor(films, collections);
-			if (!refresh.gap) feedNote = entriesNote(refresh.addedEntries);
-			if (remember) persist();
-		} catch {
-			feedNote = 'Could not check for new diary entries.';
-		}
-	}
-
-	function persist() {
-		const profile = data?.profile ?? null;
-		if (saveSnapshot({ films, watchlist, watchlistIds, profile, collections, source })) {
-			saveError = null;
-		} else {
-			clearSnapshot();
-			remember = false;
-			saveError =
-				'Could not save: your library is too large for this browser. Data stays for this visit only.';
-		}
-	}
-
-	function toggleRemember(on: boolean) {
-		remember = on;
-		if (on) persist();
-		else {
-			clearSnapshot();
-			saveError = null;
-		}
-	}
-
-	function report(next: Progress) {
-		stage = next.stage;
-		progress = { done: next.done, total: next.total };
-	}
-
-	/** Loads a library, enriches it, and shows it; any failure lands back on the start screen. */
-	async function analyse(load: () => Promise<LetterboxdData>) {
-		errorMessage = null;
-		feedNote = null;
-		phase = 'working';
-		report({ stage: 'films', done: 0, total: 0 });
-		try {
-			const parsed = await load();
-			data = parsed;
-			const library = await enrichLibrary(parsed.films, parsed.watchlist, report);
-			films = library.films;
-			watchlist = library.watchlist;
-			watchlistIds = library.watchlistIds;
-			collections = await collectionsFor(films);
-			if (source === 'feed') feedNote = FEED_ONLY_NOTE;
-			phase = 'ready';
-			if (remember) persist();
-		} catch (cause) {
-			errorMessage = cause instanceof Error ? cause.message : String(cause);
-			phase = 'idle';
-		}
-	}
-
-	/** Adds feed entries logged after the export was made; the export alone still works if this fails. */
-	async function withFeed(parsed: LetterboxdData): Promise<LetterboxdData> {
-		const username = parsed.profile?.username;
-		if (!username) return parsed;
-		const feed = await fetchFeed(username).catch(() => []);
-		return { ...parsed, films: mergeFeed(parsed.films, feed, (film) => film).films };
-	}
-
-	function handleFile(file: File) {
-		return analyse(async () => {
-			let parsed: LetterboxdData;
-			try {
-				parsed = parseExport(new Uint8Array(await file.arrayBuffer()));
-			} catch (cause) {
-				const message = cause instanceof Error ? cause.message : String(cause);
-				throw new Error(
-					`${message}. Make sure you drop the unmodified zip downloaded from Letterboxd.`
-				);
-			}
-			source = 'export';
-			return withFeed(parsed);
-		});
-	}
-
-	function handleUsername(username: string) {
-		return analyse(async () => {
-			const feed = await fetchFeed(username);
-			if (feed.length === 0) throw new Error(`${username} has no diary entries in their RSS feed.`);
-			source = 'feed';
-			return {
-				films: mergeFeed([], feed, (film) => film).films,
-				watchlist: [],
-				profile: { username, givenName: '', dateJoined: '', location: '' }
-			};
-		});
-	}
 </script>
 
 <svelte:head>
 	<title>Letterboxd Vizard</title>
 </svelte:head>
 
-<main bind:this={mainEl}>
+<main>
 	<header>
 		<div>
 			<div class="title">
 				<img class="logo" src="/letterbox-vizard-icon.svg" alt="" width="40" height="40" />
 				<h1>Letterboxd Vizard</h1>
 			</div>
-			{#if data?.profile && phase === 'ready'}
+			{#if library.profile && library.phase === 'ready'}
 				<p class="sub">
-					{data.profile.givenName || data.profile.username} · {films.length} films watched
+					{library.displayName} · {library.films.length} films watched
+				</p>
+			{:else if library.phase === 'idle'}
+				<p class="sub intro">
+					Maps, charts and a year in review of everything you have logged on Letterboxd. Your export
+					is read in your browser; only film titles and years are looked up.
 				</p>
 			{/if}
 		</div>
 		<ThemeSwitch />
 	</header>
 
-	{#if phase === 'idle'}
-		{#if errorMessage}
-			<p class="error" role="alert">{errorMessage}</p>
+	{#if library.phase === 'idle'}
+		{#if library.error}
+			<p class="error" role="alert">{library.error}</p>
 		{/if}
-		<FileDrop onfile={handleFile} />
-		<UsernameForm onsubmit={handleUsername} />
-	{:else if phase === 'working'}
+		<FileDrop onfile={(file) => library.loadFile(file)} />
+		<UsernameForm onsubmit={(username) => library.loadUsername(username)} />
+	{:else if library.phase === 'working'}
 		<div class="progress" role="status">
-			{#if progress.total === 0}
+			{#if total === 0}
 				<p>Reading your export…</p>
 			{:else if stage === 'ratings'}
-				<p>Looking up ratings… {progress.done} / {progress.total}</p>
-				<progress value={progress.done} max={progress.total} aria-label="Ratings lookup progress"
-				></progress>
+				<p>Looking up ratings… {done} / {total}</p>
+				<progress value={done} max={total} aria-label="Ratings lookup progress"></progress>
 			{:else}
-				<p>Looking up film data… {progress.done} / {progress.total}</p>
-				<progress value={progress.done} max={progress.total} aria-label="Film lookup progress"
-				></progress>
+				<p>Looking up film data… {done} / {total}</p>
+				<progress value={done} max={total} aria-label="Film lookup progress"></progress>
 			{/if}
 		</div>
 	{:else}
 		<WrappedEntry
-			{films}
-			{watchlist}
-			{collections}
-			viewer={data?.profile?.givenName || data?.profile?.username || null}
+			films={library.films}
+			watchlist={library.watchlist}
+			collections={library.collections}
+			viewer={library.displayName}
 		/>
 
-		<RememberToggle checked={remember} error={saveError} onchange={toggleRemember} />
+		<RememberToggle
+			checked={library.remember}
+			error={library.saveError}
+			onchange={(on) => library.setRemember(on)}
+		/>
 
-		{#if feedNote}
+		{#if library.feedNote}
 			<p class="feed-note" role="status">
-				{feedNote}
-				{#if source === 'feed' || feedGap}
-					<button type="button" onclick={() => (phase = 'idle')}>Upload an export</button>
+				{library.feedNote}
+				{#if library.offersExport}
+					<button type="button" onclick={() => library.startOver()}>Upload an export</button>
 				{/if}
 			</p>
 		{/if}
@@ -340,311 +129,51 @@
 			label="View"
 			options={[
 				{ value: 'stats', label: 'Your stats' },
-				{ value: 'watchlist', label: `Your watchlist (${watchlist.length})` },
+				{ value: 'watchlist', label: `Your watchlist (${library.watchlist.length})` },
 				{ value: 'releases', label: 'Release calendar' }
 			]}
 			bind:value={view}
 		/>
 
 		{#if view !== 'stats'}
-			<section id={view}>
-				<h2>{view === 'releases' ? 'Upcoming releases' : 'Your watchlist'}</h2>
-				{#if watchlist.length === 0 && (view === 'watchlist' || films.length === 0)}
+			<Section id={view} title={view === 'releases' ? 'Upcoming releases' : 'Your watchlist'}>
+				{#if library.watchlist.length === 0 && (view === 'watchlist' || library.films.length === 0)}
 					<div class="empty-watchlist form-controls">
 						<p>No watchlist yet.</p>
-						<button type="button" onclick={() => (phase = 'idle')}>Upload an export</button>
+						<button type="button" onclick={() => library.startOver()}>Upload an export</button>
 					</div>
 				{:else if view === 'releases'}
-					<ReleaseCalendar {watchlist} {films} />
+					<ReleaseCalendar watchlist={library.watchlist} films={library.films} />
 				{:else}
-					<Watchlist {watchlist} />
+					<Watchlist watchlist={library.watchlist} />
 				{/if}
-			</section>
+			</Section>
 		{:else}
-			<SectionNav container={mainEl} />
-
-			<StatTiles {tiles} />
-
-			<section id="world">
-				<h2>Your films around the world</h2>
-				<WorldMap {films} {initialMetric} {presetCountry} {watchlistExclude} />
-			</section>
-
-			{#if recent.length > 0}
-				<section id="recent">
-					<h2>Recently watched</h2>
-					<RecentWatches watches={recent} />
-				</section>
-			{/if}
-
-			<section id="ratings">
-				<h2>Rating habits</h2>
-				<div class="pair">
-					<div>
-						<h3>How you rate, and what you heart</h3>
-						<Columns
-							data={ratingHistogram(films)}
-							highlightLabel="Hearted"
-							restLabel="Not hearted"
-							description="Films per rating step, split by whether you hearted them"
-						/>
-						<p class="sub chart-note">
-							{likes.liked} of your {films.length} films hearted.
-						</p>
-					</div>
-					<RatingGaps {films} />
-				</div>
-			</section>
-
-			{#if hasOmdb}
-				<section id="triangulation">
-					<h2>Critical consensus &amp; rating triangulation</h2>
-
-					<h3>Where you diverge, film by film</h3>
-					<RatingRadar {films} />
-
-					<h3 class="spaced">Critics vs. crowds</h3>
-					<RatingContrarian {films} />
-
-					<h3 class="spaced">Biggest disagreements with Metacritic</h3>
-					<MetacriticDisagreement {films} />
-
-					<h3 class="spaced">Which source best predicts your taste</h3>
-					<RatingCorrelation {films} />
-				</section>
-			{/if}
-
-			<section id="years">
-				<h2>Through the years</h2>
-				<div class="pair">
-					<div>
-						<h3>Watches per year (diary)</h3>
-						<Columns data={watchesPerYear(films)} description="Diary entries per year" />
-					</div>
-					<div>
-						<h3>Films by release decade</h3>
-						<Columns data={releaseDecades(films)} description="Films per release decade" />
-					</div>
-				</div>
-			</section>
-
-			<section id="lag">
-				<h2>From release to watch</h2>
-				{#if medianLag !== null}
-					<p class="sub chart-note">
-						Median gap: {formatDays(medianLag)} from release to first watch.
-					</p>
-				{/if}
-				<RankedBars
-					data={watchLag(films)}
-					showAvg
-					description="Films and average rating per gap between release and first watch"
-				/>
-			</section>
-
-			<section id="when">
-				<h2>When you watch</h2>
-				<MetricToggle
-					name="heat-metric"
-					label="Heatmap metric"
-					options={[
-						{ value: 'watchtime', label: 'Watchtime' },
-						{ value: 'rating', label: 'Average rating' }
-					]}
-					bind:value={heatMetric}
-				/>
-				<h3>This year, day by day</h3>
-				<Heatmap grid={dailyHeatmap} metric={heatMetric} />
-				<h3 class="spaced">Every week, year over year</h3>
-				<Heatmap grid={weeklyHeatmap} metric={heatMetric} />
-				<h3 class="spaced">Genres by month, every year pooled</h3>
-				{#if heatMetric === 'watchtime'}
-					<MetricToggle
-						name="season-scale"
-						label="Genre heatmap scale"
-						options={[
-							{ value: 'genre', label: 'Each genre on its own scale' },
-							{ value: 'global', label: 'One scale for all genres' }
-						]}
-						bind:value={seasonScale}
-					/>
-				{/if}
-				<Heatmap grid={seasonalHeatmap} metric={heatMetric} cellSize={26} fitWidth />
-			</section>
-
-			<section id="runtime">
-				<h2>How long you watch</h2>
-				{#if hasSeries}
-					<MetricToggle
-						name="runtime-scope"
-						label="Runtime scope"
-						options={[
-							{ value: 'films', label: 'Films only' },
-							{ value: 'all', label: 'With series' }
-						]}
-						bind:value={runtimeScope}
-					/>
-				{/if}
-				<RankedBars
-					data={runtimes}
-					showAvg
-					description="Films and average rating per runtime band"
-				/>
-			</section>
-
-			<section id="length">
-				<h2>Does length buy quality?</h2>
-				<Scatter {films} />
-			</section>
-
-			{#if rewatched.length > 0}
-				<section id="rewatches">
-					<h2>Films you return to</h2>
-					<RankedBars data={rewatched} showAvg description="Diary entries per rewatched film" />
-				</section>
-			{/if}
-
-			<section id="genres">
-				<h2>Genres &amp; languages</h2>
-				<div class="pair">
-					<div>
-						<h3>Genres</h3>
-						<RankedBars
-							data={byGenre(films)}
-							showAvg
-							description="Films and average rating per genre"
-						/>
-					</div>
-					<div>
-						<h3>Original language</h3>
-						<RankedBars
-							data={byLanguage(films)}
-							showAvg
-							description="Films and average rating per language"
-						/>
-					</div>
-				</div>
-			</section>
-
-			{#if franchises.length > 0}
-				<section id="franchises">
-					<h2>Franchises you follow</h2>
-					<p class="sub chart-note">
-						{franchiseShare.inCollection} of your {franchiseShare.total} films are part of a franchise.
-					</p>
-					<RankedBars
-						data={franchises}
-						showAvg
-						description="Films and average rating per franchise"
-					/>
-				</section>
-			{/if}
-
-			{#if themes.length > 0}
-				<section id="keywords">
-					<h2>Themes you return to</h2>
-					<MetricToggle
-						name="keyword-view"
-						label="Keyword view"
-						options={[
-							{ value: 'cloud', label: 'Cloud' },
-							{ value: 'bars', label: 'Bars' }
-						]}
-						bind:value={keywordView}
-					/>
-					{#if keywordView === 'cloud'}
-						<KeywordCloud
-							data={themes}
-							description="Your most common TMDB keywords, sized by film count"
-						/>
-					{:else}
-						<RankedBars
-							data={themes}
-							showAvg
-							limit={20}
-							description="Films and average rating per TMDB keyword"
-						/>
-					{/if}
-				</section>
-			{/if}
-
-			<section id="obscurity">
-				<h2>Crowds &amp; deep cuts</h2>
-				{#if obscure !== null}
-					<p class="sub chart-note">
-						{Math.round(obscure * 100)}% of your films have fewer than 1,000 ratings.
-					</p>
-				{/if}
-				<RankedBars
-					data={audienceBands(films)}
-					showAvg
-					description="Films and average rating per combined TMDB + IMDb vote-count band"
-				/>
-			</section>
-
-			<section id="quadrants">
-				<h2>Popularity vs. your rating</h2>
-				<Quadrants {films} />
-			</section>
-
-			<section id="people">
-				<h2>People</h2>
-				<div class="pair">
-					<div>
-						<h3>Most-watched directors</h3>
-						<RankedBars
-							data={byPerson(films, 'directors')}
-							showAvg
-							description="Films and average rating per director"
-						/>
-					</div>
-					<div>
-						<h3>Most-watched actors</h3>
-						<RankedBars
-							data={byPerson(films, 'cast')}
-							showAvg
-							description="Films and average rating per actor"
-						/>
-					</div>
-				</div>
-			</section>
-
-			<section id="people-timeline">
-				<h2>Watching them over time</h2>
-				<PeopleTimeline {films} />
-			</section>
-
-			<section id="network">
-				<h2>How your films connect</h2>
-				<Network {films} />
-			</section>
-
-			<section id="mosaic">
-				<h2>Every film you have watched</h2>
-				<Mosaic {films} />
-			</section>
-
-			{#if milestones.length > 0}
-				<section id="milestones">
-					<h2>Milestones</h2>
-					<Milestones {milestones} />
-				</section>
-			{/if}
-
-			<YearRecap {films} {watchlist} {collections} />
-
-			<Recommendations {films} {watchlistIds} bind:includeWatchlist />
-
-			{#if unmatched.length > 0}
-				<details class="unmatched">
-					<summary>{unmatched.length} films could not be matched on TMDB</summary>
-					<ul>
-						{#each unmatched as film (film.uri)}
-							<li>{film.name} ({film.year ?? 'unknown year'})</li>
-						{/each}
-					</ul>
-				</details>
-			{/if}
+			<SectionNav />
+			<SummaryTiles />
+			<WorldSection />
+			<RecentSection />
+			<RatingsSection />
+			<CriticsSection />
+			<YearsSection />
+			<LagSection />
+			<WhenSection />
+			<RuntimeSection />
+			<LengthSection />
+			<RewatchesSection />
+			<GenresSection />
+			<FranchisesSection />
+			<ThemesSection />
+			<ObscuritySection />
+			<QuadrantsSection />
+			<PeopleSection />
+			<PeopleTimelineSection />
+			<NetworkSection />
+			<MosaicSection />
+			<MilestonesSection />
+			<RecapSection />
+			<RecommendationsSection />
+			<Unmatched />
 		{/if}
 	{/if}
 </main>
@@ -655,7 +184,7 @@
 		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/issues">Report an issue</a>
 		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/pulls">Contribute</a>
 		<span aria-hidden="true">|</span>
-		<a style="margin-left: 0em;" href="https://letterboxd.com/laurins0/">Built by Laurin</a>
+		<a href="https://letterboxd.com/laurins0/">Built by Laurin</a>
 	</nav>
 	<p>
 		An independent project, not affiliated with or endorsed by
@@ -669,7 +198,7 @@
 
 <style>
 	main {
-		max-width: 1080px;
+		max-width: var(--column);
 		margin: 0 auto;
 		padding: 24px 16px;
 	}
@@ -698,8 +227,9 @@
 		color: var(--fg-secondary);
 		margin: 4px 0 0;
 	}
-	.chart-note {
-		margin-bottom: 16px;
+	.intro {
+		margin-top: 12px;
+		max-width: var(--measure-narrow);
 	}
 	.feed-note {
 		color: var(--fg-secondary);
@@ -734,36 +264,8 @@
 		width: min(400px, 100%);
 		accent-color: var(--accent);
 	}
-	section {
-		margin: 32px 0;
-	}
-	section:first-of-type {
-		margin-top: 24px;
-	}
-	.pair {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-		gap: 32px;
-		align-items: start;
-	}
-	h3.spaced {
-		margin-top: 24px;
-	}
-	@media (max-width: 900px) {
-		.pair {
-			grid-template-columns: minmax(0, 1fr);
-		}
-	}
-	.unmatched summary {
-		cursor: pointer;
-		color: var(--fg-secondary);
-	}
-	.unmatched ul {
-		color: var(--fg-secondary);
-		columns: 2;
-	}
 	footer {
-		max-width: 1080px;
+		max-width: var(--column);
 		margin: 0 auto;
 		padding: 16px;
 		border-top: 1px solid var(--border);
@@ -774,10 +276,5 @@
 		display: flex;
 		gap: 16px;
 		margin-bottom: 8px;
-	}
-	@media (max-width: 640px) {
-		.unmatched ul {
-			columns: 1;
-		}
 	}
 </style>

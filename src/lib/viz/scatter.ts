@@ -1,5 +1,7 @@
+import { isSeries } from '$lib/film/runtime';
+import { linearFit as fitLine } from '$lib/math';
 import type { EnrichedFilm } from '$lib/types';
-import { hashString } from './seeded';
+import { ratingJitter } from './chart/plot';
 
 export interface Point {
 	film: EnrichedFilm;
@@ -9,7 +11,7 @@ export interface Point {
 	jitter: number;
 }
 
-export interface Fit {
+interface Fit {
 	slope: number;
 	intercept: number;
 	/** Pearson correlation of runtime against rating, −1 to 1. */
@@ -19,13 +21,6 @@ export interface Fit {
 
 /** Shortest length counted as a feature; shorts are a different form with different expectations. */
 const FEATURE_MINUTES = 40;
-const JITTER = 0.18;
-
-/** A stable offset hashed from the URI, so a point never jumps between renders. */
-export function jitterFor(uri: string): number {
-	return ((hashString(uri) >>> 0) / 0xffffffff) * 2 * JITTER - JITTER;
-}
-
 /**
  * Rated feature films with a known runtime. Series are excluded whatever their length: they carry
  * a whole-run estimate, a different unit, and a handful of them would dominate the fit on their own.
@@ -35,35 +30,19 @@ export function runtimeRatingPoints(films: EnrichedFilm[]): Point[] {
 	for (const film of films) {
 		const runtime = film.tmdb?.runtime;
 		if (film.rating === null || !runtime) continue;
-		if (film.tmdb?.mediaType === 'tv' || runtime < FEATURE_MINUTES) continue;
-		points.push({ film, runtime, rating: film.rating, jitter: jitterFor(film.uri) });
+		if (isSeries(film) || runtime < FEATURE_MINUTES) continue;
+		points.push({ film, runtime, rating: film.rating, jitter: ratingJitter(film.uri) });
 	}
 	return points;
 }
 
 /** Least-squares line of rating on runtime, plus Pearson r; null when there is nothing to fit. */
 export function linearFit(points: Point[]): Fit | null {
-	const n = points.length;
-	if (n < 2) return null;
-	let meanX = 0;
-	let meanY = 0;
-	for (const p of points) {
-		meanX += p.runtime / n;
-		meanY += p.rating / n;
-	}
-	let sxy = 0;
-	let sxx = 0;
-	let syy = 0;
-	for (const p of points) {
-		const dx = p.runtime - meanX;
-		const dy = p.rating - meanY;
-		sxy += dx * dy;
-		sxx += dx * dx;
-		syy += dy * dy;
-	}
-	if (sxx === 0 || syy === 0) return null;
-	const slope = sxy / sxx;
-	return { slope, intercept: meanY - slope * meanX, r: sxy / Math.sqrt(sxx * syy), n };
+	const fit = fitLine(
+		points.map((p) => p.runtime),
+		points.map((p) => p.rating)
+	);
+	return fit && { ...fit, n: points.length };
 }
 
 /** Plain reading of a correlation, so a near-zero r is not mistaken for a result. */

@@ -1,23 +1,17 @@
 <script lang="ts">
 	import FilmList from './FilmList.svelte';
-	import {
-		cellBin,
-		formatWatchtime,
-		heatScale,
-		minuteLabel,
-		type HeatMetric,
-		type HeatmapGrid,
-		type HeatCell
-	} from './heatmap';
+	import RampLegend from './RampLegend.svelte';
+	import { selectByKey } from './selection.svelte';
+	import { binColor, RATING_RANGE } from './ramp';
+	import { formatWatchtime, minuteLabel, noun } from '$lib/format';
+	import { cellBin, heatScale, type HeatMetric, type HeatmapGrid, type HeatCell } from './heatmap';
 
 	let {
 		grid,
-		metric = 'watchtime',
+		metric,
 		cellSize = 13,
 		fitWidth = false
-	}: { grid: HeatmapGrid; metric?: HeatMetric; cellSize?: number; fitWidth?: boolean } = $props();
-
-	let selectedKey: string | null = $state(null);
+	}: { grid: HeatmapGrid; metric: HeatMetric; cellSize?: number; fitWidth?: boolean } = $props();
 
 	const cols = $derived(grid.rows[0]?.length ?? 0);
 	// Grids with few columns can shrink their cells to fit a phone instead of scrolling; ~180px
@@ -26,10 +20,9 @@
 		fitWidth ? `min(${cellSize}px, (100vw - 180px) / ${cols})` : `${cellSize}px`
 	);
 	const scale = $derived(heatScale(grid, metric));
-	/** The scale's real endpoints, shown next to Less/More: fixed for rating, the grid's actual
-	 *  busiest cell for watchtime (bins are quantile cuts, not a round number). */
+	/** Rating's fixed endpoints; for watchtime, the grid's actual busiest cell. */
 	const legendRange = $derived.by(() => {
-		if (metric === 'rating') return { min: '0.5', max: '5' };
+		if (metric === 'rating') return RATING_RANGE;
 		let max = 0;
 		for (const row of grid.rows) {
 			for (const cell of row) if (cell && cell.minutes > max) max = cell.minutes;
@@ -39,21 +32,13 @@
 	const description = $derived(
 		`${metric === 'rating' ? 'Average rating' : 'Watchtime'} ${grid.period}`
 	);
-	const selected = $derived.by(() => {
-		if (selectedKey === null) return null;
-		for (const row of grid.rows) {
-			for (const cell of row) if (cell?.key === selectedKey) return cell;
-		}
-		return null;
-	});
+	const selection = selectByKey(
+		() => grid.rows.flat().filter((cell): cell is HeatCell => cell !== null),
+		(cell) => cell.key
+	);
 
 	/** Fira Code is for numerals; word axes (weekdays, months, genres) keep the UI face. */
 	const numeric = (label: string) => /\d/.test(label) || undefined;
-
-	function toggle(cell: HeatCell) {
-		if (cell.films.length === 0) return;
-		selectedKey = selectedKey === cell.key ? null : cell.key;
-	}
 
 	function ratingText(cell: HeatCell): string {
 		if (cell.rating === null) return 'no ratings';
@@ -63,7 +48,7 @@
 
 	function title(cell: HeatCell): string {
 		if (cell.films.length === 0) return `${cell.label}: nothing watched`;
-		const count = `${cell.films.length} film${cell.films.length === 1 ? '' : 's'}`;
+		const count = `${cell.films.length} ${noun(cell.films.length, 'film')}`;
 		const value = metric === 'rating' ? ratingText(cell) : formatWatchtime(cell.minutes);
 		return `${cell.label}: ${count} · ${value}`;
 	}
@@ -107,12 +92,14 @@
 						{:else}
 							<button
 								type="button"
-								class="cell {bin === 'few' ? 'few' : `bin-${bin}`}"
+								class="cell"
+								class:few={bin === 'few'}
 								style={pos}
-								aria-pressed={selectedKey === cell.key}
+								style:background={bin === 'few' ? undefined : binColor(bin)}
+								aria-pressed={selection.isSelected(cell.key)}
 								aria-label={title(cell)}
 								title={title(cell)}
-								onclick={() => toggle(cell)}
+								onclick={() => selection.toggle(cell.key)}
 							></button>
 						{/if}
 					{/each}
@@ -120,22 +107,24 @@
 			</div>
 		</div>
 
-		<div class="legend" aria-hidden="true">
-			<span class="less">Less <span data-numeric>({legendRange.min})</span></span>
-			<span class="scale">
-				{#each scale.legend as label, i (i)}
-					<i class="swatch bin-{i}" title={label}></i>
-				{/each}
-			</span>
-			<span class="more">More <span data-numeric>({legendRange.max})</span></span>
-			{#if metric === 'rating'}
-				<span class="key"><i class="swatch few"></i>no ratings</span>
-			{/if}
-			<span class="key"><i class="swatch empty"></i>none</span>
-		</div>
+		<RampLegend
+			titles={scale.legend}
+			less="Less"
+			more="More"
+			min={legendRange.min}
+			max={legendRange.max}
+		>
+			{#snippet keys()}
+				{#if metric === 'rating'}
+					<span><i class="swatch few"></i>no ratings</span>
+				{/if}
+				<span><i class="swatch none"></i>none</span>
+			{/snippet}
+		</RampLegend>
 	{/if}
 
-	{#if selected}
+	{#if selection.selected}
+		{@const selected = selection.selected}
 		<FilmList title={selected.label} films={selected.films} />
 	{/if}
 </section>
@@ -197,68 +186,7 @@
 		width: var(--cell);
 		height: var(--cell);
 	}
-	.bin-0 {
-		background: var(--map-bin-0);
-	}
-	.bin-1 {
-		background: var(--map-bin-1);
-	}
-	.bin-2 {
-		background: var(--map-bin-2);
-	}
-	.bin-3 {
-		background: var(--map-bin-3);
-	}
-	.bin-4 {
-		background: var(--map-bin-4);
-	}
-	.bin-5 {
-		background: var(--map-bin-5);
-	}
-	.bin-6 {
-		background: var(--map-bin-6);
-	}
-	.bin-7 {
-		background: var(--map-bin-7);
-	}
-	.bin-8 {
-		background: var(--map-bin-8);
-	}
-	.bin-9 {
-		background: var(--map-bin-9);
-	}
 
-	.legend {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 8px;
-		margin-top: 8px;
-		font-size: var(--text-2xs);
-		color: var(--fg-secondary);
-	}
-	.legend .key {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-	}
-	.less,
-	.more {
-		color: var(--fg-muted);
-	}
-	.scale {
-		display: inline-flex;
-		gap: 2px;
-	}
-	.swatch {
-		width: 13px;
-		height: 13px;
-		display: inline-block;
-	}
-	.swatch.empty,
-	.swatch.few {
-		border: 1px solid var(--border);
-	}
 	.empty-msg {
 		font-size: var(--text-base);
 		color: var(--fg-secondary);

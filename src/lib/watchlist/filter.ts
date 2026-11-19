@@ -1,32 +1,45 @@
-import { effectiveCountries } from '$lib/viz/countries';
-import { hashString, seeded } from '$lib/viz/seeded';
-import { compareSpectrum, type Swatch } from '$lib/viz/colors';
-import { imageUrl } from '$lib/viz/images';
+import { effectiveCountries } from '$lib/film/countries';
+import { languageName } from '$lib/film/language';
+import { getOrCreate } from '$lib/maps';
+import { hashString, seeded } from '$lib/random';
+import { compareSpectrum, type Swatch } from '$lib/posters/colors';
+import { posterUrl } from '$lib/posters/posters';
+import { releaseYear } from '$lib/film/release';
 import type { OfferKind, Provider, RegionOffers, WatchlistFilm } from '$lib/types';
 
 /** What a film's offers in the chosen country must include to stay in view. */
 export type Availability = 'any' | 'stream' | 'free' | 'rent' | 'none';
 
-export type WatchSort =
-	| 'added-desc'
-	| 'added-asc'
-	| 'release-desc'
-	| 'release-asc'
-	| 'rating'
-	| 'popularity'
-	| 'runtime-asc'
-	| 'runtime-desc'
-	| 'title'
-	| 'shuffle'
-	| 'colour';
+export const AVAILABILITY_OPTIONS: { value: Availability; label: string }[] = [
+	{ value: 'any', label: 'Everything' },
+	{ value: 'stream', label: 'Streaming (subscription or free)' },
+	{ value: 'free', label: 'Free, with or without ads' },
+	{ value: 'rent', label: 'To rent or buy' },
+	{ value: 'none', label: 'Not streaming' }
+];
+
+export const SORT_OPTIONS = [
+	{ value: 'added-desc', label: 'Recently added' },
+	{ value: 'added-asc', label: 'Added longest ago' },
+	{ value: 'release-desc', label: 'Newest release' },
+	{ value: 'release-asc', label: 'Oldest release' },
+	{ value: 'rating', label: 'TMDB rating' },
+	{ value: 'popularity', label: 'Most popular' },
+	{ value: 'runtime-asc', label: 'Shortest' },
+	{ value: 'runtime-desc', label: 'Longest' },
+	{ value: 'title', label: 'Title A–Z' },
+	{ value: 'shuffle', label: 'Shuffled' },
+	/** Offered once some poster colours have been read. */
+	{ value: 'colour', label: 'Colour spectrum', needsPalette: true }
+] as const;
+
+export type WatchSort = (typeof SORT_OPTIONS)[number]['value'];
 
 /** A film's poster swatch, or undefined while it has not been read. */
 export type SwatchOf = (film: WatchlistFilm) => Swatch | undefined;
 
-/** The poster the wall shows, which is also the image the colour sort reads. */
-export function posterUrl(film: WatchlistFilm): string | null {
-	return imageUrl(film.tmdb?.posterPath ?? null, 'w185');
-}
+/** The poster the wall and the pick show, which is also the image the colour sort reads. */
+export const posterOf = (film: WatchlistFilm): string | null => posterUrl(film.tmdb, 'w185');
 
 export interface WatchFilters {
 	query: string;
@@ -35,6 +48,7 @@ export interface WatchFilters {
 	services: number[];
 	mediaType: 'all' | 'movie' | 'tv';
 	genre: string;
+	/** A language's display name (`languageName`), so codes sharing a name filter as one. */
 	language: string;
 	country: string;
 	fromYear: number | null;
@@ -60,7 +74,7 @@ export const NO_FILTERS: WatchFilters = {
 /** Offers for a film: undefined while still loading, null when it has none in the country. */
 export type OffersOf = (film: WatchlistFilm) => RegionOffers | null | undefined;
 
-export const STREAM_KINDS: OfferKind[] = ['flatrate', 'free', 'ads'];
+const STREAM_KINDS: OfferKind[] = ['flatrate', 'free', 'ads'];
 
 const KINDS: Record<Exclude<Availability, 'none'>, OfferKind[]> = {
 	any: ['flatrate', 'free', 'ads', 'rent', 'buy'],
@@ -70,15 +84,16 @@ const KINDS: Record<Exclude<Availability, 'none'>, OfferKind[]> = {
 };
 
 /** The services offering a film by any of `kinds`, deduplicated, in TMDB's display order. */
-export function providersOf(
-	offers: RegionOffers | null | undefined,
-	kinds: OfferKind[]
-): Provider[] {
+function providersOf(offers: RegionOffers | null | undefined, kinds: OfferKind[]): Provider[] {
 	if (!offers) return [];
 	const seen = new Map<number, Provider>();
 	for (const kind of kinds) for (const p of offers[kind]) if (!seen.has(p.id)) seen.set(p.id, p);
 	return [...seen.values()];
 }
+
+/** The services streaming a film by subscription or for free. */
+export const streamingOn = (offers: RegionOffers | null | undefined): Provider[] =>
+	providersOf(offers, STREAM_KINDS);
 
 function offeredBy(offers: RegionOffers | null, kinds: OfferKind[], services: number[]): boolean {
 	const providers = providersOf(offers, kinds);
@@ -96,10 +111,6 @@ function matchesAvailability(film: WatchlistFilm, filters: WatchFilters, offersO
 	return offeredBy(offers, KINDS[availability], services);
 }
 
-function releaseYear(film: WatchlistFilm): number | null {
-	return film.tmdb?.year ?? film.year;
-}
-
 function matchesQuery(film: WatchlistFilm, query: string): boolean {
 	const needle = query.trim().toLowerCase();
 	if (!needle) return true;
@@ -114,7 +125,11 @@ function matchesFacets(film: WatchlistFilm, filters: WatchFilters): boolean {
 	if (filters.mediaType !== 'all' && (tmdb?.mediaType ?? 'movie') !== filters.mediaType)
 		return false;
 	if (filters.genre && !tmdb?.genres.includes(filters.genre)) return false;
-	if (filters.language && tmdb?.originalLanguage !== filters.language) return false;
+	if (
+		filters.language &&
+		(!tmdb?.originalLanguage || languageName(tmdb.originalLanguage) !== filters.language)
+	)
+		return false;
 	if (filters.country && !countriesOf(film).includes(filters.country)) return false;
 	const year = releaseYear(film);
 	if (filters.fromYear !== null && (year === null || year < filters.fromYear)) return false;
@@ -209,10 +224,8 @@ export interface ServiceCount {
 export function serviceCounts(films: WatchlistFilm[], offersOf: OffersOf): ServiceCount[] {
 	const counts = new Map<number, ServiceCount>();
 	for (const film of films) {
-		for (const provider of providersOf(offersOf(film), STREAM_KINDS)) {
-			const entry = counts.get(provider.id) ?? { provider, films: 0 };
-			entry.films += 1;
-			counts.set(provider.id, entry);
+		for (const provider of streamingOn(offersOf(film))) {
+			getOrCreate(counts, provider.id, () => ({ provider, films: 0 })).films += 1;
 		}
 	}
 	return [...counts.values()].sort(

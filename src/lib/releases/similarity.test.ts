@@ -28,13 +28,23 @@ const emptyProfile = (): TasteProfile => ({
 });
 
 describe('buildTasteProfile', () => {
-	it('picks favourites by rating 4+ or like, and weights a liked unrated film as 1.5', () => {
+	it('picks favourites by rating 4+ or a heart, counting a hearted unrated film as a 4', () => {
 		const profile = buildTasteProfile([
 			fav({ directors: [person(1)] }, 3.5),
 			fav({ directors: [person(2)] }, null, true)
 		]);
 		expect(profile.directors.has(1)).toBe(false);
-		expect(profile.directors.get(2)).toBeCloseTo(1.5 / 3.5);
+		const fourStar = buildTasteProfile([fav({ directors: [person(2)] }, 4)]);
+		expect(profile.directors.get(2)).toBeCloseTo(fourStar.directors.get(2)!);
+	});
+
+	it('weighs a higher rating and a second favourite more', () => {
+		const affinity = (films: EnrichedFilm[]) => buildTasteProfile(films).directors.get(1)!;
+		const four = affinity([fav({ directors: [person(1)] }, 4)]);
+		expect(affinity([fav({ directors: [person(1)] }, 5)])).toBeGreaterThan(four);
+		expect(
+			affinity([fav({ directors: [person(1)] }, 4), fav({ directors: [person(1)] }, 4)])
+		).toBeGreaterThan(four);
 	});
 
 	it('ignores cast seen in only one favourite', () => {
@@ -50,40 +60,49 @@ describe('buildTasteProfile', () => {
 			...filler(17)
 		]);
 		expect([...profile.keywords.keys()]).toEqual(['heist']);
-		expect(profile.keywords.get('heist')).toBeCloseTo(0.6);
 	});
 });
 
 describe('scoreUpcoming', () => {
 	it('keeps a candidate sharing only the director of a single 4-star favourite', () => {
 		const profile = buildTasteProfile([fav({ directors: [person(1)] })]);
-		const [kept] = scoreUpcoming(profile, [candidate({})], new Set());
-		expect(kept.score).toBeCloseTo(0.4 * (1.5 / 3.5), 3);
+		expect(scoreUpcoming(profile, [candidate({})]).map((s) => s.reason)).toEqual(['Director Ada']);
 	});
 
 	it('drops a candidate sharing only the director of a liked 2-star film', () => {
 		const profile = buildTasteProfile([
 			{ ...fav({ directors: [person(1)] }), rating: 2, liked: true }
 		]);
-		expect(scoreUpcoming(profile, [candidate({})], new Set())).toEqual([]);
+		expect(scoreUpcoming(profile, [candidate({})])).toEqual([]);
 	});
 
-	it('keeps a candidate by the director of two 4-star favourites', () => {
+	it('ranks a director of two favourites above a director of one', () => {
 		const profile = buildTasteProfile([
 			fav({ directors: [person(1)] }),
-			fav({ directors: [person(1)] })
+			fav({ directors: [person(1)] }),
+			fav({ directors: [person(2)] })
 		]);
-		const [scored] = scoreUpcoming(profile, [candidate({})], new Set());
-		expect(scored.score).toBeCloseTo(0.24);
-		expect(scored.reason).toBe('Director Ada');
+		const once = candidate({ directors: [person(2, 'Bo')] });
+		const twice = candidate({});
+		const scored = scoreUpcoming(profile, [once, twice]);
+		expect(scored.map((s) => s.record)).toEqual([twice, once]);
+		expect(scored[0].reason).toBe('Director Ada');
 	});
 
-	it('skips excluded ids and records with fewer than 3 cast', () => {
+	it('ranks a candidate sharing more with the favourites higher', () => {
+		const shared = { directors: [person(1, 'Ada')], keywords: ['heist'] };
+		const profile = buildTasteProfile([fav(shared), fav(shared), ...filler(18)]);
+		const directorOnly = candidate({});
+		const directorAndKeyword = candidate({ keywords: ['heist'] });
+		const scored = scoreUpcoming(profile, [directorOnly, directorAndKeyword]);
+		expect(scored.map((s) => s.record)).toEqual([directorAndKeyword, directorOnly]);
+	});
+
+	it('skips records with fewer than 3 cast', () => {
 		const profile = { ...emptyProfile(), directors: new Map([[1, 1]]) };
-		const excluded = candidate({});
 		const thin = candidate({ cast: crew(501, 502) });
 		const kept = candidate({});
-		const result = scoreUpcoming(profile, [excluded, thin, kept], new Set([excluded.tmdbId]));
+		const result = scoreUpcoming(profile, [thin, kept]);
 		expect(result.map((s) => s.record.tmdbId)).toEqual([kept.tmdbId]);
 	});
 
@@ -95,7 +114,7 @@ describe('scoreUpcoming', () => {
 			collection: { id: 77, name: 'Saga', posterPath: null }
 		};
 		const profile = buildTasteProfile([fav(shared), fav(shared), ...filler(18)]);
-		const [scored] = scoreUpcoming(profile, [candidate(shared)], new Set());
+		const [scored] = scoreUpcoming(profile, [candidate(shared)]);
 		expect(scored.reason).toBe(
 			'Director Ada · cast Bea, Cal · keywords: heist · same series as a favourite'
 		);
@@ -103,16 +122,30 @@ describe('scoreUpcoming', () => {
 });
 
 describe('topPeople', () => {
-	it('lists the top 20 directors then the top 10 cast, deduped', () => {
+	it('lists the strongest directors, then the strongest cast, once each, and drops the weakest', () => {
 		const range = (n: number, from: number) => Array.from({ length: n }, (_, i) => from + i);
-		const profile: TasteProfile = {
-			...emptyProfile(),
-			directors: new Map(range(25, 1).map((id) => [id, id / 100])),
-			cast: new Map([...range(12, 100).map((id) => [id, id / 1000] as [number, number]), [25, 1]])
-		};
-		const ids = topPeople(profile);
-		expect(ids.slice(0, 20)).toEqual(range(20, 6).reverse());
-		expect(ids.slice(20)).toEqual(range(9, 103).reverse());
-		expect(ids).toHaveLength(29);
+		const directors = new Map(range(200, 1).map((id) => [id, id / 1000] as [number, number]));
+		const cast = new Map(range(200, 1001).map((id) => [id, id / 10_000] as [number, number]));
+		cast.set(200, 1);
+		const ids = topPeople({ ...emptyProfile(), directors, cast });
+
+		expect(new Set(ids).size).toBe(ids.length);
+		const listedDirectors = ids.filter((id) => directors.has(id));
+		const listedCast = ids.filter((id) => !directors.has(id));
+		expect(ids).toEqual([...listedDirectors, ...listedCast]);
+		for (const [listed, all] of [
+			[listedDirectors, directors],
+			[listedCast, cast]
+		] as const) {
+			expect(listed.length).toBeGreaterThan(0);
+			expect(listed.length).toBeLessThan(all.size);
+			const weights = listed.map((id) => all.get(id)!);
+			expect(weights).toEqual([...weights].sort((a, b) => b - a));
+			const weakestListed = Math.min(...weights);
+			for (const [id, weight] of all) {
+				if (!listed.includes(id) && !ids.includes(id))
+					expect(weight).toBeLessThanOrEqual(weakestListed);
+			}
+		}
 	});
 });

@@ -1,5 +1,8 @@
-import type { FilmReleases, ReleaseKind } from '$lib/releases/dates';
+import { DAY_MS } from '$lib/math';
+import { isTmdbId, type FilmReleases, type ReleaseKind } from '$lib/types';
+import type { BatchLookup } from './batch';
 import type { FetchBudget } from './budget';
+import { jsonCache } from './cache';
 import { tmdbGet } from './tmdb';
 
 interface TmdbReleaseDate {
@@ -13,12 +16,20 @@ interface TmdbCountryReleases {
 }
 
 /** TMDB release types: 2 limited and 3 wide theatrical, 4 digital, 5 physical. */
-const KIND_OF_TYPE: Record<number, ReleaseKind> = {
+const KIND_OF_TYPE: Readonly<Record<number, ReleaseKind>> = {
 	2: 'theatrical',
 	3: 'theatrical',
 	4: 'digital',
 	5: 'physical'
 };
+
+/** TMDB's release types for `kind`, as discover's `with_release_type` takes them (`2|3`). */
+export function releaseTypesOf(kind: ReleaseKind): string {
+	return Object.entries(KIND_OF_TYPE)
+		.filter(([, of]) => of === kind)
+		.map(([type]) => type)
+		.join('|');
+}
 
 /** One country's distinct dated releases, premieres and TV airings dropped. */
 function countryDates(entries: TmdbReleaseDate[]): [ReleaseKind, string][] {
@@ -46,9 +57,17 @@ export function compactReleases(results: TmdbCountryReleases[]): FilmReleases {
 }
 
 /** Release dates in every country for one film: a single subrequest. */
-export async function fetchReleases(budget: FetchBudget, id: number): Promise<FilmReleases> {
+async function fetchReleases(budget: FetchBudget, id: number): Promise<FilmReleases> {
 	const { results } = (await tmdbGet(budget, `/movie/${id}/release_dates`, {})) as {
 		results?: TmdbCountryReleases[];
 	};
 	return compactReleases(results ?? []);
 }
+
+/** Release dates per movie id; studios move and add dates often enough to refetch weekly. */
+export const releases: BatchLookup<number, number, FilmReleases> = {
+	keyOf: (id) => (isTmdbId(id) ? id : null),
+	cache: jsonCache<number, FilmReleases>({ table: 'releases', key: 'tmdb_id', ttlMs: 7 * DAY_MS }),
+	fetchOne: fetchReleases,
+	label: 'tmdb release dates'
+};

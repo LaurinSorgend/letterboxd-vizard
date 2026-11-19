@@ -1,19 +1,25 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { fixed, noun } from '$lib/format';
+	import { onMount, type Snippet } from 'svelte';
 	import { geoNaturalEarth1, geoPath } from 'd3-geo';
 	import { feature } from 'topojson-client';
 	import type { Topology, GeometryCollection } from 'topojson-specification';
-	import CountryRec from './CountryRec.svelte';
-	import FilmList from './FilmList.svelte';
+	import FilmList, { byRatingThenName } from './FilmList.svelte';
+	import { selectByKey } from './selection.svelte';
+	import DataTable from './chart/DataTable.svelte';
+	import Tooltip from './chart/Tooltip.svelte';
 	import MetricToggle from './MetricToggle.svelte';
-	import { aggregateCountries, numericToAlpha2, type CountryStat } from './countries';
-	import { watchedTmdbIds } from './seeds';
+	import { numericToAlpha2 } from '$lib/film/countries';
+	import { aggregateCountries, type CountryStat } from '$lib/film/tally';
+	import RampLegend from './RampLegend.svelte';
 	import {
-		countThresholds,
+		binColor,
+		binOf,
 		countBinLabels,
-		binIndex,
+		countThresholds,
 		HALF_STAR_RANGE_LABELS,
-		HALF_STAR_THRESHOLDS
+		HALF_STAR_THRESHOLDS,
+		RATING_RANGE
 	} from './ramp';
 	import type { EnrichedFilm } from '$lib/types';
 
@@ -24,12 +30,13 @@
 		films,
 		initialMetric = 'count',
 		presetCountry = null,
-		watchlistExclude = []
+		countryDetail
 	}: {
 		films: EnrichedFilm[];
 		initialMetric?: 'count' | 'rating';
 		presetCountry?: string | null;
-		watchlistExclude?: number[];
+		/** Shown above the selected country's film list. */
+		countryDetail?: Snippet<[CountryStat]>;
 	} = $props();
 
 	type Shape = { code: string | undefined; d: string; centroid: [number, number] };
@@ -39,14 +46,16 @@
 	let container: HTMLElement | undefined = $state();
 
 	const stats = $derived(aggregateCountries(films));
-	const excludeIds = $derived([...watchedTmdbIds(films), ...watchlistExclude]);
 
-	// svelte-ignore state_referenced_locally -- URL presets are initial values by design
-	let selected: CountryStat | null = $state(
-		presetCountry ? (stats.get(presetCountry) ?? null) : null
+	const selection = selectByKey(
+		() => stats.values(),
+		(stat) => stat.code
 	);
+	// svelte-ignore state_referenced_locally -- URL presets are initial values by design
+	if (presetCountry) selection.toggle(presetCountry);
+	const selected = $derived(selection.selected);
 	let hoverStat: CountryStat | null = $state(null);
-	let hoverPos = $state({ x: 0, y: 0 });
+	let hoverPos = $state({ x: 0, y: 0, frameWidth: 0 });
 	let mapBox: DOMRect | null = null;
 
 	const MIN_ZOOM = 1;
@@ -73,7 +82,6 @@
 		};
 	}
 
-	/** A client point in the map's own coordinates. */
 	function toMap(clientX: number, clientY: number): { x: number; y: number } {
 		const box = svgEl?.getBoundingClientRect();
 		if (!box) return { x: 0, y: 0 };
@@ -155,9 +163,7 @@
 		zoomTo(view.k * (event.deltaY < 0 ? 1.25 : 0.8), { x: event.clientX, y: event.clientY });
 	}
 
-	function select(stat: CountryStat) {
-		selected = selected?.code === stat.code ? null : stat;
-	}
+	const select = (stat: CountryStat) => selection.toggle(stat.code);
 
 	const maxCount = $derived(Math.max(1, ...[...stats.values()].map((s) => s.count)));
 	const thresholds = $derived(
@@ -166,9 +172,8 @@
 	const binLabels = $derived(
 		metric === 'count' ? countBinLabels(thresholds) : HALF_STAR_RANGE_LABELS
 	);
-	/** The scale's real endpoints, shown next to Less/More. */
 	const legendRange = $derived(
-		metric === 'count' ? { min: '1', max: String(maxCount) } : { min: '0.5', max: '5' }
+		metric === 'count' ? { min: '1', max: String(maxCount) } : RATING_RANGE
 	);
 
 	onMount(async () => {
@@ -186,22 +191,16 @@
 		}));
 	});
 
-	function binOf(stat: CountryStat): number | 'few' | null {
-		if (metric === 'count') return binIndex(stat.count, thresholds);
-		if (stat.ratedCount === 0) return 'few';
-		return binIndex(stat.avg ?? 0, thresholds);
-	}
-
-	function fillClass(code: string | undefined): string {
-		const stat = code ? stats.get(code) : undefined;
-		if (!stat) return 'nodata';
-		const bin = binOf(stat);
-		return bin === 'few' ? 'few' : `bin-${bin}`;
+	/** A country's bin colour, or the "no ratings" colour on the rating metric. */
+	function fillOf(stat: CountryStat): string {
+		const value = metric === 'count' ? stat.count : stat.ratedCount === 0 ? null : (stat.avg ?? 0);
+		const bin = binOf(value, thresholds);
+		return bin === 'few' ? 'var(--surface)' : binColor(bin);
 	}
 
 	function describe(stat: CountryStat): string {
 		const avg = stat.avg !== null ? `, average rating ${stat.avg.toFixed(2)}` : '';
-		return `${stat.name}: ${stat.count} film${stat.count === 1 ? '' : 's'}${avg}`;
+		return `${stat.name}: ${stat.count} ${noun(stat.count, 'film')}${avg}`;
 	}
 
 	function showHover(code: string | undefined, event: PointerEvent | FocusEvent) {
@@ -224,12 +223,12 @@
 			x = (shape.centroid[0] - view.x) * scale;
 			y = (shape.centroid[1] - view.y) * scale;
 		}
-		hoverPos = { x: Math.min(x + 12, mapBox.width - 180), y: y + 12 };
+		hoverPos = { x, y, frameWidth: mapBox.width };
 		hoverStat = stat;
 	}
 
 	function topFilms(stat: CountryStat, n: number): EnrichedFilm[] {
-		return [...stat.films].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1)).slice(0, n);
+		return [...stat.films].sort(byRatingThenName).slice(0, n);
 	}
 
 	const hoverFilms = $derived(hoverStat ? topFilms(hoverStat, 3) : []);
@@ -268,7 +267,7 @@
 				{@const stat = shape.code ? stats.get(shape.code) : undefined}
 				{#if stat}
 					<path
-						class={fillClass(shape.code)}
+						style:fill={fillOf(stat)}
 						class:selected={selected?.code === shape.code}
 						d={shape.d}
 						role="button"
@@ -296,11 +295,11 @@
 		</svg>
 
 		{#if hoverStat}
-			<div class="tooltip" style="left: {hoverPos.x}px; top: {hoverPos.y}px">
+			<Tooltip x={hoverPos.x} y={hoverPos.y} frameWidth={hoverPos.frameWidth} width={180}>
 				<strong>{hoverStat.name}</strong>
 				<div>
 					<span class="value" data-numeric>{hoverStat.count}</span>
-					film{hoverStat.count === 1 ? '' : 's'}
+					{noun(hoverStat.count, 'film')}
 					{#if hoverStat.avg !== null}
 						· <span class="value" data-numeric>{hoverStat.avg.toFixed(2)}</span> avg
 						{#if metric === 'rating' && hoverStat.ratedCount < hoverStat.count}
@@ -308,7 +307,7 @@
 						{/if}
 					{/if}
 				</div>
-				<ul>
+				<ul class="top-films">
 					{#each hoverFilms as film (film.uri)}
 						<li>
 							{film.name}{film.rating !== null ? ': ' : ''}{#if film.rating !== null}<span
@@ -317,7 +316,7 @@
 						</li>
 					{/each}
 				</ul>
-			</div>
+			</Tooltip>
 		{/if}
 
 		<div class="zoom">
@@ -334,94 +333,42 @@
 		</div>
 	</div>
 
-	<div class="legend" aria-hidden="true">
-		<span class="less">Less <span data-numeric>({legendRange.min})</span></span>
-		<span class="scale">
-			{#each binLabels as label, i (i)}
-				<i class="swatch bin-{i}" title={label}></i>
-			{/each}
-		</span>
-		<span class="more">More <span data-numeric>({legendRange.max})</span></span>
-		{#if metric === 'rating'}
-			<span><i class="swatch few"></i>no ratings</span>
-		{/if}
-		<span><i class="swatch nodata"></i>no films</span>
-	</div>
+	<RampLegend
+		titles={binLabels}
+		less="Less"
+		more="More"
+		min={legendRange.min}
+		max={legendRange.max}
+	>
+		{#snippet keys()}
+			{#if metric === 'rating'}
+				<span><i class="swatch few"></i>no ratings</span>
+			{/if}
+			<span><i class="swatch none"></i>no films</span>
+		{/snippet}
+	</RampLegend>
 	{#if selected}
 		{#key selected.code}
-			<CountryRec stat={selected} exclude={excludeIds} />
+			{@render countryDetail?.(selected)}
 		{/key}
 		<FilmList title={selected.name} films={selected.films} />
 	{/if}
 
-	<details>
-		<summary>View as table</summary>
-		<table>
-			<thead>
-				<tr><th>Country</th><th class="num">Films</th><th class="num">Avg rating</th></tr>
-			</thead>
-			<tbody>
-				{#each tableRows as stat (stat.code)}
-					<tr>
-						<td>{stat.name}</td>
-						<td class="num">{stat.count}</td>
-						<td class="num">{stat.avg !== null ? stat.avg.toFixed(2) : '—'}</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</details>
+	<DataTable
+		columns={[
+			{ label: 'Country' },
+			{ label: 'Films', numeric: true },
+			{ label: 'Avg rating', numeric: true }
+		]}
+		rows={tableRows}
+		key={(stat) => stat.code}
+		cells={(stat) => [stat.name, stat.count, fixed(stat.avg, 2)]}
+	/>
 </section>
 
 <style>
-	.bin-0 {
-		fill: var(--map-bin-0);
-		background: var(--map-bin-0);
-	}
-	.bin-1 {
-		fill: var(--map-bin-1);
-		background: var(--map-bin-1);
-	}
-	.bin-2 {
-		fill: var(--map-bin-2);
-		background: var(--map-bin-2);
-	}
-	.bin-3 {
-		fill: var(--map-bin-3);
-		background: var(--map-bin-3);
-	}
-	.bin-4 {
-		fill: var(--map-bin-4);
-		background: var(--map-bin-4);
-	}
-	.bin-5 {
-		fill: var(--map-bin-5);
-		background: var(--map-bin-5);
-	}
-	.bin-6 {
-		fill: var(--map-bin-6);
-		background: var(--map-bin-6);
-	}
-	.bin-7 {
-		fill: var(--map-bin-7);
-		background: var(--map-bin-7);
-	}
-	.bin-8 {
-		fill: var(--map-bin-8);
-		background: var(--map-bin-8);
-	}
-	.bin-9 {
-		fill: var(--map-bin-9);
-		background: var(--map-bin-9);
-	}
-
 	.nodata {
 		fill: var(--bg-secondary);
-		background: var(--bg-secondary);
-	}
-	.few {
-		fill: var(--surface);
-		background: var(--surface);
 	}
 
 	svg {
@@ -494,85 +441,12 @@
 		cursor: default;
 	}
 
-	.tooltip {
-		position: absolute;
-		width: 180px;
-		padding: 8px;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border);
-		font-size: var(--text-sm);
-		pointer-events: none;
-		z-index: 1;
-	}
-	.tooltip ul {
+	.top-films {
 		margin: 4px 0 0;
 		padding-left: 16px;
 		color: var(--fg-secondary);
 	}
 	.value {
-		font-weight: 700;
-	}
-
-	.legend {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 12px;
-		margin-top: 8px;
-		font-size: var(--text-2xs);
-		color: var(--fg-secondary);
-	}
-	.legend span {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-	}
-	.less,
-	.more {
-		color: var(--fg-muted);
-	}
-	.scale {
-		display: inline-flex;
-		gap: 2px;
-	}
-	.swatch {
-		width: 14px;
-		height: 14px;
-		display: inline-block;
-	}
-	.swatch.nodata,
-	.swatch.few {
-		border: 1px solid var(--border);
-	}
-
-	.note {
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
-		margin: 4px 0 0;
-	}
-
-	details {
-		margin-top: 12px;
-	}
-	summary {
-		cursor: pointer;
-		color: var(--fg-secondary);
-		font-size: var(--text-sm);
-	}
-	table {
-		border-collapse: collapse;
-		margin-top: 8px;
-		font-size: var(--text-sm);
-	}
-	th,
-	td {
-		padding: 4px 12px;
-		border-bottom: 1px solid var(--border);
-		text-align: left;
-	}
-	thead tr {
-		background: var(--bg-secondary);
-	}
-	.num {
-		text-align: right;
+		font-weight: 500;
 	}
 </style>

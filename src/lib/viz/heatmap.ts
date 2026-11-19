@@ -1,6 +1,16 @@
-import { binIndex, HALF_STAR_RANGE_LABELS, HALF_STAR_THRESHOLDS } from './ramp';
-import { avgRating } from './stats';
-import { getOrCreate } from '$lib/collections';
+import {
+	BIN_COUNT,
+	binIndex,
+	binOf,
+	HALF_STAR_RANGE_LABELS,
+	HALF_STAR_THRESHOLDS,
+	quantileCuts
+} from './ramp';
+import { avgRating } from '$lib/film/tally';
+import { minuteLabel } from '$lib/format';
+import { getOrCreate } from '$lib/maps';
+import { periodMinutes } from '$lib/film/runtime';
+import { DAY_MS } from '$lib/math';
 import type { EnrichedFilm } from '$lib/types';
 
 export type HeatMetric = 'watchtime' | 'rating';
@@ -46,13 +56,7 @@ export function cellBin(
 ): number | 'few' | null {
 	if (cell.films.length === 0) return null;
 	if (metric === 'watchtime') return cell.watchtimeBin ?? binIndex(cell.minutes, thresholds);
-	return cell.rating === null ? 'few' : binIndex(cell.rating, thresholds);
-}
-
-/** Compact minutes/hours label, e.g. `45m`, `2h`, `2.5h`; used for cell tooltips and legend ends. */
-export function minuteLabel(minutes: number): string {
-	if (minutes < 60) return `${minutes}m`;
-	return minutes % 60 === 0 ? `${minutes / 60}h` : `${(minutes / 60).toFixed(1)}h`;
+	return binOf(cell.rating, thresholds);
 }
 
 /** Range labels for fixed (non-quantile) watchtime thresholds, one bin per gap plus an open top. */
@@ -64,13 +68,12 @@ function fixedWatchtimeLegend(thresholds: number[]): string[] {
 	return legend;
 }
 
-/* Watchtime bins in minutes; index i = value >= threshold[i-1]. Map colors reused. */
+/* Watchtime bins in minutes; index i = value >= threshold[i-1]. */
 const DAILY_THRESHOLDS = [30, 60, 90, 120, 150, 180, 240, 300, 360];
 const DAILY_LEGEND = fixedWatchtimeLegend(DAILY_THRESHOLDS);
 const WEEKLY_THRESHOLDS = [90, 180, 300, 420, 570, 720, 900, 1080, 1290];
 const WEEKLY_LEGEND = fixedWatchtimeLegend(WEEKLY_THRESHOLDS);
 
-const DAY_MS = 86_400_000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -84,16 +87,7 @@ function emptyBucket(): Bucket {
 }
 
 /** Watch buckets keyed by calendar day (YYYY-MM-DD); the daily and weekly grids share one. */
-export type DayBuckets = Map<string, Bucket>;
-
-/** Total watched runtime as a human string; "runtime unknown" when the sum is zero. */
-export function formatWatchtime(minutes: number): string {
-	if (minutes <= 0) return 'runtime unknown';
-	const h = Math.floor(minutes / 60);
-	const m = minutes % 60;
-	if (h === 0) return `${m} min`;
-	return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
+type DayBuckets = Map<string, Bucket>;
 
 function toUtcDate(iso: string): Date {
 	const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
@@ -143,16 +137,7 @@ function diaryDay(date: string): string | null {
 	return day.length === 10 ? day : null;
 }
 
-/**
- * Minutes one diary entry adds to the calendar period it lands in. A series' runtime spans its
- * whole run rather than the day it was logged, so it contributes none.
- */
-function periodMinutes(film: EnrichedFilm): number {
-	if (film.tmdb?.mediaType === 'tv') return 0;
-	return film.tmdb?.runtime ?? 0;
-}
-
-/** Sum each diary watch's runtime into its calendar day (YYYY-MM-DD). */
+/** Each diary watch's `periodMinutes`, summed into its calendar day (YYYY-MM-DD). */
 export function bucketsByDay(films: EnrichedFilm[]): DayBuckets {
 	const days = new Map<string, Bucket>();
 	for (const film of films) {
@@ -179,18 +164,8 @@ function dailyLabel(day: Date): string {
 	return `${WEEKDAYS[day.getUTCDay()]}, ${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]} ${day.getUTCFullYear()}`;
 }
 
-/* Nine cuts give the ten bins the map colors provide (--map-bin-0…9). */
-const QUANTILES = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
-
-/** The nine quantile cuts of `minutes`, ignoring periods with nothing to measure. */
-function quantileCuts(minutes: number[]): number[] {
-	const sorted = minutes.filter((m) => m > 0).sort((a, b) => a - b);
-	if (sorted.length === 0) return [];
-	return QUANTILES.map((q) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]);
-}
-
 /**
- * Ten roughly even watchtime bins drawn from the non-empty cells, rounded to whole hours.
+ * Roughly even watchtime bins drawn from the non-empty cells, rounded to whole hours.
  * Genre totals scale with library size, so fixed cuts would saturate or starve the ramp.
  */
 function watchtimeBins(minutes: number[]): { thresholds: number[]; legend: string[] } {
@@ -230,20 +205,19 @@ function scaleRowsIndependently(rows: HeatCell[][]): GridScale {
 		const thresholds = quantileCuts(row.map((cell) => cell.minutes));
 		for (const cell of row) cell.watchtimeBin = binIndex(cell.minutes, thresholds);
 	}
-	return { watchtimeThresholds: [], watchtimeLegend: ['', '', '', '', '', '', '', '', '', 'More'] };
+	return {
+		watchtimeThresholds: [],
+		watchtimeLegend: [...Array<string>(BIN_COUNT - 1).fill(''), 'More']
+	};
 }
 
-/** Bins every row against one scale drawn from the whole grid. */
 function scaleGridTogether(rows: HeatCell[][]): GridScale {
 	const { thresholds, legend } = watchtimeBins(rows.flat().map((cell) => cell.minutes));
 	return { watchtimeThresholds: thresholds, watchtimeLegend: legend };
 }
 
 /** One row per genre (most-watched first), one column per calendar month, every year pooled. */
-export function buildSeasonalHeatmap(
-	films: EnrichedFilm[],
-	scale: SeasonScale = 'genre'
-): HeatmapGrid {
+export function buildSeasonalHeatmap(films: EnrichedFilm[], scale: SeasonScale): HeatmapGrid {
 	const byCell = new Map<string, Bucket>();
 	const watches = new Map<string, number>();
 

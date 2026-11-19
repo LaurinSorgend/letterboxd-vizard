@@ -19,3 +19,13 @@ export function writePref(key: string, value: string): void {
 		return;
 	}
 }
+
+/** Forgets a viewer preference; a browser that refuses storage has nothing saved to forget. */
+export function removePref(key: string): void {
+	if (!browser) return;
+	try {
+		localStorage.removeItem(key);
+	} catch {
+		return;
+	}
+}

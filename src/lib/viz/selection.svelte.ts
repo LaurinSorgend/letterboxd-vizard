@@ -1,18 +1,26 @@
-import type { BarDatum } from './stats';
-
 /**
- * Click-to-select state for a bar chart: one bar at a time, clicking it again clears it.
- * `data` is a getter so the selection follows a reactive prop.
+ * Click-to-select state for a chart: one item at a time, clicking it again clears it. The
+ * selection is held by key and looked up in `items()` on every read, so when the items are
+ * rebuilt (a feed sync replaces the films) the open selection shows the new item, not a stale
+ * copy, and clears itself if the key is gone.
  */
-export function selectByLabel(data: () => BarDatum[]) {
-	let label: string | null = $state(null);
+export function selectByKey<T, K>(items: () => Iterable<T>, keyOf: (item: T) => K) {
+	let key: K | null = $state(null);
 	return {
-		get selected(): BarDatum | null {
-			return label === null ? null : (data().find((d) => d.label === label) ?? null);
+		get selected(): T | null {
+			if (key === null) return null;
+			for (const item of items()) if (keyOf(item) === key) return item;
+			return null;
 		},
-		isSelected: (candidate: string) => label === candidate,
-		toggle: (candidate: string) => {
-			label = label === candidate ? null : candidate;
+		get key(): K | null {
+			return key;
+		},
+		isSelected: (candidate: K) => key === candidate,
+		toggle: (candidate: K) => {
+			key = key === candidate ? null : candidate;
+		},
+		clear: () => {
+			key = null;
 		}
 	};
 }

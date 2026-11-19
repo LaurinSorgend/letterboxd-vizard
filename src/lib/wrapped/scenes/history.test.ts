@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { film, tmdb, watched } from '$lib/testing/fixtures';
-import { buildWrapped } from '../wrapped';
+import { deckOf } from '$lib/testing/year';
 import {
 	driftScene,
 	firstTimersScene,
@@ -30,14 +30,13 @@ const paddington = film({
 });
 
 const export2Years = [...yearOf(2024, 12), ...yearOf(2025, 25, 5), paddington];
-const data = () => buildWrapped(export2Years, 2025)!;
+const data = () => deckOf(export2Years, 2025);
 
 describe('perYearScene', () => {
 	it('sets this year against the years before it', () => {
 		const scene = perYearScene(data());
 		expect(scene).toMatchObject({ id: 'per-year', value: '26' });
 		expect(scene?.body.kind).toBe('bars');
-		expect(scene?.note).toContain('2024');
 		// Full string: catches a formula that quotes the wrong year or the wrong denominator.
 		expect(scene?.note).toBe(
 			'26 films in 2025, against 12 in 2024. Your busiest year was 2025, with 26.'
@@ -51,12 +50,12 @@ describe('perYearScene', () => {
 	});
 
 	it('drops out on a single-year export', () => {
-		expect(perYearScene(buildWrapped(yearOf(2025, 12), 2025)!)).toBeNull();
+		expect(perYearScene(deckOf(yearOf(2025, 12), 2025))).toBeNull();
 	});
 
 	it('says nothing was logged rather than counting zero when the year before was empty', () => {
 		const films = [...yearOf(2023, 5), ...yearOf(2025, 15)];
-		const scene = perYearScene(buildWrapped(films, 2025)!);
+		const scene = perYearScene(deckOf(films, 2025));
 		// The prose never states a zero; the Change stat is a table cell and may show a dash.
 		expect(scene?.note).toBe(
 			'15 films in 2025. Nothing logged in 2024. Your busiest year was 2025, with 15.'
@@ -75,7 +74,7 @@ describe('mostLoggedScene', () => {
 	});
 
 	it('drops out when no film has been logged three times or more', () => {
-		expect(mostLoggedScene(buildWrapped(yearOf(2025, 12), 2025)!)).toBeNull();
+		expect(mostLoggedScene(deckOf(yearOf(2025, 12), 2025))).toBeNull();
 	});
 
 	it('drops out when the most-logged film was not watched this year', () => {
@@ -88,7 +87,7 @@ describe('mostLoggedScene', () => {
 			]
 		});
 		const films = [...yearOf(2025, 12), oldFavourite];
-		expect(mostLoggedScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(mostLoggedScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('does not pluralise "of them" wrongly when it happened more than once this year', () => {
@@ -102,7 +101,7 @@ describe('mostLoggedScene', () => {
 			]
 		});
 		const films = [...yearOf(2025, 10), returner];
-		const scene = mostLoggedScene(buildWrapped(films, 2025)!);
+		const scene = mostLoggedScene(deckOf(films, 2025));
 		expect(scene?.note).toBe('3 times since January 2023, 2 of them this year.');
 	});
 
@@ -125,7 +124,7 @@ describe('mostLoggedScene', () => {
 			]
 		});
 		const films = [...yearOf(2025, 10), winner, second];
-		const scene = mostLoggedScene(buildWrapped(films, 2025)!);
+		const scene = mostLoggedScene(deckOf(films, 2025));
 		expect(scene?.note).toBe(
 			'4 times since January 2021, 1 of them this year. No other film in your diary has been logged more than 3 times.'
 		);
@@ -144,21 +143,19 @@ describe('fiveStarScene', () => {
 	});
 
 	it('drops out under twenty rated films', () => {
-		expect(
-			fiveStarScene(buildWrapped([...yearOf(2024, 12), ...yearOf(2025, 12)], 2025)!)
-		).toBeNull();
+		expect(fiveStarScene(deckOf([...yearOf(2024, 12), ...yearOf(2025, 12)], 2025))).toBeNull();
 	});
 
 	it('drops out when nothing was rated five stars, even with twenty rated films', () => {
 		const films = yearOf(2025, 20, 4);
-		expect(fiveStarScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(fiveStarScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('shares against the rated total, not the whole watched slice, and omits last year when it never happened', () => {
 		// 20 five-star films plus 5 unrated films: share must be 100%, not 20/25 = 80%.
 		const fiveStarFilms = yearOf(2025, 20, 5);
 		const unrated = yearOf(2025, 5, null);
-		const scene = fiveStarScene(buildWrapped([...fiveStarFilms, ...unrated], 2025)!);
+		const scene = fiveStarScene(deckOf([...fiveStarFilms, ...unrated], 2025));
 		expect(scene?.stats.find((s) => s.label === 'Share')?.value).toBe('100%');
 		expect(scene?.stats.some((s) => s.label === 'In 2024')).toBe(false);
 		expect(scene?.note).toBe('20 five-star ratings out of 20 rated films.');
@@ -171,7 +168,7 @@ describe('fiveStarScene', () => {
 		// omitting `rating` from `film()` leaves it null while the entry is still rated.
 		const noCurrentRating = film({ ...watched(['2025-05-01'], 5) });
 		const films = [...yearOf(2025, 19, 5), noCurrentRating];
-		const scene = fiveStarScene(buildWrapped(films, 2025)!);
+		const scene = fiveStarScene(deckOf(films, 2025));
 		// Hand-derived: ratingInYear counts all 20 entries (19 with a current rating + this one
 		// without), so `top.count` = 20, `top.rated` = 20, share = 20/20 = 100%. A denominator built
 		// from `film.rating !== null` instead would give 19, reading "20 out of 19" against a 100%
@@ -185,8 +182,6 @@ describe('driftScene', () => {
 	it('reports a rating that moved between viewings', () => {
 		const scene = driftScene(data());
 		expect(scene).toMatchObject({ id: 'drift', valueKind: 'name', value: 'Paddington 2' });
-		expect(scene?.note).toContain('★ 3');
-		expect(scene?.note).toContain('★ 4.5');
 		// Full string pins the before/after ordering: before is the earliest entry (2019, ★3.00),
 		// after is this year's (★4.50) — a swapped formula would flip which year sits next to which star.
 		expect(scene?.note).toBe(
@@ -210,7 +205,7 @@ describe('driftScene', () => {
 			]
 		});
 		const films = [...yearOf(2025, 12), declined];
-		const scene = driftScene(buildWrapped(films, 2025)!);
+		const scene = driftScene(deckOf(films, 2025));
 		expect(scene?.label).toBe('It did not hold up');
 		expect(scene?.note).toBe(
 			'You gave it ★ 4.5 in 2020 and ★ 3.0 this time. 1 film in your diary changed your mind this year.'
@@ -223,7 +218,7 @@ describe('driftScene', () => {
 	});
 
 	it('drops out when no film has two rated entries', () => {
-		expect(driftScene(buildWrapped(yearOf(2025, 12), 2025)!)).toBeNull();
+		expect(driftScene(deckOf(yearOf(2025, 12), 2025))).toBeNull();
 	});
 
 	it('drops out when the widest rating move is under a full star', () => {
@@ -235,26 +230,21 @@ describe('driftScene', () => {
 			]
 		});
 		const films = [...yearOf(2025, 12), small];
-		expect(driftScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(driftScene(deckOf(films, 2025))).toBeNull();
 	});
 });
 
 describe('firstTimersScene', () => {
 	it('counts directors new to the export', () => {
 		const sciamma = { name: 'Céline Sciamma', tmdbId: 7, profilePath: null };
-		// Padded with plain, director-less films so the 2025 slice clears MIN_FILMS (10); the brief's
-		// three-film slice alone is below that bar and buildWrapped would return null.
-		const filler = yearOf(2025, 7);
 		const films = [
 			...yearOf(2024, 12),
-			...filler,
 			...Array.from({ length: 3 }, () =>
 				film({ ...watched(['2025-04-01']), rating: 4, tmdb: tmdb({ directors: [sciamma] }) })
 			)
 		];
-		const scene = firstTimersScene(buildWrapped(films, 2025)!);
+		const scene = firstTimersScene(deckOf(films, 2025));
 		expect(scene).toMatchObject({ id: 'first-timers', value: '1' });
-		expect(scene?.note).toContain('Céline Sciamma');
 		// Full string: catches the "of theirs" -> "of theirss" pluralisation bug at count > 1.
 		expect(scene?.note).toBe(
 			'1 director you had never logged before. Céline Sciamma arrived this year and you watched 3 of theirs.'
@@ -266,7 +256,7 @@ describe('firstTimersScene', () => {
 		const films = Array.from({ length: 10 }, () =>
 			film({ ...watched(['2025-04-01']), rating: 4, tmdb: tmdb({ directors: [person] }) })
 		);
-		expect(firstTimersScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(firstTimersScene(deckOf(films, 2025))).toBeNull();
 	});
 
 	it('drops out when every director this year was already logged before', () => {
@@ -276,6 +266,6 @@ describe('firstTimersScene', () => {
 			film({ ...watched(['2025-04-01']), rating: 4, tmdb: tmdb({ directors: [person] }) })
 		);
 		const films = [priorFilm, ...thisYearFilms];
-		expect(firstTimersScene(buildWrapped(films, 2025)!)).toBeNull();
+		expect(firstTimersScene(deckOf(films, 2025))).toBeNull();
 	});
 });

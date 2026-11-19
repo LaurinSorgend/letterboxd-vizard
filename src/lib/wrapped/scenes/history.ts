@@ -4,19 +4,26 @@ import {
 	fiveStars,
 	mostLogged,
 	ratingDrift
-} from '../facts/history';
-import { monthName, monthOf } from '../facts/dates';
-import { count, percent, plural, posterOf, stars, type Scene } from './shared';
-import type { Wrapped } from '../wrapped';
+} from '$lib/year/facts/history';
+import { monthOf } from '$lib/year/calendar';
+import { monthName } from './prose';
+import { byRating } from '$lib/year/facts/totals';
+import { count, percent, plural, starCaption, stars } from '$lib/format';
+import { posterOf, posterRow, type DeckInput, type Scene } from './shared';
 
 const MIN_YEARS = 2;
+/** A film logged twice is a rewatch; three times is a habit. */
+const MIN_LOGS = 3;
+const MIN_RATED = 20;
+/** Half a star is noise between two moods; a whole star is a changed mind. */
+const MIN_DRIFT = 1;
 
-export function perYearScene(data: Wrapped): Scene | null {
-	const years = filmsPerYear(data.library);
+export function perYearScene({ library }: DeckInput): Scene | null {
+	const years = filmsPerYear(library);
 	if (years.length < MIN_YEARS) return null;
-	const current = years.find((entry) => entry.year === data.year);
+	const current = years.find((entry) => entry.year === library.year);
 	if (!current) return null;
-	const previous = years.find((entry) => entry.year === data.year - 1);
+	const previous = years.find((entry) => entry.year === library.year - 1);
 	const best = years.reduce((most, entry) => (entry.count > most.count ? entry : most));
 	const change =
 		previous && previous.count > 0
@@ -30,13 +37,13 @@ export function perYearScene(data: Wrapped): Scene | null {
 		label: 'Films per year',
 		value: String(current.count),
 		valueKind: 'number',
-		note: `${plural(current.count, 'film')} in ${data.year}${
+		note: `${plural(current.count, 'film')} in ${library.year}${
 			previous && previous.count > 0
-				? `, against ${previous.count} in ${data.year - 1}`
-				: `. Nothing logged in ${data.year - 1}`
+				? `, against ${previous.count} in ${library.year - 1}`
+				: `. Nothing logged in ${library.year - 1}`
 		}. Your busiest year was ${best.year}, with ${best.count}.`,
 		stats: [
-			{ label: String(data.year - 1), value: String(previous?.count ?? 0) },
+			{ label: String(library.year - 1), value: String(previous?.count ?? 0) },
 			{ label: 'Change', value: change },
 			{ label: 'Best year', value: String(best.year) }
 		],
@@ -51,12 +58,12 @@ export function perYearScene(data: Wrapped): Scene | null {
 	};
 }
 
-export function mostLoggedScene(data: Wrapped): Scene | null {
-	const most = mostLogged(data.library);
-	if (!most) return null;
+export function mostLoggedScene({ library }: DeckInput): Scene | null {
+	const most = mostLogged(library);
+	if (!most || most.total < MIN_LOGS || most.thisYear === 0) return null;
 	const first = most.first;
 	const extra =
-		most.runnerUp > 0
+		most.runnerUp >= MIN_LOGS
 			? ` No other film in your diary has been logged more than ${plural(most.runnerUp, 'time')}.`
 			: '';
 	return {
@@ -75,11 +82,10 @@ export function mostLoggedScene(data: Wrapped): Scene | null {
 	};
 }
 
-export function fiveStarScene(data: Wrapped): Scene | null {
-	const top = fiveStars(data.library);
-	// A count of zero would still clear the MIN_RATED gate below, but the frame exists to show off
-	// five-star films: with none to show, it drops out rather than headlining a zero.
-	if (!top || top.count === 0) return null;
+export function fiveStarScene({ library }: DeckInput): Scene | null {
+	const top = fiveStars(library);
+	// The frame shows off five-star films: with none to show it drops out rather than headline a zero.
+	if (!top || top.rated < MIN_RATED || top.count === 0) return null;
 	const lastYear =
 		top.lastYear === null
 			? ''
@@ -92,25 +98,23 @@ export function fiveStarScene(data: Wrapped): Scene | null {
 		label: 'Five stars',
 		value: String(top.count),
 		valueKind: 'number',
-		// `top.rated` is the same population `top.share` is a fraction of, so the two always agree —
-		// a locally recomputed count (e.g. films with a non-null current rating) can diverge from it.
 		note: `${plural(top.count, 'five-star rating')} out of ${plural(top.rated, 'rated film')}.${lastYear}`,
 		stats: [
 			{ label: 'Share', value: percent(top.share) },
 			{ label: 'Most-used rating', value: stars(top.modal) },
 			...(top.lastYear === null
 				? []
-				: [{ label: `In ${data.year - 1}`, value: String(top.lastYear) }])
+				: [{ label: `In ${library.year - 1}`, value: String(top.lastYear) }])
 		],
 		body: {
 			kind: 'posters',
-			posters: top.shownFilms.map((film) => posterOf(film, '★ 5'))
+			posters: posterRow(top.films, () => starCaption(5))
 		}
 	};
 }
 
-export function firstTimersScene(data: Wrapped): Scene | null {
-	const fresh = firstTimeDirectors(data.library);
+export function firstTimersScene({ library }: DeckInput): Scene | null {
+	const fresh = firstTimeDirectors(library);
 	if (!fresh) return null;
 	return {
 		id: 'first-timers',
@@ -118,21 +122,21 @@ export function firstTimersScene(data: Wrapped): Scene | null {
 		label: 'New to you',
 		value: String(fresh.directors),
 		valueKind: 'number',
-		note: `${plural(fresh.directors, 'director')} you had never logged before. ${fresh.top!.name} arrived this year and you watched ${count(fresh.top!.count)} of theirs.`,
+		note: `${plural(fresh.directors, 'director')} you had never logged before. ${fresh.top.name} arrived this year and you watched ${count(fresh.top.count)} of theirs.`,
 		stats: [
-			{ label: 'Most watched', value: `${fresh.top!.name}, ${fresh.top!.count}` },
-			{ label: 'Their films', value: String(fresh.byFirstTimers) }
+			{ label: 'Most watched', value: `${fresh.top.name}, ${fresh.top.count}` },
+			{ label: 'Their films', value: String(fresh.films.length) }
 		],
 		body: {
 			kind: 'posters',
-			posters: fresh.shownFilms.map((film) => posterOf(film, film.rating ? `★ ${film.rating}` : ''))
+			posters: posterRow([...fresh.films].sort(byRating), (film) => starCaption(film.rating))
 		}
 	};
 }
 
-export function driftScene(data: Wrapped): Scene | null {
-	const drift = ratingDrift(data.library);
-	if (!drift) return null;
+export function driftScene({ library }: DeckInput): Scene | null {
+	const drift = ratingDrift(library);
+	if (!drift || Math.abs(drift.delta) < MIN_DRIFT) return null;
 	const up = drift.delta > 0;
 	return {
 		id: 'drift',

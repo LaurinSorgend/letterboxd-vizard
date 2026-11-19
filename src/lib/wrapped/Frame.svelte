@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { imageUrl } from '$lib/viz/images';
-	import type { Poster, Scene } from './scenes';
+	import { imageUrl } from '$lib/film/links';
+	import { isDense } from './look';
+	import type { Poster, Scene } from './scenes/shared';
 
 	let {
 		scene,
@@ -13,7 +14,7 @@
 		extras?: import('svelte').Snippet<[number]>;
 	} = $props();
 
-	const dense = $derived(scene.body.kind === 'bars' && scene.body.bars.length > 6);
+	const dense = $derived(scene.body.kind === 'bars' && isDense(scene.body.bars));
 </script>
 
 {#snippet posterCard(item: Poster, size: 'w185' | 'w342')}
@@ -129,9 +130,8 @@
 		padding-top: clamp(8px, 1.4cqh, 14px);
 		font-family: var(--font-sans);
 		font-size: clamp(0.95rem, 2cqw, 1.35rem);
-		font-weight: 700;
+		font-weight: 500;
 		line-height: var(--leading-snug);
-		letter-spacing: 0.01em;
 		border-top: 2px solid var(--w-accent);
 		/* The rule reads as the caption line under a still: it belongs to the value above. */
 		min-width: min(100%, 22ch);
@@ -150,8 +150,6 @@
 		margin: 0;
 		font-family: var(--font-mono);
 		font-size: clamp(0.62rem, 1.15cqw, 0.8rem);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
 		color: var(--w-muted);
 	}
 
@@ -319,8 +317,6 @@
 	.stats dt {
 		font-family: var(--font-mono);
 		font-size: clamp(0.58rem, 1.05cqw, 0.72rem);
-		text-transform: uppercase;
-		letter-spacing: 0.12em;
 		color: var(--w-muted);
 	}
 	.stats dd {

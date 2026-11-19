@@ -1,37 +1,15 @@
-import { json, error } from '@sveltejs/kit';
-import { MAX_BATCH, resolveBatch } from '$lib/server/batch';
-import { cacheKey, getCachedMany, putCachedMany } from '$lib/server/cache';
-import { getDb } from '$lib/server/db';
-import { checkRateLimit } from '$lib/server/ratelimit';
-import { requireSession } from '$lib/server/session';
-import { lookupMovie } from '$lib/server/tmdb';
+import { json } from '@sveltejs/kit';
+import { readBatch, requestContext } from '$lib/server/batch';
+import { resolveEnrich } from '$lib/server/enrich';
 import type { EnrichRequestItem } from '$lib/types';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, platform, cookies, getClientAddress }) => {
-	await requireSession(cookies);
-	await checkRateLimit(platform?.env?.ENRICH_LIMITER, getClientAddress());
+const isItem = (item: unknown): item is EnrichRequestItem =>
+	typeof (item as EnrichRequestItem | null)?.name === 'string';
 
-	const db = await getDb(platform);
-	const body = (await request.json().catch(() => null)) as { items?: EnrichRequestItem[] } | null;
-	const items = body?.items;
-	if (!Array.isArray(items) || items.some((i) => typeof i?.name !== 'string')) {
-		error(400, 'Expected body: { items: { name: string, year: number | null }[] }');
-	}
-	if (items.length > MAX_BATCH) {
-		error(400, `Batch too large, send at most ${MAX_BATCH} items`);
-	}
-
-	const answer = await resolveBatch(items, {
-		keyOf: (item) => cacheKey(item.name, item.year),
-		getCached: (keys) => getCachedMany(db, keys),
-		fetchOne: async (budget, item) => {
-			const movie = await lookupMovie(budget, item.name, item.year);
-			console.log(`tmdb lookup: ${item.name} (${item.year}) -> ${movie?.tmdbId ?? 'no match'}`);
-			return movie;
-		},
-		putCached: (entries) => putCachedMany(db, entries),
-		label: 'tmdb lookup'
-	});
-	return json(answer);
+/** Body `{ items }` of Letterboxd (name, year) pairs; answers each film's TMDB record. */
+export const POST: RequestHandler = async ({ request, platform }) => {
+	const expected = '{ items: { name: string, year: number | null }[] }';
+	const { items } = await readBatch(request, 'items', isItem, expected);
+	return json(await resolveEnrich(items, await requestContext(platform)));
 };

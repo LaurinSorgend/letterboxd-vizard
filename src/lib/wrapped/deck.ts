@@ -1,11 +1,11 @@
+import { plural } from '$lib/format';
 import * as audience from './scenes/audience';
 import * as core from './scenes/core';
 import * as history from './scenes/history';
 import * as library from './scenes/library';
 import * as release from './scenes/release';
 import * as timing from './scenes/timing';
-import { plural, type Scene } from './scenes/shared';
-import type { Wrapped } from './wrapped';
+import type { DeckInput, Scene } from './scenes/shared';
 
 /** Twenty slides is about four minutes at a comfortable pace. Everything true beyond that waits. */
 export const DECK_CAP = 20;
@@ -13,7 +13,7 @@ export const DECK_CAP = 20;
 interface Entry {
 	/** Narrative position is this array's order; rank decides who survives the cap. */
 	rank: number;
-	build: (data: Wrapped) => Scene | null;
+	build: (input: DeckInput) => Scene | null;
 }
 
 const SEQUENCE: Entry[] = [
@@ -56,7 +56,6 @@ const SEQUENCE: Entry[] = [
 ];
 
 export interface Deck {
-	/** Shown in order the first time through. */
 	main: Scene[];
 	/** True frames the cap pushed out; empty when everything fitted. */
 	extras: Scene[];
@@ -83,20 +82,20 @@ function gateScene(count: number, expanded: boolean): Scene {
 	};
 }
 
-export function buildDeck(data: Wrapped, cap = DECK_CAP): Deck {
-	const built = SEQUENCE.map((entry) => ({ rank: entry.rank, scene: entry.build(data) })).filter(
+export function buildDeck(input: DeckInput): Deck {
+	const built = SEQUENCE.map((entry) => ({ rank: entry.rank, scene: entry.build(input) })).filter(
 		(entry): entry is { rank: number; scene: Scene } => entry.scene !== null
 	);
 	const keep = new Set(
 		[...built]
 			.sort((a, b) => b.rank - a.rank)
-			.slice(0, cap)
+			.slice(0, DECK_CAP)
 			.map((entry) => entry.scene.id)
 	);
 	return {
 		main: built.filter((entry) => keep.has(entry.scene.id)).map((entry) => entry.scene),
 		extras: built.filter((entry) => !keep.has(entry.scene.id)).map((entry) => entry.scene),
-		closing: [core.verdictScene(data), core.summaryScene(data)]
+		closing: [core.verdictScene(input), core.summaryScene(input)]
 	};
 }
 

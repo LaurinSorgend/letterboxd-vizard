@@ -1,5 +1,9 @@
 @import './typography.css';
-@import './wrapped.css';
+
+:root {
+	/* The page column: the dashboard, the footer, and the gutter the section nav sits in. */
+	--column: 1080px;
+}
 
 :root {
 	/* Catppuccin Latte (light, default); see DESIGN.md */
@@ -37,6 +41,8 @@
 	--surface: var(--ctp-surface0);
 	--border: var(--ctp-surface1);
 	--border-strong: var(--ctp-overlay0);
+	/* Bars that are not the lead: quiet, so the accent marks only the entry that matters. */
+	--bar: var(--ctp-overlay1);
 	--fg: var(--ctp-text);
 	/* Subtext1 for both: Subtext0/Overlay1 fall below WCAG AA (4.5:1) on Latte Base. */
 	--fg-secondary: var(--ctp-subtext1);
@@ -44,8 +50,6 @@
 	--accent: var(--ctp-blue);
 	--on-accent: var(--ctp-base);
 	--focus: var(--ctp-lavender);
-	--success: var(--ctp-green);
-	--warning: var(--ctp-yellow);
 	--error: var(--ctp-red);
 	/* Letterboxd's heart, and the second series wherever a chart splits a bar by it. */
 	--liked: var(--ctp-pink);
@@ -257,7 +261,7 @@
 	--degree-bin-9: #0c0887;
 }
 
-/* Accent picker: default stays Blue; --focus and --on-accent are unaffected. */
+/* Accent picker, one block per ACCENTS entry in src/lib/theme.ts; default stays Blue; --focus and --on-accent are unaffected. */
 :root[data-accent='rosewater'] {
 	--accent: var(--ctp-rosewater);
 }
@@ -368,6 +372,19 @@ a {
 
 .form-controls :is(button:not(.link):disabled) {
 	cursor: default;
+	color: var(--fg-muted);
+}
+
+/* A view's status line and its data credit. :where keeps them easy to override in place. */
+:where(.form-controls) .summary {
+	margin: 0 0 12px;
+	font-size: var(--text-sm);
+	color: var(--fg-secondary);
+}
+
+:where(.form-controls) .credit {
+	margin-top: 16px;
+	font-size: var(--text-2xs);
 	color: var(--fg-muted);
 }
 

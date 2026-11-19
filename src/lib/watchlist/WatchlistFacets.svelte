@@ -1,20 +1,11 @@
 <script lang="ts">
-	import { countryName } from '$lib/viz/countries';
+	import { countryName } from '$lib/film/countries';
+	import { languageName } from '$lib/film/language';
 	import { countriesOf, type WatchFilters } from './filter';
 	import type { WatchlistFilm } from '$lib/types';
 
 	let { films, filters = $bindable() }: { films: WatchlistFilm[]; filters: WatchFilters } =
 		$props();
-
-	const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
-
-	function languageName(code: string): string {
-		try {
-			return languageNames.of(code) ?? code;
-		} catch {
-			return code;
-		}
-	}
 
 	/** Each value present in the watchlist with how many films carry it, alphabetical. */
 	function tally(keysOf: (film: WatchlistFilm) => string[], name: (key: string) => string) {
@@ -33,7 +24,10 @@
 		)
 	);
 	const languages = $derived(
-		tally((f) => (f.tmdb?.originalLanguage ? [f.tmdb.originalLanguage] : []), languageName)
+		tally(
+			(f) => (f.tmdb?.originalLanguage ? [languageName(f.tmdb.originalLanguage)] : []),
+			(name) => name
+		)
 	);
 	const countries = $derived(tally(countriesOf, countryName));
 	const hasSeries = $derived(films.some((f) => f.tmdb?.mediaType === 'tv'));

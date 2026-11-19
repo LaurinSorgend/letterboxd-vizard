@@ -1,25 +1,31 @@
 import { env } from '$env/dynamic/private';
-import worldCountries from 'world-countries';
+import alpha2 from 'virtual:alpha3-countries';
+import { yearOf } from '$lib/dates';
+import { DAY_MS } from '$lib/math';
 import type { TmdbMovie } from '$lib/types';
-import { normalizeTitle } from '$lib/text';
-import type { FetchBudget } from './budget';
+import { RetryLater, type FetchBudget } from './budget';
+import { budgetedFetch } from './http';
+import { exactTitleMatches, firstNearYear } from './match';
 
 const BASE = 'https://api4.thetvdb.com/v4';
-const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const TOKEN_TTL_MS = DAY_MS;
 
-const alpha3to2 = new Map(worldCountries.map((c) => [c.cca3.toLowerCase(), c.cca2]));
+const alpha3to2 = new Map(Object.entries(alpha2));
 
 let session: { token: string; fetchedAt: number } | null = null;
 
 async function token(budget: FetchBudget): Promise<string> {
 	if (session && Date.now() - session.fetchedAt < TOKEN_TTL_MS) return session.token;
-	budget.take();
-	const response = await fetch(`${BASE}/login`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ apikey: env.TVDB_API_KEY })
-	});
-	if (!response.ok) throw new Error(`TheTVDB login failed: ${response.status}`);
+	const response = await budgetedFetch(
+		budget,
+		new URL(`${BASE}/login`),
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ apikey: env.TVDB_API_KEY })
+		},
+		'TheTVDB login'
+	);
 	const body = (await response.json()) as { data: { token: string } };
 	session = { token: body.data.token, fetchedAt: Date.now() };
 	return session.token;
@@ -27,12 +33,8 @@ async function token(budget: FetchBudget): Promise<string> {
 
 async function tvdbGet(budget: FetchBudget, path: string): Promise<unknown> {
 	const auth = await token(budget);
-	budget.take();
-	const response = await fetch(BASE + path, {
-		headers: { Authorization: `Bearer ${auth}` }
-	});
-	if (!response.ok) throw new Error(`TheTVDB ${path} failed: ${response.status}`);
-	return response.json();
+	const init = { headers: { Authorization: `Bearer ${auth}` } };
+	return (await budgetedFetch(budget, new URL(BASE + path), init, `TheTVDB ${path}`)).json();
 }
 
 interface TvdbSearchResult {
@@ -57,30 +59,7 @@ function seriesRuntime(details: TvdbSeries): number | null {
 	return details.averageRuntime * episodes;
 }
 
-function tvdbYear(result: TvdbSearchResult): number | null {
-	const year = Number.parseInt(result.year ?? '', 10);
-	return Number.isFinite(year) ? year : null;
-}
-
-/** TheTVDB ranks search results by relevance, not title equality. */
-function exactTitleMatches(results: TvdbSearchResult[], name: string): TvdbSearchResult[] {
-	const target = normalizeTitle(name);
-	return results.filter((r) => normalizeTitle(r.name) === target);
-}
-
-/** Among same-titled results, the one closest to `year` wins. */
-function closestToYear(
-	results: TvdbSearchResult[],
-	year: number | null
-): TvdbSearchResult | undefined {
-	if (year === null) return results[0];
-	return (
-		results.find((r) => {
-			const ry = tvdbYear(r);
-			return ry !== null && Math.abs(ry - year) <= 1;
-		}) ?? results[0]
-	);
-}
+const tvdbYear = (result: TvdbSearchResult): number | null => yearOf(result.year);
 
 /**
  * Last-resort series lookup on TheTVDB; returns null when no TVDB_API_KEY is set.
@@ -97,10 +76,14 @@ export async function lookupSeriesOnTvdb(
 	const { data: results } = (await tvdbGet(budget, `/search?query=${query}&type=series`)) as {
 		data: TvdbSearchResult[];
 	};
-	const match = closestToYear(exactTitleMatches(results, name), year);
+	const match = firstNearYear(
+		exactTitleMatches(results, name, (r) => r.name),
+		year,
+		tvdbYear
+	);
 	if (!match) return null;
 
-	// A non-numeric tvdb_id would poison the negative id and break the INTEGER cache write.
+	// A non-numeric tvdb_id would make an unusable record id (`tv:NaN`, a tmdbId that serialises as null).
 	const tvdbId = Number.parseInt(match.tvdb_id, 10);
 	if (!Number.isFinite(tvdbId)) return null;
 
@@ -112,8 +95,10 @@ export async function lookupSeriesOnTvdb(
 				data: TvdbSeries;
 			}
 		).data;
-	} catch {
-		// Search hit is enough; extended details are a bonus.
+	} catch (cause) {
+		// The search hit is enough on its own, but a record cut short by the budget or an outage
+		// would be cached as final, so those are asked again instead.
+		if (cause instanceof RetryLater) throw cause;
 	}
 
 	const country = match.country ? alpha3to2.get(match.country.toLowerCase()) : undefined;
@@ -121,7 +106,7 @@ export async function lookupSeriesOnTvdb(
 		tmdbId: -tvdbId,
 		mediaType: 'tv',
 		title: match.name,
-		year: Number.parseInt(match.year ?? '', 10) || null,
+		year: tvdbYear(match),
 		countries: country ? [country] : [],
 		originCountries: country ? [country] : [],
 		genres: details.genres?.map((g) => g.name) ?? [],

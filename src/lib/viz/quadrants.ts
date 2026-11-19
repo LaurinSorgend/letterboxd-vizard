@@ -1,5 +1,6 @@
-import { jitterFor } from './scatter';
-import { combinedVoteCount } from './stats';
+import { meanMedian } from '$lib/math';
+import { ratingJitter } from './chart/plot';
+import { votes } from '$lib/film/votes';
 import type { EnrichedFilm } from '$lib/types';
 
 export type Quadrant = 'popular-loved' | 'popular-disliked' | 'obscure-loved' | 'obscure-disliked';
@@ -20,9 +21,9 @@ export interface QuadrantPoint {
 }
 
 /** Rated 3.5★ or higher counts as loved, same border Letterboxd's own heart nudges people toward. */
-export const LIKE_THRESHOLD = 3.5;
+const LIKE_THRESHOLD = 3.5;
 
-export interface QuadrantAxes {
+interface QuadrantAxes {
 	popularityMedian: number;
 	ratingThreshold: number;
 }
@@ -33,17 +34,11 @@ function eligible(
 ): { film: EnrichedFilm; popularity: number; rating: number }[] {
 	const rows: { film: EnrichedFilm; popularity: number; rating: number }[] = [];
 	for (const film of films) {
-		const popularity = combinedVoteCount(film);
+		const popularity = votes(film);
 		if (film.rating === null || popularity <= 0) continue;
 		rows.push({ film, popularity, rating: film.rating });
 	}
 	return rows;
-}
-
-function median(values: number[]): number {
-	const sorted = [...values].sort((a, b) => a - b);
-	const mid = Math.floor(sorted.length / 2);
-	return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 function classify(popularity: number, rating: number, axes: QuadrantAxes): Quadrant {
@@ -67,7 +62,7 @@ export function quadrantPoints(films: EnrichedFilm[]): {
 		return { points: [], axes: { popularityMedian: 0, ratingThreshold: LIKE_THRESHOLD } };
 	}
 	const axes: QuadrantAxes = {
-		popularityMedian: median(rows.map((r) => r.popularity)),
+		popularityMedian: meanMedian(rows.map((r) => r.popularity))!,
 		ratingThreshold: LIKE_THRESHOLD
 	};
 	const points = rows.map((r) => ({
@@ -75,12 +70,12 @@ export function quadrantPoints(films: EnrichedFilm[]): {
 		popularity: r.popularity,
 		rating: r.rating,
 		quadrant: classify(r.popularity, r.rating, axes),
-		jitter: jitterFor(r.film.uri)
+		jitter: ratingJitter(r.film.uri)
 	}));
 	return { points, axes };
 }
 
-export interface QuadrantSummary {
+interface QuadrantSummary {
 	quadrant: Quadrant;
 	label: string;
 	count: number;

@@ -12,7 +12,7 @@ function retryWait(response: Response): Promise<void> {
 }
 
 /**
- * An upstream GET that spends one subrequest per attempt and retries a 429/5xx once.
+ * An upstream request that spends one subrequest per attempt and retries a 429/5xx once.
  * @returns the OK response
  * @throws RetryLater when the upstream is unreachable or still failing after the retry
  * @throws Error for any other non-OK answer, which asking again would not change

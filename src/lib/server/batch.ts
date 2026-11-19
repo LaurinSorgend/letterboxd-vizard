@@ -1,46 +1,83 @@
-import pLimit from 'p-limit';
-import { FetchBudget, FETCHES_PER_REQUEST, RetryLater } from './budget';
+import { error } from '@sveltejs/kit';
+import type { D1Database } from '@cloudflare/workers-types';
+import pLimit, { type LimitFunction } from 'p-limit';
+import { MAX_BATCH, type BatchAnswer } from '$lib/types';
+import { FetchBudget, fetchesPerRequest, RetryLater } from './budget';
+import type { Cache } from './cache';
+import { getDb } from './db';
 
 const CONCURRENCY = 5;
 
-/** Most items one batch request may carry, on every batch endpoint. */
-export const MAX_BATCH = 100;
+/** What one API request may spend: its cache, its upstream budget, and its concurrency. */
+export interface RequestContext {
+	db: D1Database;
+	budget: FetchBudget;
+	limit: LimitFunction;
+}
+
+/**
+ * A fresh context per request: Workers cap subrequests per invocation and forbid I/O queued from
+ * another request's context. `reserve` walls off part of the budget for a later phase.
+ */
+export async function requestContext(
+	platform: App.Platform | undefined,
+	reserve = 0
+): Promise<RequestContext> {
+	return {
+		db: await getDb(platform),
+		budget: new FetchBudget(fetchesPerRequest(), reserve),
+		limit: pLimit(CONCURRENCY)
+	};
+}
+
+export const isInteger = (value: unknown): value is number => Number.isInteger(value);
+
+/**
+ * The items under `field` of a batch request's JSON body, and the body for any other fields.
+ * Answers 400 with `Expected body: <expected>` when the list is missing or holds an item that
+ * fails `isItem`, and when it is longer than MAX_BATCH.
+ */
+export async function readBatch<T>(
+	request: Request,
+	field: string,
+	isItem: (item: unknown) => item is T,
+	expected: string
+): Promise<{ items: T[]; body: Record<string, unknown> }> {
+	const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+	const items = body?.[field];
+	if (!body || !Array.isArray(items) || !items.every(isItem)) {
+		error(400, `Expected body: ${expected}`);
+	}
+	if (items.length > MAX_BATCH) error(400, `Batch too large, send at most ${MAX_BATCH} items`);
+	return { items, body };
+}
 
 export interface BatchLookup<T, K, V> {
 	/** Cache key of a request item, or null for one the upstream cannot know. */
 	keyOf: (item: T) => K | null;
-	/** Cached values for the keys, stale and unknown ones left out. */
-	getCached: (keys: K[]) => Promise<Map<K, V>>;
-	/** One upstream lookup; each call spends from the shared per-request budget. */
+	cache: Cache<K, V>;
+	/** One upstream lookup; each call spends from the request's budget. */
 	fetchOne: (budget: FetchBudget, item: T) => Promise<V>;
-	putCached: (entries: [K, V][]) => Promise<void>;
 	/** Names a failed key in the server log. */
 	label: string;
 }
 
-export interface BatchAnswer<V> {
-	results: (V | null)[];
-	/** Indices of the request the client should send again. */
-	pending: number[];
-}
-
 /**
- * Reads the cache for every item, fetches the rest under one fetch budget, stores what came back,
- * and answers in request order. A lookup that may succeed later is pending; any other failure is
- * final and answers null, as does an item without a key.
+ * Reads the cache for every item, fetches the rest within the request's budget, stores what came
+ * back, and answers in request order. A lookup that may succeed later is pending; any other
+ * failure is final and answers null, as does an item without a key.
  */
 export async function resolveBatch<T, K, V>(
 	items: T[],
-	lookup: BatchLookup<T, K, V>
+	lookup: BatchLookup<T, K, V>,
+	{ db, budget, limit }: RequestContext
 ): Promise<BatchAnswer<V>> {
 	const keys = items.map(lookup.keyOf);
 	const firstItem = new Map<K, T>();
 	keys.forEach((key, index) => {
 		if (key !== null && !firstItem.has(key)) firstItem.set(key, items[index]);
 	});
-	const known = await lookup.getCached([...firstItem.keys()]);
-	const budget = new FetchBudget(FETCHES_PER_REQUEST);
-	const limit = pLimit(CONCURRENCY);
+	const known = await lookup.cache.getMany(db, [...firstItem.keys()]);
 	const resolved = new Map<K, V>();
 	const retry = new Set<K>();
 	await Promise.all(
@@ -55,7 +92,7 @@ export async function resolveBatch<T, K, V>(
 				}
 			})
 	);
-	if (resolved.size > 0) await lookup.putCached([...resolved]);
+	if (resolved.size > 0) await lookup.cache.putMany(db, [...resolved]);
 
 	const results = keys.map((key) =>
 		key === null ? null : (known.get(key) ?? resolved.get(key) ?? null)

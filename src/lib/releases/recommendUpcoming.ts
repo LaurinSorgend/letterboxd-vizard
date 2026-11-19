@@ -1,11 +1,9 @@
-import { fetchRecords, fetchUpcoming } from '$lib/ingest/enrich';
-import type { EnrichedFilm, TmdbMovie, WatchlistFilm } from '$lib/types';
-import { watchedTmdbIds } from '$lib/viz/seeds';
-import type { CalendarFilm } from './calendar';
-import type { ReleaseKind } from './dates';
+import { fetchRecords, fetchUpcoming } from '$lib/api/endpoints';
+import { excludedIds } from '$lib/recommend/recommend';
+import type { EnrichedFilm, ReleaseKind, TmdbMovie, WatchlistFilm } from '$lib/types';
+import { recommendedCalendarFilm, type CalendarFilm } from './calendar';
 import { buildTasteProfile, scoreUpcoming, topPeople, type TasteProfile } from './similarity';
 
-/** Stage of an upcoming-film recommendation run. */
 export type RecommendPhase = 'searching' | 'enriching';
 
 function isEmpty(profile: TasteProfile): boolean {
@@ -28,9 +26,8 @@ export async function recommendUpcoming(
 ): Promise<CalendarFilm[]> {
 	const profile = buildTasteProfile(films);
 	if (isEmpty(profile)) return [];
-	onProgress('searching', 0, 0);
 	const candidates = await fetchUpcoming(region, kinds, topPeople(profile), signal);
-	const exclude = new Set([...watchedTmdbIds(films), ...watchedTmdbIds(watchlist)]);
+	const exclude = new Set(excludedIds({ films, watchlist }, false));
 	const ids = candidates.map((c) => c.tmdbId).filter((id) => !exclude.has(id));
 	onProgress('enriching', 0, ids.length);
 	const records = await fetchRecords(
@@ -39,11 +36,7 @@ export async function recommendUpcoming(
 		signal
 	);
 	const found = [...records.values()].filter((r): r is TmdbMovie => r !== null);
-	return scoreUpcoming(profile, found, exclude).map(({ record, score, reason }) => ({
-		name: record.title,
-		year: record.year,
-		uri: null,
-		tmdb: record,
-		recommended: { score, reason }
-	}));
+	return scoreUpcoming(profile, found).map(({ record, score, reason }) =>
+		recommendedCalendarFilm(record, { score, reason, kinds })
+	);
 }

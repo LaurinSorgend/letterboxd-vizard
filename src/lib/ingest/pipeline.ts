@@ -1,15 +1,17 @@
-import { enrichFilms, enrichOmdb, fetchCollections } from '$lib/ingest/enrich';
-import { feedHasGap, mergeFeed, type FeedEntry } from '$lib/ingest/rss';
-import { watchedTmdbIds } from '$lib/viz/seeds';
+import { enrichFilms, enrichOmdb, fetchCollections, fetchFeed } from '$lib/api/endpoints';
+import { parseExport } from '$lib/ingest/parse';
+import { feedHasGap, mergeFeed } from '$lib/ingest/rss';
 import type {
 	CollectionParts,
 	EnrichedFilm,
+	FeedEntry,
 	Film,
+	LetterboxdData,
 	OmdbRatings,
-	TmdbMovie,
 	WatchlistEntry,
 	WatchlistFilm
 } from '$lib/types';
+import { blankProfile } from './film';
 
 export interface Progress {
 	stage: 'films' | 'ratings';
@@ -17,32 +19,45 @@ export interface Progress {
 	total: number;
 }
 
-export interface EnrichedLibrary {
-	films: EnrichedFilm[];
-	watchlist: WatchlistFilm[];
-	watchlistIds: number[];
+/**
+ * Reads an export zip and adds the feed entries logged after the export was made. The export
+ * alone still loads if the feed fails.
+ */
+export async function loadExport(bytes: Uint8Array): Promise<LetterboxdData> {
+	let parsed: LetterboxdData;
+	try {
+		parsed = parseExport(bytes);
+	} catch (cause) {
+		const message = cause instanceof Error ? cause.message : String(cause);
+		throw new Error(
+			`${message}. Make sure you drop the unmodified zip downloaded from Letterboxd.`
+		);
+	}
+	const username = parsed.profile?.username;
+	const feed = username ? await fetchFeed(username).catch(() => []) : [];
+	const { library, newFilms } = mergeFeed(parsed.films, feed);
+	return { ...parsed, films: [...library, ...newFilms] };
 }
 
-/** Loads a member's public feed through /api/feed; throws with the server's message on failure. */
-export async function fetchFeed(username: string): Promise<FeedEntry[]> {
-	const response = await fetch(`/api/feed/${encodeURIComponent(username.trim())}`);
-	if (!response.ok) {
-		const body = (await response.json().catch(() => null)) as { message?: string } | null;
-		throw new Error(body?.message ?? `Feed request failed (${response.status})`);
-	}
-	return ((await response.json()) as { entries: FeedEntry[] }).entries;
+/** A library from a member's public feed alone: their latest diary entries and no watchlist. */
+export async function loadFeed(username: string): Promise<LetterboxdData> {
+	const feed = await fetchFeed(username);
+	if (feed.length === 0) throw new Error(`${username} has no diary entries in their RSS feed.`);
+	return {
+		films: mergeFeed([], feed).newFilms,
+		watchlist: [],
+		profile: blankProfile(username)
+	};
 }
 
 async function ratingsFor(
-	films: (Film & { tmdb: EnrichedFilm['tmdb'] })[],
+	films: { tmdb: EnrichedFilm['tmdb'] }[],
 	report: (progress: Progress) => void
 ): Promise<Map<string, OmdbRatings | null>> {
 	const imdbIds = [...new Set(films.map((f) => f.tmdb?.imdbId).filter((id): id is string => !!id))];
 	report({ stage: 'ratings', done: 0, total: imdbIds.length });
 	if (imdbIds.length === 0) return new Map();
-	return enrichOmdb(imdbIds, (done, total) => report({ stage: 'ratings', done, total })).catch(
-		() => new Map<string, OmdbRatings | null>()
-	);
+	return enrichOmdb(imdbIds, (done, total) => report({ stage: 'ratings', done, total }));
 }
 
 /** Joins films (and the watchlist) with TMDB records, then OMDb ratings for every IMDb match. */
@@ -50,7 +65,7 @@ export async function enrichLibrary(
 	films: Film[],
 	watchlist: WatchlistEntry[],
 	report: (progress: Progress) => void
-): Promise<EnrichedLibrary> {
+): Promise<{ films: EnrichedFilm[]; watchlist: WatchlistFilm[] }> {
 	const total = films.length + watchlist.length;
 	const done = { films: 0, watchlist: 0 };
 	const tick = () => report({ stage: 'films', done: done.films + done.watchlist, total });
@@ -65,8 +80,7 @@ export async function enrichLibrary(
 			...f,
 			omdb: f.tmdb?.imdbId ? (omdb.get(f.tmdb.imdbId) ?? null) : null
 		})),
-		watchlist: enrichedWatchlist,
-		watchlistIds: watchedTmdbIds(enrichedWatchlist)
+		watchlist: enrichedWatchlist
 	};
 }
 
@@ -77,9 +91,9 @@ const WATCHLIST_CAST = 5;
  * TMDB records for the watchlist, trimmed of what the watchlist view never reads so a long
  * watchlist doesn't crowd the watched library out of the browser's storage quota.
  */
-export async function enrichWatchlist(
+async function enrichWatchlist(
 	watchlist: WatchlistEntry[],
-	onProgress: (done: number) => void = () => {}
+	onProgress: (done: number) => void
 ): Promise<WatchlistFilm[]> {
 	const enriched = await enrichFilms(watchlist, onProgress);
 	return enriched.map((film) => ({
@@ -102,30 +116,13 @@ export async function collectionsFor(
 	return [...known, ...(ids.length > 0 ? await fetchCollections(ids) : [])];
 }
 
-export interface FeedRefresh {
-	films: EnrichedFilm[];
-	addedEntries: number;
-	gap: boolean;
-}
-
 /** Merges a feed into an analysed library, looking up only the films the feed introduced. */
 export async function refreshFromFeed(
 	library: EnrichedFilm[],
 	feed: FeedEntry[]
-): Promise<FeedRefresh> {
+): Promise<{ films: EnrichedFilm[]; addedEntries: number; gap: boolean }> {
 	const gap = feedHasGap(library, feed);
-	const merged = mergeFeed<EnrichedFilm>(library, feed, (film) => ({
-		...film,
-		tmdb: null,
-		omdb: null
-	}));
-	if (merged.newFilms.length === 0)
-		return { films: merged.films, addedEntries: merged.addedEntries, gap };
-	const { films: enriched } = await enrichLibrary(merged.newFilms, [], () => {});
-	const byUri = new Map(enriched.map((film) => [film.uri, film]));
-	return {
-		films: merged.films.map((film) => byUri.get(film.uri) ?? film),
-		addedEntries: merged.addedEntries,
-		gap
-	};
+	const merged = mergeFeed(library, feed);
+	const { films: added } = await enrichLibrary(merged.newFilms, [], () => {});
+	return { films: [...merged.library, ...added], addedEntries: merged.addedEntries, gap };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { film, tmdb, watched } from '$lib/testing/fixtures';
-import { buildWrapped } from './wrapped';
+import { deckOf } from '$lib/testing/year';
 import { assemble, buildDeck, DECK_CAP } from './deck';
 
 /** A heavy year: enough of everything that most frames survive their drop-out conditions. */
@@ -29,25 +29,25 @@ const thin = Array.from({ length: 11 }, (_, i) => film(watched([`2025-03-${10 + 
 
 describe('buildDeck', () => {
 	it('caps the main run and holds the overflow back', () => {
-		const deck = buildDeck(buildWrapped(heavy, 2025)!);
+		const deck = buildDeck(deckOf(heavy, 2025));
 		expect(deck.main.length).toBeLessThanOrEqual(DECK_CAP);
 		expect(deck.extras.length).toBeGreaterThan(0);
 		expect(deck.closing.map((scene) => scene.id)).toEqual(['verdict', 'summary']);
 	});
 
 	it('always opens on the title and the count', () => {
-		const deck = buildDeck(buildWrapped(heavy, 2025)!);
+		const deck = buildDeck(deckOf(heavy, 2025));
 		expect(deck.main.slice(0, 2).map((scene) => scene.id)).toEqual(['title', 'count']);
 	});
 
 	it('gives a thin year a short deck with nothing held back', () => {
-		const deck = buildDeck(buildWrapped(thin, 2025)!);
+		const deck = buildDeck(deckOf(thin, 2025));
 		expect(deck.main.length).toBeLessThan(DECK_CAP);
 		expect(deck.extras).toEqual([]);
 	});
 
 	it('never repeats a frame between the main run and the extras', () => {
-		const deck = buildDeck(buildWrapped(heavy, 2025)!);
+		const deck = buildDeck(deckOf(heavy, 2025));
 		const ids = [...deck.main, ...deck.extras, ...deck.closing].map((scene) => scene.id);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
@@ -55,7 +55,7 @@ describe('buildDeck', () => {
 
 describe('assemble', () => {
 	it('puts a gate frame between the main run and the closing pair', () => {
-		const deck = buildDeck(buildWrapped(heavy, 2025)!);
+		const deck = buildDeck(deckOf(heavy, 2025));
 		const collapsed = assemble(deck, false).map((scene) => scene.id);
 		expect(collapsed).toHaveLength(deck.main.length + 3);
 		expect(collapsed.at(-3)).toBe('more');
@@ -63,7 +63,7 @@ describe('assemble', () => {
 	});
 
 	it('splices the extras in at the gate when expanded, keeping earlier indices stable', () => {
-		const deck = buildDeck(buildWrapped(heavy, 2025)!);
+		const deck = buildDeck(deckOf(heavy, 2025));
 		const collapsed = assemble(deck, false);
 		const expanded = assemble(deck, true);
 		expect(expanded).toHaveLength(collapsed.length + deck.extras.length);
@@ -73,7 +73,7 @@ describe('assemble', () => {
 	});
 
 	it('omits the gate entirely when nothing was held back', () => {
-		const deck = buildDeck(buildWrapped(thin, 2025)!);
+		const deck = buildDeck(deckOf(thin, 2025));
 		expect(assemble(deck, false).map((scene) => scene.id)).not.toContain('more');
 	});
 });

@@ -1,57 +1,59 @@
 <script lang="ts">
 	import MetricToggle from './MetricToggle.svelte';
-	import { webHref } from './href';
-	import { HALF_STAR_LABELS } from './ramp';
+	import DataTable from './chart/DataTable.svelte';
+	import FilmLink from './chart/FilmLink.svelte';
+	import Tooltip from './chart/Tooltip.svelte';
+	import { getOrCreate } from '$lib/maps';
+	import { releaseYear } from '$lib/film/release';
+	import RampLegend from './RampLegend.svelte';
+	import { selectByKey } from './selection.svelte';
+	import { BIN_COUNT, binColor, HALF_STAR_LABELS, RATING_RANGE } from './ramp';
 	import { buildNetwork, NET_HEIGHT, NET_WIDTH, type NetworkNode } from './network';
 	import type { EnrichedFilm } from '$lib/types';
 
 	let { films }: { films: EnrichedFilm[] } = $props();
 
-	/** Past this many nodes the picture stops being readable, whatever the thresholds. */
-	const MAX_NODES = 150;
 	/** Minimum pointer target in graph units, so a small node is still comfortably clickable. */
 	const HIT_RADIUS = 20;
-	/** Every pair sharing anybody at all counts as a link; the cast-depth toggle is the real filter. */
-	const MIN_SHARED = 1;
 
 	let castDepth = $state('10');
-	/** Identity of the selected film, not a position — the graph reshuffles when castDepth changes. */
-	let selected: string | null = $state(null);
 	let hover: NetworkNode | null = $state(null);
-	let hoverPos = $state({ x: 0, y: 0, above: true });
+	let hoverPos = $state({ x: 0, y: 0, frameWidth: 0, above: true });
 	let container: HTMLElement | undefined = $state();
 	/** Rough tooltip height in px: below this much room above the point, flip it under instead. */
 	const TOOLTIP_HEIGHT = 90;
 
-	const graph = $derived(
-		buildNetwork(films, {
-			castDepth: Number(castDepth),
-			minShared: MIN_SHARED,
-			maxNodes: MAX_NODES
-		})
+	// Every pair sharing anybody at all counts as a link; the cast-depth toggle is the real filter.
+	const graph = $derived(buildNetwork(films, Number(castDepth)));
+
+	/** Keyed by film, not position: the graph reshuffles when castDepth changes. */
+	const selection = selectByKey(
+		() => graph.nodes,
+		(node) => node.film.uri
 	);
 
 	/** Index of the selected film in the current graph, or null if unselected or dropped by a rebuild. */
 	const selectedIndex = $derived.by(() => {
-		if (selected === null) return null;
-		const index = graph.nodes.findIndex((n) => n.film.uri === selected);
-		return index === -1 ? null : index;
+		const node = selection.selected;
+		return node === null ? null : graph.nodes.indexOf(node);
 	});
 
 	/** Neighbor lookup shared by every BFS, so re-selecting a node doesn't re-scan all edges. */
 	const adjacency = $derived.by(() => {
 		const map = new Map<number, number[]>();
 		for (const edge of graph.edges) {
-			(map.get(edge.source) ?? map.set(edge.source, []).get(edge.source)!).push(edge.target);
-			(map.get(edge.target) ?? map.set(edge.target, []).get(edge.target)!).push(edge.source);
+			getOrCreate(map, edge.source, () => []).push(edge.target);
+			getOrCreate(map, edge.target, () => []).push(edge.source);
 		}
 		return map;
 	});
 
-	const MAX_DEGREE = 10;
-	const DEGREE_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
+	/** Hops coloured outward from a selected film, one per bin of the degree ramp. */
+	const MAX_DEGREE = BIN_COUNT;
+	const ordinal = (n: number): string =>
+		`${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
+	const DEGREE_LABELS = Array.from({ length: MAX_DEGREE }, (_, i) => ordinal(i + 1));
 
-	/** Hop distance from the selected node, out to `MAX_DEGREE`; the selected node itself is 0. */
 	const focusDist = $derived.by(() => {
 		if (selectedIndex === null) return null;
 		const dist = new Map<number, number>([[selectedIndex, 0]]);
@@ -71,7 +73,6 @@
 		return dist;
 	});
 
-	/** Whether an edge sits between two nodes both still within `MAX_DEGREE` of the selection. */
 	function edgeInFocus(edge: { source: number; target: number }): boolean {
 		if (focusDist === null) return true;
 		return focusDist.has(edge.source) && focusDist.has(edge.target);
@@ -90,7 +91,8 @@
 	});
 
 	function describe(node: NetworkNode): string {
-		const year = node.film.tmdb?.year ? ` (${node.film.tmdb.year})` : '';
+		const released = releaseYear(node.film);
+		const year = released ? ` (${released})` : '';
 		const rating = node.film.rating !== null ? `, you rated it ${node.film.rating}` : ', unrated';
 		return `${node.film.name}${year}${rating}, connected to ${node.degree} films`;
 	}
@@ -98,14 +100,11 @@
 	/** Rating colour normally; while a node is selected, its neighbors switch to a degree colour
 	 *  instead, so the ripple outward from the click reads at a glance. The selected node itself
 	 *  keeps its rating colour, as the anchor the ripple is measured from. */
-	function fillClass(node: NetworkNode, index: number): string {
+	function fillOf(node: NetworkNode, index: number): string {
 		const degree = focusDist?.get(index);
-		if (focusDist !== null && degree !== undefined && degree > 0) return `degree-${degree - 1}`;
-		return node.bin === null ? 'unrated' : `bin-${node.bin}`;
-	}
-
-	function select(uri: string) {
-		selected = selected === uri ? null : uri;
+		if (focusDist !== null && degree !== undefined && degree > 0)
+			return binColor(degree - 1, 'degree');
+		return node.bin === null ? 'var(--surface)' : binColor(node.bin);
 	}
 
 	/** Anchored above the point by default, flipping below when there isn't room, so it never clips
@@ -117,11 +116,7 @@
 		const x = event instanceof PointerEvent ? event.clientX - box.left : node.x * scale;
 		const y = event instanceof PointerEvent ? event.clientY - box.top : node.y * scale;
 		const above = y >= TOOLTIP_HEIGHT;
-		hoverPos = {
-			x: Math.min(x + 12, Math.max(0, box.width - 200)),
-			y: above ? y - 12 : y + 12,
-			above
-		};
+		hoverPos = { x, y, frameWidth: box.width, above };
 		hover = node;
 	}
 
@@ -167,7 +162,7 @@
 				<g
 					class="node"
 					class:dim={focusDist !== null && !focusDist.has(index)}
-					class:selected={selected === node.film.uri}
+					class:selected={selection.isSelected(node.film.uri)}
 					role="button"
 					tabindex="0"
 					aria-label={describe(node)}
@@ -175,60 +170,62 @@
 					onpointerleave={() => (hover = null)}
 					onfocus={(e) => showHover(node, e)}
 					onblur={() => (hover = null)}
-					onclick={() => select(node.film.uri)}
+					onclick={() => selection.toggle(node.film.uri)}
 					onkeydown={(e) => {
 						if (e.key === 'Enter' || e.key === ' ') {
 							e.preventDefault();
-							select(node.film.uri);
+							selection.toggle(node.film.uri);
 						}
 					}}
 				>
 					<circle class="hit" cx={node.x} cy={node.y} r={Math.max(node.r, HIT_RADIUS)} />
-					<circle class="dot {fillClass(node, index)}" cx={node.x} cy={node.y} r={node.r} />
+					<circle class="dot" style:fill={fillOf(node, index)} cx={node.x} cy={node.y} r={node.r} />
 				</g>
 			{/each}
 		</svg>
 
 		{#if hover}
-			<div
-				class="tooltip"
-				class:below={!hoverPos.above}
-				style="left: {hoverPos.x}px; top: {hoverPos.y}px"
+			<Tooltip
+				x={hoverPos.x}
+				y={hoverPos.y}
+				frameWidth={hoverPos.frameWidth}
+				width={190}
+				above={hoverPos.above}
 			>
 				<strong>{hover.film.name}</strong>
 				<div>
-					{#if hover.film.tmdb?.year}<span data-numeric>{hover.film.tmdb.year}</span> ·{/if}
+					{#if releaseYear(hover.film)}<span data-numeric>{releaseYear(hover.film)}</span> ·{/if}
 					{#if hover.film.rating !== null}
 						<span data-numeric>★ {hover.film.rating}</span> ·
 					{/if}
 					{hover.degree} connections
 				</div>
-			</div>
+			</Tooltip>
 		{/if}
 	</div>
 
-	<div class="legend" aria-hidden="true">
-		{#if selectedIndex !== null}
-			<span class="less">Less <span data-numeric>({DEGREE_LABELS[0]})</span></span>
-			<span class="scale">
-				{#each DEGREE_LABELS as label, i (label)}
-					<i class="swatch degree-{i}" title="{label} degree"></i>
-				{/each}
-			</span>
-			<span class="more"
-				>More <span data-numeric>({DEGREE_LABELS[DEGREE_LABELS.length - 1]})</span></span
-			>
-		{:else}
-			<span class="less">Less <span data-numeric>(0.5)</span></span>
-			<span class="scale">
-				{#each HALF_STAR_LABELS as label, i (label)}
-					<i class="swatch bin-{i}" title="★ {label}"></i>
-				{/each}
-			</span>
-			<span class="more">More <span data-numeric>(5)</span></span>
-			<span><i class="swatch unrated"></i>unrated</span>
-		{/if}
-	</div>
+	{#if selectedIndex !== null}
+		<RampLegend
+			ramp="degree"
+			titles={DEGREE_LABELS.map((label) => `${label} degree`)}
+			less="Less"
+			more="More"
+			min={DEGREE_LABELS[0]}
+			max={DEGREE_LABELS[DEGREE_LABELS.length - 1]}
+		/>
+	{:else}
+		<RampLegend
+			titles={HALF_STAR_LABELS.map((label) => `★ ${label}`)}
+			less="Less"
+			more="More"
+			min={RATING_RANGE.min}
+			max={RATING_RANGE.max}
+		>
+			{#snippet keys()}
+				<span><i class="swatch few"></i>unrated</span>
+			{/snippet}
+		</RampLegend>
+	{/if}
 
 	{#if selectedIndex !== null}
 		<div class="connections">
@@ -237,15 +234,8 @@
 			</h3>
 			<ul>
 				{#each connections as connection (connection.film.uri)}
-					{@const href = webHref(connection.film.uri)}
 					<li>
-						{#if href}
-							<a {href} target="_blank" rel="noopener" title={connection.film.name}
-								>{connection.film.name}</a
-							>
-						{:else}
-							<span class="name" title={connection.film.name}>{connection.film.name}</span>
-						{/if}
+						<FilmLink film={connection.film} />
 						<span class="shared">via {connection.shared.join(', ')}</span>
 					</li>
 				{/each}
@@ -253,23 +243,16 @@
 		</div>
 	{/if}
 
-	<details>
-		<summary>View as table</summary>
-		<table>
-			<thead>
-				<tr><th>Film</th><th class="num">Connections</th><th class="num">Your rating</th></tr>
-			</thead>
-			<tbody>
-				{#each tableRows as node (node.film.uri)}
-					<tr>
-						<td>{node.film.name}</td>
-						<td class="num" data-numeric>{node.degree}</td>
-						<td class="num" data-numeric>{node.film.rating ?? '—'}</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</details>
+	<DataTable
+		columns={[
+			{ label: 'Film' },
+			{ label: 'Connections', numeric: true },
+			{ label: 'Your rating', numeric: true }
+		]}
+		rows={tableRows}
+		key={(node) => node.film.uri}
+		cells={(node) => [node.film.name, node.degree, node.film.rating ?? '—']}
+	/>
 {/if}
 
 <style>
@@ -339,151 +322,10 @@
 		opacity: 0.1;
 	}
 
-	/* Rating ramp: one bin per half-star, the same 10-step --map-bin Viridis scale the world map
-	   and heatmaps use. */
-	.bin-0 {
-		fill: var(--map-bin-0);
-		background: var(--map-bin-0);
-	}
-	.bin-1 {
-		fill: var(--map-bin-1);
-		background: var(--map-bin-1);
-	}
-	.bin-2 {
-		fill: var(--map-bin-2);
-		background: var(--map-bin-2);
-	}
-	.bin-3 {
-		fill: var(--map-bin-3);
-		background: var(--map-bin-3);
-	}
-	.bin-4 {
-		fill: var(--map-bin-4);
-		background: var(--map-bin-4);
-	}
-	.bin-5 {
-		fill: var(--map-bin-5);
-		background: var(--map-bin-5);
-	}
-	.bin-6 {
-		fill: var(--map-bin-6);
-		background: var(--map-bin-6);
-	}
-	.bin-7 {
-		fill: var(--map-bin-7);
-		background: var(--map-bin-7);
-	}
-	.bin-8 {
-		fill: var(--map-bin-8);
-		background: var(--map-bin-8);
-	}
-	.bin-9 {
-		fill: var(--map-bin-9);
-		background: var(--map-bin-9);
-	}
-	.unrated {
-		fill: var(--surface);
-		background: var(--surface);
-	}
-
-	/* Degree ramp: a separate Plasma scale from the rating bins' Viridis, so a selected film's
-	   ripple is never mistaken for a rating. */
-	.degree-0 {
-		fill: var(--degree-bin-0);
-		background: var(--degree-bin-0);
-	}
-	.degree-1 {
-		fill: var(--degree-bin-1);
-		background: var(--degree-bin-1);
-	}
-	.degree-2 {
-		fill: var(--degree-bin-2);
-		background: var(--degree-bin-2);
-	}
-	.degree-3 {
-		fill: var(--degree-bin-3);
-		background: var(--degree-bin-3);
-	}
-	.degree-4 {
-		fill: var(--degree-bin-4);
-		background: var(--degree-bin-4);
-	}
-	.degree-5 {
-		fill: var(--degree-bin-5);
-		background: var(--degree-bin-5);
-	}
-	.degree-6 {
-		fill: var(--degree-bin-6);
-		background: var(--degree-bin-6);
-	}
-	.degree-7 {
-		fill: var(--degree-bin-7);
-		background: var(--degree-bin-7);
-	}
-	.degree-8 {
-		fill: var(--degree-bin-8);
-		background: var(--degree-bin-8);
-	}
-	.degree-9 {
-		fill: var(--degree-bin-9);
-		background: var(--degree-bin-9);
-	}
-
-	.tooltip {
-		position: absolute;
-		width: 190px;
-		padding: 8px;
-		background: var(--bg-tertiary);
-		border: 1px solid var(--border);
-		font-size: var(--text-sm);
-		pointer-events: none;
-		z-index: 1;
-		/* Anchored at its bottom edge by default, growing upward from the point. Flipped to grow
-		   downward near the top of the frame instead, so it clips against neither edge. */
-		transform: translateY(-100%);
-	}
-	.tooltip.below {
-		transform: translateY(0);
-	}
-
-	.legend {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 12px;
-		margin-top: 8px;
-		font-size: var(--text-2xs);
-		color: var(--fg-secondary);
-	}
-	.legend span {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-	}
-	.less,
-	.more {
-		color: var(--fg-muted);
-	}
-	.scale {
-		display: inline-flex;
-		gap: 2px;
-	}
-	.swatch {
-		width: 14px;
-		height: 14px;
-		display: inline-block;
-	}
-	.swatch.unrated {
-		border: 1px solid var(--border);
-	}
-
-	.empty,
-	.note {
-		font-size: var(--text-2xs);
-		color: var(--fg-muted);
-		margin: 8px 0 0;
-	}
 	.empty {
 		font-size: var(--text-sm);
+		color: var(--fg-muted);
+		margin: 8px 0 0;
 	}
 
 	.connections {
@@ -512,45 +354,15 @@
 	.connections li:last-child {
 		border-bottom: none;
 	}
-	.connections a,
-	.connections .name {
-		color: var(--fg);
+	.connections li > :global(a) {
+		color: var(--accent);
 		text-decoration: none;
 	}
-	.connections a {
-		color: var(--accent);
-	}
-	.connections a:hover {
+	.connections li > :global(a:hover) {
 		text-decoration: underline;
 	}
 	.connections .shared {
 		color: var(--fg-muted);
 		font-size: var(--text-2xs);
-	}
-
-	details {
-		margin-top: 12px;
-	}
-	summary {
-		cursor: pointer;
-		color: var(--fg-secondary);
-		font-size: var(--text-sm);
-	}
-	table {
-		border-collapse: collapse;
-		margin-top: 8px;
-		font-size: var(--text-sm);
-	}
-	th,
-	td {
-		padding: 4px 12px;
-		border-bottom: 1px solid var(--border);
-		text-align: left;
-	}
-	thead tr {
-		background: var(--bg-secondary);
-	}
-	.num {
-		text-align: right;
 	}
 </style>

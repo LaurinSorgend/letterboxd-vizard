@@ -6,9 +6,12 @@
 	import { deliver, paletteFrom } from './canvas';
 	import { storyCard, summaryCard } from './cards';
 	import { posterRain } from './rain';
-	import type { Wrapped } from './wrapped';
+	import { gateStyle, TRAY_TURN_MS } from './look';
+	import './wrapped.css';
+	import type { DeckInput } from './scenes/shared';
 
-	let { data, onclose }: { data: Wrapped; onclose: () => void } = $props();
+	let { data, onclose }: { data: DeckInput; onclose: () => void } = $props();
+	const year = $derived(data.library.year);
 
 	let expanded = $state(false);
 	const deck = $derived(buildDeck(data));
@@ -25,10 +28,12 @@
 	let busy = $state(false);
 	let message: string | null = $state(null);
 	let posterPreview: string | null = $state(null);
+	/** The preview could not be rendered (e.g. a tainted canvas); the frame keeps its text alone. */
+	let previewFailed = $state(false);
 
 	const scene = $derived(scenes[Math.min(index, scenes.length - 1)]);
 	const last = $derived(index >= scenes.length - 1);
-	const rain = $derived(posterRain(data.films));
+	const rain = $derived(posterRain(data.library));
 
 	function go(step: number) {
 		const next = index + step;
@@ -37,7 +42,6 @@
 		index = next;
 		message = null;
 		pulling = true;
-		setTimeout(() => (pulling = false), 420);
 	}
 
 	function onkeydown(event: KeyboardEvent) {
@@ -71,7 +75,7 @@
 				kind === 'poster'
 					? await summaryCard(data, palette)
 					: await storyCard(scene, data, palette);
-			const name = `${data.year}-in-cinema${kind === 'scene' ? `-${scene.id}` : ''}.png`;
+			const name = `${year}-in-cinema${kind === 'scene' ? `-${scene.id}` : ''}.png`;
 			const outcome = await deliver(canvas, name);
 			if (outcome === 'saved') message = `Saved as ${name}.`;
 		} catch (cause) {
@@ -82,11 +86,11 @@
 	}
 
 	$effect(() => {
-		if (scene?.body.kind !== 'summary' || posterPreview || !dialog) return;
+		if (scene?.body.kind !== 'summary' || posterPreview || previewFailed || !dialog) return;
 		const palette = paletteFrom(dialog);
 		summaryCard(data, palette)
 			.then((canvas) => (posterPreview = canvas.toDataURL('image/png')))
-			.catch(() => (posterPreview = null));
+			.catch(() => (previewFailed = true));
 	});
 
 	$effect(() => {
@@ -101,7 +105,7 @@
 	 * a shade soft until the lamp house pulls it back into focus. */
 	function drop(_node: Element, { from }: { from: number }) {
 		return {
-			duration: reduced ? 0 : 380,
+			duration: reduced ? 0 : TRAY_TURN_MS,
 			easing: cubicOut,
 			css: (_t: number, u: number) =>
 				`transform: translateY(${-from * u * 115}%); filter: blur(${u * 7}px);`
@@ -114,8 +118,9 @@
 <dialog
 	bind:this={dialog}
 	data-hue={scene?.accent ?? 'neutral'}
+	style:--turn="{TRAY_TURN_MS}ms"
 	class:pulling
-	aria-label="{data.year} year in review"
+	aria-label="{year} year in review"
 	{onclose}
 	{onpointerdown}
 	{onpointerup}
@@ -155,13 +160,15 @@
 						<div class="slide" in:drop={{ from: direction }} out:drop={{ from: -direction }}>
 							<Frame {scene}>
 								{#snippet poster()}
-									<div class="preview">
-										{#if posterPreview}
-											<img src={posterPreview} alt="Your {data.year} in cinema, as one poster" />
-										{:else}
-											<p class="rendering">Developing the picture…</p>
-										{/if}
-									</div>
+									{#if !previewFailed}
+										<div class="preview">
+											{#if posterPreview}
+												<img src={posterPreview} alt="Your {year} in cinema, as one poster" />
+											{:else}
+												<p class="rendering">Developing the picture…</p>
+											{/if}
+										</div>
+									{/if}
 								{/snippet}
 								{#snippet extras(held: number)}
 									{#if !expanded}
@@ -186,13 +193,17 @@
 				</div>
 				<div class="cast" aria-hidden="true"></div>
 				<div class="grain" aria-hidden="true"></div>
-				<div class="vignette" aria-hidden="true"></div>
-				<div class="dust" aria-hidden="true"></div>
-				<div class="flash" aria-hidden="true"></div>
+				<div class="vignette" aria-hidden="true" style:background={gateStyle.vignette}></div>
+				<div
+					class="dust"
+					aria-hidden="true"
+					style="{gateStyle.hair}; background-image: {gateStyle.dust}"
+				></div>
+				<div class="flash" aria-hidden="true" onanimationend={() => (pulling = false)}></div>
 			</div>
 
 			<div class="mount">
-				<span class="stamp">Letterboxd Vizard · {data.year}</span>
+				<span class="stamp">Letterboxd Vizard · {year}</span>
 				<div class="tray">
 					{#each scenes as item, i (item.id)}
 						<span class="notch" class:seen={i < index}>
@@ -422,9 +433,6 @@
 		inset: 0;
 		z-index: 4;
 		pointer-events: none;
-		background:
-			radial-gradient(70% 60% at 50% 42%, rgba(255, 250, 232, 0.14), transparent 72%),
-			radial-gradient(122% 112% at 50% 50%, transparent 44%, rgba(24, 16, 6, 0.22) 100%);
 	}
 
 	/* Dust and one hair sit on the gate, not on the slide, so they never move between frames. */
@@ -434,20 +442,14 @@
 		z-index: 5;
 		opacity: 0.45;
 		pointer-events: none;
-		background-image:
-			radial-gradient(circle at 18% 27%, rgba(20, 14, 6, 0.55) 0 1.1px, transparent 1.7px),
-			radial-gradient(circle at 74% 16%, rgba(20, 14, 6, 0.4) 0 0.9px, transparent 1.4px),
-			radial-gradient(circle at 61% 84%, rgba(20, 14, 6, 0.5) 0 1.3px, transparent 1.9px),
-			radial-gradient(circle at 33% 69%, rgba(20, 14, 6, 0.34) 0 0.8px, transparent 1.3px),
-			radial-gradient(circle at 88% 57%, rgba(20, 14, 6, 0.45) 0 1px, transparent 1.5px);
 	}
 	.dust::after {
 		content: '';
 		position: absolute;
-		top: 7%;
-		right: 13%;
+		top: var(--hair-y);
+		left: var(--hair-x);
 		width: 1px;
-		height: 24%;
+		height: var(--hair-length);
 		background: linear-gradient(
 			to bottom,
 			transparent,
@@ -455,7 +457,7 @@
 			rgba(20, 14, 6, 0.32) 74%,
 			transparent
 		);
-		transform: rotate(13deg) skewX(-9deg);
+		transform: rotate(var(--hair-angle)) skewX(-9deg);
 	}
 
 	/* The one authored moment: the tray turns, and for a beat the lamp burns through an
@@ -469,7 +471,7 @@
 		pointer-events: none;
 	}
 	dialog.pulling .flash {
-		animation: blank 380ms ease-out;
+		animation: blank var(--turn) ease-out;
 	}
 	@keyframes blank {
 		0% {
@@ -493,8 +495,6 @@
 		gap: clamp(12px, 2vw, 24px);
 		font-family: var(--font-mono);
 		font-size: var(--text-2xs);
-		letter-spacing: 0.09em;
-		text-transform: uppercase;
 		color: var(--w-stamp);
 	}
 	.tray {
@@ -629,7 +629,7 @@
 		outline-offset: 2px;
 	}
 	.share {
-		font-weight: 700;
+		font-weight: 500;
 		color: var(--w-room);
 		background: var(--w-screen);
 		border-color: var(--w-screen);

@@ -1,4 +1,4 @@
-import { grouped, type BarDatum } from './stats';
+import { grouped, type BarDatum } from '$lib/film/tally';
 import type { EnrichedFilm } from '$lib/types';
 
 /**
@@ -15,7 +15,7 @@ export function byKeyword(films: EnrichedFilm[]): BarDatum[] {
 }
 
 /** Six discriminable size/colour steps, darkest and largest at step 5. */
-export const CLOUD_STEPS = 6;
+const CLOUD_STEPS = 6;
 
 /**
  * Size step 0–5 for a keyword. The square root is deliberate: raw counts have a long tail, and a

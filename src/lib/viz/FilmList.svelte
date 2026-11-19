@@ -1,26 +1,27 @@
+<script lang="ts" module>
+	import type { Film } from '$lib/types';
+
+	/** Highest rated first, unrated last, then by name: how every film list reads. */
+	export const byRatingThenName = (a: Film, b: Film): number =>
+		(b.rating ?? -1) - (a.rating ?? -1) || a.name.localeCompare(b.name);
+</script>
+
 <script lang="ts">
+	import { noun } from '$lib/format';
 	import type { EnrichedFilm } from '$lib/types';
-	import { webHref } from './href';
+	import FilmLink from './chart/FilmLink.svelte';
 
 	let { title, films }: { title: string; films: EnrichedFilm[] } = $props();
 
-	const sorted = $derived(
-		[...films].sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.name.localeCompare(b.name))
-	);
+	const sorted = $derived([...films].sort(byRatingThenName));
 </script>
 
 <div class="panel">
-	<h3>{title}: {films.length} film{films.length === 1 ? '' : 's'}</h3>
+	<h3>{title}: {films.length} {noun(films.length, 'film')}</h3>
 	<ul>
 		{#each sorted as film (film.uri)}
 			<li>
-				{#if webHref(film.uri)}
-					<a href={webHref(film.uri)} target="_blank" rel="noopener" title={film.name}
-						>{film.name}</a
-					>
-				{:else}
-					<span class="name" title={film.name}>{film.name}</span>
-				{/if}
+				<FilmLink {film} class="name" />
 				<span class="meta" data-numeric>{film.year ?? ''}</span>
 				{#if film.rating !== null}<span class="value" data-numeric>★ {film.rating}</span>{/if}
 			</li>
@@ -55,18 +56,17 @@
 	.meta {
 		color: var(--fg-muted);
 	}
-	a,
-	.name {
+	li :global(.name) {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
 	}
-	a {
+	li :global(a.name) {
 		color: var(--accent);
 		text-decoration: none;
 	}
-	a:hover {
+	li :global(a.name:hover) {
 		text-decoration: underline;
 	}
 	.value {

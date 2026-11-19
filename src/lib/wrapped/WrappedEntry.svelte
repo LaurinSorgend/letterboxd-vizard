@@ -3,8 +3,7 @@
 	import { dev } from '$app/environment';
 	import { page } from '$app/state';
 	import Wrapped from './Wrapped.svelte';
-	import { buildWrapped } from './wrapped';
-	import { eligibleYears } from '$lib/viz/recap';
+	import { buildYear, deckYear } from '$lib/year';
 	import type { CollectionParts, EnrichedFilm, WatchlistEntry } from '$lib/types';
 
 	let {
@@ -19,28 +18,12 @@
 		viewer?: string | null;
 	} = $props();
 
-	const now = new Date();
-	const december = now.getMonth() === 11;
 	const demo = $derived(dev && page.url.searchParams.has('demo'));
-
-	/* December shows the running year; the demo route shows the latest year worth a deck
-	 * so the surface can be worked on in any month. */
-	const year = $derived.by(() => {
-		if (december) return now.getFullYear();
-		if (!demo) return null;
-		const years = eligibleYears(films, now);
-		return years.length > 0 ? Math.max(...years) : null;
+	const year = $derived(deckYear(films, new Date(), { demo }));
+	const data = $derived.by(() => {
+		const built = year === null ? null : buildYear(films, year, { watchlist, collections });
+		return built && { ...built, viewer };
 	});
-	const data = $derived(
-		year === null
-			? null
-			: buildWrapped(films, year, {
-					viewer,
-					watchlist,
-					collections,
-					locale: typeof navigator === 'undefined' ? 'en' : navigator.language
-				})
-	);
 	let open = $state(false);
 
 	/* The deck opens by itself once per year per browser, so a reader who has already seen
@@ -67,7 +50,7 @@
 		<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
 			<path d="M6 3.5 20 12 6 20.5Z" fill="currentColor" />
 		</svg>
-		<span class="title">{data.year} Year in review</span>
+		<span class="title">{year} Year in review</span>
 	</button>
 
 	{#if open}
@@ -99,6 +82,6 @@
 		outline-offset: 2px;
 	}
 	.title {
-		font-weight: 700;
+		font-weight: 500;
 	}
 </style>

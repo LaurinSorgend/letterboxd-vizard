@@ -1,60 +1,37 @@
 <script lang="ts">
+	import ColourSortButton from '$lib/posters/ColourSortButton.svelte';
+	import type { PosterPalette } from '$lib/posters/palette.svelte';
 	import RegionSelect from '$lib/region/RegionSelect.svelte';
-	import type { WatchFilters, WatchSort } from './filter';
+	import { AVAILABILITY_OPTIONS, SORT_OPTIONS, type WatchFilters, type WatchSort } from './filter';
 
 	let {
-		region,
-		onregion,
 		filters = $bindable(),
 		sort = $bindable(),
 		showLogos = $bindable(),
 		onshuffle,
 		onreset,
-		colours,
-		oncolours
+		palette,
+		posters
 	}: {
-		region: string;
-		onregion: (region: string) => void;
 		filters: WatchFilters;
 		sort: WatchSort;
 		showLogos: boolean;
 		onshuffle: () => void;
 		onreset: () => void;
-		/** Colour sort state: whether any swatches exist, how many posters are left to read. */
-		colours: {
-			ready: boolean;
-			unread: number;
-			reading: boolean;
-			progress: number;
-			refused: boolean;
-		};
-		oncolours: () => void;
+		palette: PosterPalette;
+		/** Posters the colour sort would read. */
+		posters: (string | null)[];
 	} = $props();
-
-	const SORTS: { value: WatchSort; label: string }[] = [
-		{ value: 'added-desc', label: 'Recently added' },
-		{ value: 'added-asc', label: 'Added longest ago' },
-		{ value: 'release-desc', label: 'Newest release' },
-		{ value: 'release-asc', label: 'Oldest release' },
-		{ value: 'rating', label: 'TMDB rating' },
-		{ value: 'popularity', label: 'Most popular' },
-		{ value: 'runtime-asc', label: 'Shortest' },
-		{ value: 'runtime-desc', label: 'Longest' },
-		{ value: 'title', label: 'Title A–Z' },
-		{ value: 'shuffle', label: 'Shuffled' }
-	];
 </script>
 
 <div class="controls">
-	<RegionSelect label="I watch in" {region} onchange={onregion} />
+	<RegionSelect label="I watch in" />
 	<label>
 		Availability
 		<select bind:value={filters.availability}>
-			<option value="any">Everything</option>
-			<option value="stream">Streaming (subscription or free)</option>
-			<option value="free">Free, with or without ads</option>
-			<option value="rent">To rent or buy</option>
-			<option value="none">Not streaming</option>
+			{#each AVAILABILITY_OPTIONS as option (option.value)}
+				<option value={option.value}>{option.label}</option>
+			{/each}
 		</select>
 	</label>
 	<label class="search">
@@ -64,24 +41,19 @@
 	<label>
 		Order
 		<select bind:value={sort}>
-			{#each SORTS as option (option.value)}
-				<option value={option.value}>{option.label}</option>
+			{#each SORT_OPTIONS as option (option.value)}
+				<option
+					value={option.value}
+					disabled={'needsPalette' in option && option.needsPalette && !palette.ready}
+					>{option.label}</option
+				>
 			{/each}
-			<option value="colour" disabled={!colours.ready}>Colour spectrum</option>
 		</select>
 	</label>
 	<div class="actions">
 		<button type="button" onclick={onshuffle}>Shuffle</button>
 		<button type="button" onclick={onreset}>Reset filters</button>
-		{#if !colours.refused && colours.unread > 0}
-			<button type="button" onclick={oncolours} disabled={colours.reading}>
-				{colours.reading ? 'Reading colours…' : 'Sort by colour'}
-			</button>
-		{/if}
-		{#if colours.reading}
-			<progress value={colours.progress} max={colours.unread} aria-label="Reading poster colours"
-			></progress>
-		{/if}
+		<ColourSortButton {palette} urls={posters} onread={() => (sort = 'colour')} />
 		<label class="inline">
 			<input type="checkbox" bind:checked={showLogos} />
 			Logos on posters
@@ -121,9 +93,5 @@
 	label.inline input {
 		accent-color: var(--accent);
 		margin: 0;
-	}
-	progress {
-		width: 160px;
-		accent-color: var(--accent);
 	}
 </style>

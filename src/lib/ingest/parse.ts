@@ -1,7 +1,8 @@
 import { unzipSync } from 'fflate';
 import Papa from 'papaparse';
-import { getOrCreate } from '$lib/collections';
+import { getOrCreate } from '$lib/maps';
 import type { Film, LetterboxdData, Profile, WatchlistEntry } from '$lib/types';
+import { blankFilm, filmKey } from './film';
 
 type Row = Record<string, string>;
 
@@ -31,22 +32,12 @@ export function parseExport(zipBytes: Uint8Array): LetterboxdData {
 		throw new Error('watched.csv not found: is this a Letterboxd data export zip?');
 	}
 
-	// Diary and review rows carry per-entry URIs, so films merge by name + year.
 	const films = new Map<string, Film>();
 	const get = (row: Row): Film => {
-		const key = `${row['Name']}::${row['Year']}`;
-		return getOrCreate(films, key, () => ({
-			uri: row['Letterboxd URI'],
-			name: row['Name'],
-			year: toYear(row['Year']),
-			rating: null,
-			liked: false,
-			review: null,
-			watchedDates: [],
-			entries: [],
-			rewatch: false,
-			tags: []
-		}));
+		const year = toYear(row['Year']);
+		return getOrCreate(films, filmKey(row['Name'], year), () =>
+			blankFilm({ uri: row['Letterboxd URI'], name: row['Name'], year })
+		);
 	};
 
 	for (const row of csv('watched.csv')) get(row);

@@ -1,7 +1,8 @@
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
-import { getOrCreate } from '$lib/collections';
+import { getOrCreate } from '$lib/maps';
+import { personKey } from '$lib/film/tally';
 import { binIndex, HALF_STAR_THRESHOLDS } from './ramp';
-import { clamp, seeded } from './seeded';
+import { clamp, seeded } from '$lib/random';
 import type { EnrichedFilm } from '$lib/types';
 
 export const NET_WIDTH = 1000;
@@ -18,25 +19,15 @@ export interface NetworkNode {
 }
 
 /** `source` and `target` index into `NetworkGraph.nodes`. */
-export interface NetworkEdge {
+interface NetworkEdge {
 	source: number;
 	target: number;
 	shared: string[];
 }
 
-export interface NetworkOptions {
-	castDepth: number;
-	minShared: number;
-	maxNodes: number;
-}
-
-export interface NetworkGraph {
+interface NetworkGraph {
 	nodes: NetworkNode[];
 	edges: NetworkEdge[];
-	/** Films sharing nobody with the rest of your library at this threshold. */
-	isolated: number;
-	/** Connected films dropped to keep the graph readable. */
-	omitted: number;
 }
 
 /**
@@ -63,7 +54,7 @@ function indexPeople(films: EnrichedFilm[], castDepth: number): PersonIndex {
 		const people = [...film.tmdb.directors, ...film.tmdb.cast.slice(0, castDepth)];
 		const seen = new Set<string>();
 		for (const person of people) {
-			const key = person.tmdbId !== null ? `id:${person.tmdbId}` : `name:${person.name}`;
+			const key = personKey(person);
 			if (seen.has(key)) continue;
 			seen.add(key);
 			names.set(key, person.name);
@@ -73,8 +64,8 @@ function indexPeople(films: EnrichedFilm[], castDepth: number): PersonIndex {
 	return { names, filmsByPerson };
 }
 
-/** Film pairs sharing at least `minShared` people, keyed `lowIndex-highIndex`. */
-function sharedPairs(index: PersonIndex, minShared: number): Map<string, string[]> {
+/** Film pairs sharing anybody, keyed `lowIndex-highIndex`, with the names they share. */
+function sharedPairs(index: PersonIndex): Map<string, string[]> {
 	const pairs = new Map<string, string[]>();
 	for (const [key, indices] of index.filmsByPerson) {
 		if (indices.length < 2 || indices.length > UBIQUITY_LIMIT) continue;
@@ -85,7 +76,7 @@ function sharedPairs(index: PersonIndex, minShared: number): Map<string, string[
 			}
 		}
 	}
-	return new Map([...pairs].filter(([, shared]) => shared.length >= minShared));
+	return pairs;
 }
 
 const ITERATIONS = 300;
@@ -148,13 +139,16 @@ function toNode(film: EnrichedFilm, degree: number): NetworkNode {
 	};
 }
 
+/** Past this many nodes the picture stops being readable, whatever the thresholds. */
+const MAX_NODES = 150;
+
 /**
  * Films joined where they share billed people, laid out ready to draw. Films are ranked by how
- * many others they connect to and cut at `maxNodes`, because past roughly that many the picture
+ * many others they connect to and cut at MAX_NODES, because past roughly that many the picture
  * stops being a map of your taste and becomes a ball of string.
  */
-export function buildNetwork(films: EnrichedFilm[], options: NetworkOptions): NetworkGraph {
-	const pairs = sharedPairs(indexPeople(films, options.castDepth), options.minShared);
+export function buildNetwork(films: EnrichedFilm[], castDepth: number): NetworkGraph {
+	const pairs = sharedPairs(indexPeople(films, castDepth));
 	const edgeKeys = [...pairs.keys()].map((key) => key.split('-').map(Number));
 
 	const linkCount = new Map<number, number>();
@@ -165,7 +159,7 @@ export function buildNetwork(films: EnrichedFilm[], options: NetworkOptions): Ne
 	const connected = [...linkCount.keys()].sort(
 		(a, b) => linkCount.get(b)! - linkCount.get(a)! || films[a].name.localeCompare(films[b].name)
 	);
-	const kept = connected.slice(0, options.maxNodes);
+	const kept = connected.slice(0, MAX_NODES);
 
 	// Two passes: the first finds which of the kept films still have a link, the second numbers
 	// the survivors. Dropping a linkless film removes no edge, so one round of this is enough.
@@ -193,10 +187,5 @@ export function buildNetwork(films: EnrichedFilm[], options: NetworkOptions): Ne
 
 	const nodes = finalFilms.map((filmIndex, i) => toNode(films[filmIndex], degrees[i]));
 	layout(nodes, edges);
-	return {
-		nodes,
-		edges,
-		isolated: films.filter((film) => film.tmdb).length - connected.length,
-		omitted: connected.length - nodes.length
-	};
+	return { nodes, edges };
 }

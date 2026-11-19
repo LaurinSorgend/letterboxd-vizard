@@ -1,34 +1,22 @@
 import Database from 'better-sqlite3';
+import { env } from '$env/dynamic/private';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { D1Database } from '@cloudflare/workers-types';
 import schemaSql from '../../../schema.sql?raw';
 
-const DB_PATH = process.env.CACHE_DB_PATH ?? 'data/cache.db';
-
-let handle: Database.Database | undefined;
-
-function open(): Database.Database {
-	if (handle) return handle;
-	fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-	const db = new Database(DB_PATH);
-	db.pragma('journal_mode = WAL');
-	db.exec(schemaSql);
-	handle = db;
-	return db;
-}
+let handle: D1Database | undefined;
 
 /**
- * Minimal D1Database-compatible facade over better-sqlite3 so self-hosters get
- * the same cache without Cloudflare. Implements only the
- * prepare().bind().first()/run()/all() subset the app uses.
+ * Minimal D1Database-compatible facade over better-sqlite3, with schema.sql applied, so
+ * self-hosters get the same cache without Cloudflare. Implements only the
+ * prepare().bind().run()/all() subset the app uses.
  */
-export function localDb(): D1Database {
-	const db = open();
+export function d1Facade(db: Database.Database): D1Database {
+	db.exec(schemaSql);
 	const prepare = (sql: string) => {
 		const stmt = db.prepare(sql);
 		const withArgs = (args: unknown[]) => ({
-			first: async <T>() => (stmt.get(...args) as T | undefined) ?? null,
 			run: async () => {
 				stmt.run(...args);
 				return { success: true, meta: {} };
@@ -39,4 +27,15 @@ export function localDb(): D1Database {
 		return withArgs([]);
 	};
 	return { prepare } as unknown as D1Database;
+}
+
+/** The cache database at CACHE_DB_PATH, created with schema.sql on first open. */
+export function localDb(): D1Database {
+	if (handle) return handle;
+	const file = env.CACHE_DB_PATH || 'data/cache.db';
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	const db = new Database(file);
+	db.pragma('journal_mode = WAL');
+	handle = d1Facade(db);
+	return handle;
 }

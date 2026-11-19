@@ -1,21 +1,12 @@
 <script lang="ts">
-	import { REGIONS, saveRegion } from './region';
+	import { region, REGIONS } from './region.svelte';
 
-	let {
-		label,
-		region,
-		onchange
-	}: { label: string; region: string; onchange: (region: string) => void } = $props();
-
-	function pick(next: string) {
-		saveRegion(next);
-		onchange(next);
-	}
+	let { label }: { label: string } = $props();
 </script>
 
 <label>
 	{label}
-	<select value={region} onchange={(e) => pick(e.currentTarget.value)}>
+	<select value={region.code} onchange={(e) => (region.code = e.currentTarget.value)}>
 		{#each REGIONS as option (option.code)}
 			<option value={option.code}>{option.name}</option>
 		{/each}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { tmdb } from '$lib/testing/fixtures';
 import type { Provider, RegionOffers, TmdbMovie, WatchlistFilm } from '$lib/types';
-import type { Swatch } from '$lib/viz/colors';
+import type { Swatch } from '$lib/posters/colors';
 import {
 	filterWatchlist,
 	NO_FILTERS,
@@ -86,7 +86,7 @@ describe('filterWatchlist', () => {
 
 	it('narrows by facets and year range', () => {
 		expect(run({ genre: 'Crime' })).toEqual(['Heat']);
-		expect(run({ language: 'ru' })).toEqual(['Stalker']);
+		expect(run({ language: 'Russian' })).toEqual(['Stalker']);
 		expect(run({ fromYear: 1990, toYear: 2000 })).toEqual(['Heat']);
 		expect(run({ maxRuntime: 120 })).toEqual(['Heat', 'Paddington']);
 		expect(run({ minRating: 7.5 })).toEqual(['Heat']);
@@ -114,8 +114,13 @@ describe('sortWatchlist', () => {
 		expect(names(sortWatchlist([unknown, ...all], 'runtime-desc')).at(-1)).toBe('Aaa');
 	});
 
-	it('shuffles the same way for the same seed', () => {
-		expect(sortWatchlist(all, 'shuffle', 3)).toEqual(sortWatchlist(all, 'shuffle', 3));
+	it('shuffles the whole list, the same way for the same seed and differently for another', () => {
+		const many = Array.from({ length: 20 }, (_, i) => entry(`Film ${i}`));
+		const order = (seed: number) => names(sortWatchlist(many, 'shuffle', seed));
+		expect([...order(3)].sort()).toEqual([...names(many)].sort());
+		expect(order(3)).toEqual(order(3));
+		expect(order(4)).not.toEqual(order(3));
+		expect(order(3)).not.toEqual(names(many));
 	});
 
 	it('orders by poster hue, unread posters last', () => {

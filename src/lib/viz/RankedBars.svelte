@@ -1,44 +1,52 @@
 <script lang="ts">
+	import { stars } from '$lib/format';
 	import FilmList from './FilmList.svelte';
-	import { selectByLabel } from './selection.svelte';
-	import type { BarDatum } from './stats';
+	import { selectByKey } from './selection.svelte';
+	import type { BarDatum } from '$lib/film/tally';
 
 	let {
 		data,
 		limit = 12,
-		showAvg = false,
 		description
-	}: { data: BarDatum[]; limit?: number; showAvg?: boolean; description: string } = $props();
+	}: { data: BarDatum[]; limit?: number; description: string } = $props();
 
 	let expanded = $state(false);
-	let pinnedLabel: string | null = $state(null);
-	const selection = selectByLabel(() => data);
+	let pinnedKey: string | null = $state(null);
+	const selection = selectByKey(
+		() => data,
+		(d) => d.key
+	);
 	const rows = $derived(expanded ? data : data.slice(0, limit));
 	const max = $derived(Math.max(1, ...rows.map((d) => d.count)));
 	const hasImages = $derived(data.some((d) => d.image !== undefined));
+	// The accent marks the top entry; when every entry ties, nothing leads.
+	const lead = $derived.by(() => {
+		const top = Math.max(0, ...data.map((d) => d.count));
+		return data.some((d) => d.count < top) ? top : null;
+	});
 
-	function togglePin(label: string) {
-		pinnedLabel = pinnedLabel === label ? null : label;
+	function togglePin(key: string) {
+		pinnedKey = pinnedKey === key ? null : key;
 	}
 </script>
 
 <svelte:window
 	onkeydown={(e) => {
-		if (e.key === 'Escape' && pinnedLabel !== null) pinnedLabel = null;
+		if (e.key === 'Escape' && pinnedKey !== null) pinnedKey = null;
 	}}
 />
 
 <div class="chart" class:with-images={hasImages} role="group" aria-label={description}>
-	{#each rows as d (d.label)}
+	{#each rows as d (d.key)}
 		{#if hasImages}
 			{#if d.imageLarge}
 				<button
 					type="button"
 					class="pic"
-					class:pinned={pinnedLabel === d.label}
-					aria-pressed={pinnedLabel === d.label}
+					class:pinned={pinnedKey === d.key}
+					aria-pressed={pinnedKey === d.key}
 					aria-label="Show portrait of {d.label}"
-					onclick={() => togglePin(d.label)}
+					onclick={() => togglePin(d.key)}
 				>
 					{#if d.image}
 						<img src={d.image} alt="" loading="lazy" width="40" height="40" />
@@ -63,18 +71,17 @@
 		<button
 			type="button"
 			class="track"
-			aria-pressed={selection.isSelected(d.label)}
+			aria-pressed={selection.isSelected(d.key)}
 			title="{d.label}: {d.count}{d.avg !== null
 				? `, avg ${d.avg.toFixed(1)}`
 				: ''}; click to list films"
-			onclick={() => selection.toggle(d.label)}
+			onclick={() => selection.toggle(d.key)}
 		>
-			<span class="bar" style="width: {(d.count / max) * 100}%"></span>
+			<span class="bar" class:lead={d.count === lead} style="width: {(d.count / max) * 100}%"
+			></span>
 			<span class="val" data-numeric>{d.count}</span>
 		</button>
-		{#if showAvg}
-			<span class="avg" data-numeric>{d.avg !== null ? `★ ${d.avg.toFixed(1)}` : '—'}</span>
-		{/if}
+		<span class="avg" data-numeric>{stars(d.avg)}</span>
 	{/each}
 </div>
 {#if data.length > limit}
@@ -170,6 +177,9 @@
 	.bar {
 		height: 18px;
 		min-width: 2px;
+		background: var(--bar);
+	}
+	.bar.lead {
 		background: var(--accent);
 	}
 	.track:hover .bar {

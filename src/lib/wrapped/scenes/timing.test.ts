@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { film, tmdb, watched } from '$lib/testing/fixtures';
-import { buildWrapped } from '../wrapped';
+import { deckOf } from '$lib/testing/year';
 import { bestWeekScene, doubleBillScene, gapSilenceScene, weekdayScene } from './timing';
 
 const spread = (dates: string[]) =>
@@ -19,8 +19,7 @@ const januaryThenAugust = spread([
 	'2025-01-09',
 	'2025-08-20'
 ]);
-const data = () =>
-	buildWrapped(januaryThenAugust, 2025, { now: new Date('2026-01-05T00:00:00Z') })!;
+const data = () => deckOf(januaryThenAugust, 2025, { now: new Date('2026-01-05T00:00:00Z') });
 
 describe('gapSilenceScene', () => {
 	it('reports the longest silence with both ends of it', () => {
@@ -37,7 +36,7 @@ describe('gapSilenceScene', () => {
 		// Pin `now` inside the fixture's own active window: with the real clock past 2025 the
 		// closing date would fall back to 2025-12-31 and the eleven months of silence after
 		// January would register as a genuine ~335-day early-stop gap, not "never went quiet".
-		const wrapped = buildWrapped(dense, 2025, { now: new Date('2025-02-01T00:00:00Z') })!;
+		const wrapped = deckOf(dense, 2025, { now: new Date('2025-02-01T00:00:00Z') });
 		expect(gapSilenceScene(wrapped)).toBeNull();
 	});
 
@@ -47,7 +46,7 @@ describe('gapSilenceScene', () => {
 		const lateStart = spread(
 			Array.from({ length: 10 }, (_, i) => `2025-06-${String(i + 1).padStart(2, '0')}`)
 		);
-		const wrapped = buildWrapped(lateStart, 2025, { now: new Date('2025-06-11T00:00:00Z') })!;
+		const wrapped = deckOf(lateStart, 2025, { now: new Date('2025-06-11T00:00:00Z') });
 		expect(gapSilenceScene(wrapped)?.note).toBe(
 			'You did not start until 1 June. 151 days of 2025 went by first.'
 		);
@@ -59,7 +58,7 @@ describe('gapSilenceScene', () => {
 		const earlyStop = spread(
 			Array.from({ length: 10 }, (_, i) => `2025-01-${String(i + 1).padStart(2, '0')}`)
 		);
-		const wrapped = buildWrapped(earlyStop, 2025, { now: new Date('2025-12-31T00:00:00Z') })!;
+		const wrapped = deckOf(earlyStop, 2025, { now: new Date('2025-12-31T00:00:00Z') });
 		expect(gapSilenceScene(wrapped)?.note).toBe(
 			'Your last entry was 10 January, and nothing followed it. 355 days.'
 		);
@@ -71,7 +70,7 @@ describe('weekdayScene', () => {
 		const many = spread(
 			Array.from({ length: 35 }, (_, i) => `2025-0${Math.floor(i / 9) + 1}-0${(i % 9) + 1}`)
 		);
-		const scene = weekdayScene(buildWrapped(many, 2025)!);
+		const scene = weekdayScene(deckOf(many, 2025));
 		expect(scene?.id).toBe('weekday');
 		expect(scene?.valueKind).toBe('name');
 		expect(scene?.body).toMatchObject({ kind: 'bars' });
@@ -105,7 +104,7 @@ describe('bestWeekScene', () => {
 			'2025-03-22',
 			'2025-04-01'
 		]);
-		const wrapped = buildWrapped(sparse, 2025, { now: new Date('2025-04-02T00:00:00Z') })!;
+		const wrapped = deckOf(sparse, 2025, { now: new Date('2025-04-02T00:00:00Z') });
 		expect(bestWeekScene(wrapped)).toBeNull();
 	});
 });
@@ -124,7 +123,7 @@ describe('doubleBillScene', () => {
 			'2025-06-01',
 			'2025-07-01'
 		]);
-		const scene = doubleBillScene(buildWrapped(doubles, 2025)!);
+		const scene = doubleBillScene(deckOf(doubles, 2025));
 		expect(scene).toMatchObject({ id: 'doubles', value: '3' });
 		expect(scene?.stats.map((stat) => stat.label)).toContain('Heaviest');
 	});
@@ -146,7 +145,7 @@ describe('doubleBillScene', () => {
 			'2025-05-01',
 			'2025-06-01'
 		]);
-		const scene = doubleBillScene(buildWrapped(doubles, 2025)!);
+		const scene = doubleBillScene(deckOf(doubles, 2025));
 		expect(scene?.note).toBe(
 			'3 days with more than one film. On 2 of them you watched three or more.'
 		);

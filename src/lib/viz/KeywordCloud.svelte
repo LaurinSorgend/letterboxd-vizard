@@ -1,19 +1,24 @@
 <script lang="ts">
+	import DataTable from './chart/DataTable.svelte';
 	import { onDestroy, onMount } from 'svelte';
+	import { fixed, stars } from '$lib/format';
+	import { onThemeChange } from '$lib/theme';
 	import FilmList from './FilmList.svelte';
-	import { selectByLabel } from './selection.svelte';
+	import { selectByKey } from './selection.svelte';
 	import { sizeStep } from './keywords';
-	import type { BarDatum } from './stats';
+	import type { BarDatum } from '$lib/film/tally';
 	import type { ECharts } from 'echarts';
 
-	let {
-		data,
-		limit = 120,
-		description
-	}: { data: BarDatum[]; limit?: number; description: string } = $props();
+	/** Words drawn at most; past this the cloud is noise. */
+	const LIMIT = 120;
 
-	const shown = $derived(data.slice(0, limit));
-	const selection = selectByLabel(() => data);
+	let { data, description }: { data: BarDatum[]; description: string } = $props();
+
+	const shown = $derived(data.slice(0, LIMIT));
+	const selection = selectByKey(
+		() => data,
+		(d) => d.label
+	);
 
 	/** Muted → full ink, same four tones the bar charts use for the equivalent step. */
 	const FG_BY_STEP = [
@@ -27,8 +32,7 @@
 
 	let container: HTMLDivElement | undefined = $state();
 	let chart: ECharts | undefined;
-	let mediaQuery: MediaQueryList | undefined;
-	let observer: MutationObserver | undefined;
+	let stopThemeWatch: (() => void) | undefined;
 	let resizeHandler: (() => void) | undefined;
 
 	function themeColor(name: string): string {
@@ -48,7 +52,7 @@
 					formatter: (params: { name: string; value: number }) => {
 						const word = shown.find((w) => w.label === params.name);
 						const avg =
-							word?.avg !== null && word?.avg !== undefined ? `, avg ★ ${word.avg.toFixed(1)}` : '';
+							word?.avg !== null && word?.avg !== undefined ? `, avg ${stars(word.avg)}` : '';
 						return `${params.name}: ${params.value} films${avg}`;
 					}
 				},
@@ -96,19 +100,12 @@
 
 		resizeHandler = () => chart?.resize();
 		window.addEventListener('resize', resizeHandler);
-		mediaQuery = matchMedia('(prefers-color-scheme: dark)');
-		mediaQuery.addEventListener('change', render);
-		observer = new MutationObserver(render);
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ['data-flavor', 'data-accent']
-		});
+		stopThemeWatch = onThemeChange(render);
 	});
 
 	onDestroy(() => {
 		if (resizeHandler) window.removeEventListener('resize', resizeHandler);
-		mediaQuery?.removeEventListener('change', render);
-		observer?.disconnect();
+		stopThemeWatch?.();
 		chart?.dispose();
 	});
 
@@ -125,54 +122,21 @@
 	<FilmList title={selected.label} films={selected.films} />
 {/if}
 
-<details>
-	<summary>View as table</summary>
-	<table>
-		<thead>
-			<tr><th>Keyword</th><th class="num">Films</th><th class="num">Avg rating</th></tr>
-		</thead>
-		<tbody>
-			{#each shown as d (d.label)}
-				<tr>
-					<td>{d.label}</td>
-					<td class="num" data-numeric>{d.count}</td>
-					<td class="num" data-numeric>{d.avg !== null ? d.avg.toFixed(1) : '—'}</td>
-				</tr>
-			{/each}
-		</tbody>
-	</table>
-</details>
+<DataTable
+	columns={[
+		{ label: 'Keyword' },
+		{ label: 'Films', numeric: true },
+		{ label: 'Avg rating', numeric: true }
+	]}
+	rows={shown}
+	key={(d) => d.label}
+	cells={(d) => [d.label, d.count, fixed(d.avg, 1)]}
+/>
 
 <style>
 	.chart {
 		width: 100%;
 		height: 420px;
 		margin-top: 8px;
-	}
-
-	details {
-		margin-top: 12px;
-	}
-	summary {
-		cursor: pointer;
-		color: var(--fg-secondary);
-		font-size: var(--text-sm);
-	}
-	table {
-		border-collapse: collapse;
-		margin-top: 8px;
-		font-size: var(--text-sm);
-	}
-	th,
-	td {
-		padding: 4px 12px;
-		border-bottom: 1px solid var(--border);
-		text-align: left;
-	}
-	thead tr {
-		background: var(--bg-secondary);
-	}
-	.num {
-		text-align: right;
 	}
 </style>

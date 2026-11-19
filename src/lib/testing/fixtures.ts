@@ -1,6 +1,6 @@
 import type { DiaryEntry, EnrichedFilm, Film, OmdbRatings, TmdbMovie } from '$lib/types';
 
-/** Test-only builders. Nothing under `src/routes` or `src/lib/viz` may import this module. */
+/** Test-only builders: no non-test module imports `$lib/testing` (`boundary.test.ts` checks). */
 let counter = 0;
 
 export function tmdb(over: Partial<TmdbMovie> = {}): TmdbMovie {
