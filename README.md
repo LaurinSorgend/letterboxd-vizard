@@ -1,5 +1,7 @@
 # Vizard for Letterboxd
 
+Try it at **[vizard.sorgend.org](https://vizard.sorgend.org)**.
+
 Not affiliated with or endorsed by Letterboxd.
 
 Drop your Letterboxd data-export zip and get visualizations of your film history:
