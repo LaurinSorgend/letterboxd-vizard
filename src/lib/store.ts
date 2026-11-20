@@ -7,7 +7,7 @@ import {
 	type WatchlistFilm
 } from '$lib/types';
 
-const PREFIX = 'letterboxd-vizard:snapshot:';
+const PREFIX = 'vizard:snapshot:';
 /**
  * Carries RECORD_SCHEMA, so a snapshot of old records is ignored rather than misread. A change to
  * the snapshot's own shape needs a new key too: add a suffix after the schema.

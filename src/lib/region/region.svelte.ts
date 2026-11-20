@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 import { readPref, writePref } from '$lib/prefs';
 import { COUNTRY_CODES, countryName } from '$lib/film/countries';
 
-const REGION_KEY = 'letterboxd-vizard:watch-region';
+const REGION_KEY = 'vizard:watch-region';
 
 /** Every ISO country, by English name, for the "where do you watch" picker. */
 export const REGIONS: { code: string; name: string }[] = COUNTRY_CODES.map((code) => ({

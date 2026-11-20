@@ -1,6 +1,6 @@
 import { readPref, writePref } from '$lib/prefs';
 
-const SERVICES_KEY = 'letterboxd-vizard:services:';
+const SERVICES_KEY = 'vizard:services:';
 
 /** The services picked for a country; catalogues differ by country, so each keeps its own. */
 export function loadServices(region: string): number[] {

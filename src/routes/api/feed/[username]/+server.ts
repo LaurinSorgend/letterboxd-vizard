@@ -5,7 +5,7 @@ import { USERNAME_PATTERN } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 const USER_AGENT =
-	'Mozilla/5.0 (compatible; vizard; +https://codeberg.org/LaurinS/letterboxd-vizard)';
+	'Mozilla/5.0 (compatible; vizard; +https://github.com/LaurinSorgend/vizard-for-letterboxd)';
 
 /** Fetches a member's public Letterboxd RSS feed and returns its film entries as JSON. */
 export const GET: RequestHandler = async ({ params }) => {

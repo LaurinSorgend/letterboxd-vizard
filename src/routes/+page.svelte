@@ -180,9 +180,9 @@
 
 <footer>
 	<nav aria-label="Project links">
-		<a href="https://codeberg.org/LaurinS/letterboxd-vizard">Source code</a>
-		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/issues">Report an issue</a>
-		<a href="https://codeberg.org/LaurinS/letterboxd-vizard/pulls">Contribute</a>
+		<a href="https://github.com/LaurinSorgend/vizard-for-letterboxd">Source code</a>
+		<a href="https://github.com/LaurinSorgend/vizard-for-letterboxd/issues">Report an issue</a>
+		<a href="https://github.com/LaurinSorgend/vizard-for-letterboxd/pulls">Contribute</a>
 		<span aria-hidden="true">|</span>
 		<a href="https://letterboxd.com/laurins0/">Built by Laurin</a>
 	</nav>
