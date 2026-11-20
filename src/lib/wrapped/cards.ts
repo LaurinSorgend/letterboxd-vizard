@@ -26,7 +26,7 @@ const STORY = { width: 1080, height: 1920, mount: 56, strip: 148, margin: 128 };
 const POSTER = { width: 1080, height: 1350, mount: 56, strip: 136, margin: 124 };
 
 /** Printed on the mount of the card people actually hand around. */
-const SITE = 'letterboxd-vizard.sorgend.org';
+const SITE = 'vizard.sorgend.org';
 
 function surface(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
 	const canvas = document.createElement('canvas');
@@ -90,7 +90,7 @@ function stamp(
 	const centre = field.y + field.height + size.strip / 2;
 	ctx.font = font(palette.faces, 'mono', 26);
 	ctx.fillStyle = palette.stamp;
-	ctx.fillText('LETTERBOXD VIZARD', size.mount, url ? centre - 30 : centre - 13);
+	ctx.fillText('VIZARD FOR LETTERBOXD', size.mount, url ? centre - 30 : centre - 13);
 	if (url) {
 		ctx.fillStyle = palette.screen;
 		ctx.fillText(url, size.mount, centre + 4);

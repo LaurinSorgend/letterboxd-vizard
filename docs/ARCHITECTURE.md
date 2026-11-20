@@ -1,6 +1,6 @@
 # Architecture and design documentation
 
-Letterboxd Vizard is a SvelteKit app. The user's export zip is parsed **in the browser**; only film
+Vizard for Letterboxd is a SvelteKit app. The user's export zip is parsed **in the browser**; only film
 titles and years go to the server, which looks them up on TMDB (plus OMDb and TheTVDB as optional
 extras) and caches the answers in SQLite. All charts are computed client-side from the enriched
 library.
@@ -73,7 +73,7 @@ flowchart LR
     viewer([Letterboxd user])
     host([Self-hoster / operator])
 
-    subgraph app[Letterboxd Vizard]
+    subgraph app[Vizard for Letterboxd]
         uc1(Upload export zip)
         uc12(Load from a username via RSS)
         uc13(Top up from the RSS feed on each visit)

@@ -4,6 +4,7 @@
 	"main": ".cloudflare/worker.js",
 	"compatibility_date": "2026-07-01",
 	"compatibility_flags": ["nodejs_compat"],
+	"routes": [{ "pattern": "vizard.sorgend.org", "custom_domain": true }],
 	"assets": {
 		"directory": ".cloudflare/public",
 		"binding": "ASSETS"

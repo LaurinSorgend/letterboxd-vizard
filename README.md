@@ -1,4 +1,6 @@
-# Letterboxd Vizard
+# Vizard for Letterboxd
+
+Not affiliated with or endorsed by Letterboxd.
 
 Drop your Letterboxd data-export zip and get visualizations of your film history:
 a world map of your watches, rating habits vs TMDB, what you heart, how long after

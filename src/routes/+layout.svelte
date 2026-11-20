@@ -4,14 +4,14 @@
 
 	let { children } = $props();
 
-	const title = 'Letterboxd Vizard';
+	const title = 'Vizard for Letterboxd';
 	const description =
 		'Drop your Letterboxd export and see your film history as maps, charts, a poster wall and a year in review.';
 	const image = $derived(`${page.url.origin}/og-image.jpg`);
 </script>
 
 <svelte:head>
-	<link rel="icon" href="/letterbox-vizard-icon.svg" />
+	<link rel="icon" href="/vizard-icon.svg" />
 	<meta name="description" content={description} />
 	<meta name="theme-color" content="#fe640b" />
 	<meta property="og:type" content="website" />
@@ -24,7 +24,7 @@
 	<meta property="og:image:height" content="630" />
 	<meta
 		property="og:image:alt"
-		content="Letterboxd Vizard stats and a world map of watched films"
+		content="Vizard stats and a world map of watched films"
 	/>
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={title} />

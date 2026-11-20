@@ -59,15 +59,15 @@
 </script>
 
 <svelte:head>
-	<title>Letterboxd Vizard</title>
+	<title>Vizard for Letterboxd</title>
 </svelte:head>
 
 <main>
 	<header>
 		<div>
 			<div class="title">
-				<img class="logo" src="/letterbox-vizard-icon.svg" alt="" width="40" height="40" />
-				<h1>Letterboxd Vizard</h1>
+				<img class="logo" src="/vizard-icon.svg" alt="" width="40" height="40" />
+				<h1>Vizard <span class="for">for Letterboxd</span></h1>
 			</div>
 			{#if library.profile && library.phase === 'ready'}
 				<p class="sub">
@@ -222,6 +222,10 @@
 	}
 	h1 {
 		margin: 0;
+	}
+	h1 .for {
+		font-size: 0.55em;
+		color: var(--fg-secondary);
 	}
 	.sub {
 		color: var(--fg-secondary);

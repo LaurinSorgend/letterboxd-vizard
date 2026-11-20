@@ -203,7 +203,7 @@
 			</div>
 
 			<div class="mount">
-				<span class="stamp">Letterboxd Vizard · {year}</span>
+				<span class="stamp">Vizard for Letterboxd · {year}</span>
 				<div class="tray">
 					{#each scenes as item, i (item.id)}
 						<span class="notch" class:seen={i < index}>
