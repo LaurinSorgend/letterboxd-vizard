@@ -15,6 +15,7 @@
 		"test:watch": "vitest",
 		"lint": "prettier --check .",
 		"format": "prettier --write .",
+		"screenshots": "node scripts/readme-screenshots.mjs",
 		"dev:node": "cross-env DEPLOY_TARGET=node vite dev",
 		"build:node": "cross-env DEPLOY_TARGET=node vite build"
 	},
