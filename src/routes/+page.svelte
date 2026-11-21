@@ -334,7 +334,8 @@
 		margin-bottom: 16px;
 	}
 	.cancel {
-		margin-top: 16px;
+		display: block;
+		margin: 16px auto 0;
 	}
 	.library-actions {
 		display: flex;
