@@ -14,6 +14,8 @@ frame by frame, ending in a verdict on your year.
 ![Example Image 1](/docs/assets/1.jpg)
 ![Example Image 2](/docs/assets/2.jpg)
 ![Example Image 3](/docs/assets/3.jpg)
+![Example Image 4](/docs/assets/4.jpg)
+![Example Image 5](/docs/assets/5.jpg)
 
 Your export is parsed entirely in the browser - only film titles and years are sent
 to the server to look up metadata on TMDB. Lookups are cached in SQLite, so each film

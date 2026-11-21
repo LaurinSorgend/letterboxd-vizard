@@ -30,8 +30,9 @@ const BROWSERS = [
 ];
 
 /**
- * The page regions to capture, each an in-page expression returning document bounds. `fullPage`
- * shots render past the viewport; the first stays a plain viewport so the fixed side nav shows.
+ * The page regions to capture, each an in-page expression returning document bounds, after an
+ * optional in-page `prepare` step. `fullPage` shots render past the viewport; the first stays a
+ * plain viewport so the fixed side nav shows.
  */
 const SHOTS = [
 	{ file: '1.jpg', bounds: `viewportBounds()`, fullPage: false },
@@ -40,7 +41,19 @@ const SHOTS = [
 		bounds: `unionBounds('#when h3', '#when section[aria-label]:nth-of-type(2)')`,
 		fullPage: true
 	},
-	{ file: '3.jpg', bounds: `unionBounds('#people')`, fullPage: true }
+	{ file: '3.jpg', bounds: `unionBounds('#people')`, fullPage: true },
+	{
+		file: '4.jpg',
+		prepare: `showKeywordCloud()`,
+		bounds: `unionBounds('#keywords')`,
+		fullPage: true
+	},
+	{
+		file: '5.jpg',
+		prepare: `sortPostersByColour()`,
+		bounds: `unionBounds('#mosaic')`,
+		fullPage: true
+	}
 ];
 
 const PAGE_HELPERS = `
@@ -53,6 +66,25 @@ const PAGE_HELPERS = `
 		const left = Math.min(...rects.map((r) => r.left));
 		const right = Math.max(...rects.map((r) => r.right));
 		return { x: left - ${PAD}, y: top - ${PAD}, width: right - left + ${2 * PAD}, height: bottom - top + ${2 * PAD} };
+	};
+	window.waitFor = async (test, ms, what) => {
+		const deadline = Date.now() + ms;
+		while (!test()) {
+			if (Date.now() > deadline) throw new Error('Timed out waiting for ' + what);
+			await new Promise((r) => setTimeout(r, 250));
+		}
+	};
+	window.showKeywordCloud = async () => {
+		document.querySelector('#keywords')?.scrollIntoView();
+		await waitFor(() => document.querySelector('#keywords canvas'), 10000, 'the keyword cloud');
+		await new Promise((r) => setTimeout(r, 3000));
+	};
+	window.sortPostersByColour = async () => {
+		const mosaic = document.querySelector('#mosaic');
+		mosaic.scrollIntoView();
+		const button = [...mosaic.querySelectorAll('button')].find((b) => b.textContent.includes('Sort by colour'));
+		button?.click();
+		await waitFor(() => mosaic.querySelector('select')?.value === 'colour', 120000, 'the colour sort');
 	};
 `;
 
@@ -137,25 +169,28 @@ async function waitForDashboard(send) {
 	throw new Error('The demo did not finish loading in time.');
 }
 
-/** Scrolls a region into view and waits for its images and the web fonts to load. */
+/** Scrolls through a region a screen at a time, waiting for its images and the web fonts. */
 async function settle(send, bounds) {
 	await evaluate(
 		send,
 		`(async () => {
-			scrollTo(0, ${bounds.y});
 			await document.fonts.ready;
-			const deadline = Date.now() + 15000;
-			while (Date.now() < deadline && [...document.images].some((img) => {
-				const r = img.getBoundingClientRect();
-				return r.bottom > 0 && r.top < innerHeight && !img.complete;
-			})) await new Promise((r) => setTimeout(r, 200));
+			for (let y = ${bounds.y}; y < ${bounds.y + bounds.height}; y += innerHeight) {
+				scrollTo(0, y);
+				const deadline = Date.now() + 15000;
+				while (Date.now() < deadline && [...document.images].some((img) => {
+					const r = img.getBoundingClientRect();
+					return r.bottom > 0 && r.top < innerHeight && !img.complete;
+				})) await new Promise((r) => setTimeout(r, 200));
+			}
 			await new Promise((r) => setTimeout(r, 800));
 			scrollTo(0, 0);
 		})()`
 	);
 }
 
-async function capture(send, { file, bounds: expression, fullPage }) {
+async function capture(send, { file, prepare, bounds: expression, fullPage }) {
+	if (prepare) await evaluate(send, prepare);
 	const bounds = await evaluate(send, expression);
 	if (!bounds) throw new Error(`Nothing to capture for ${file}.`);
 	await settle(send, bounds);
