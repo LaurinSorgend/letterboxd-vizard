@@ -22,20 +22,29 @@ const hasPending = (sets: Recommendation[][]): boolean =>
  * Recommendations for each seed set, delivered through `update` as they settle. The server marks
  * a film `pending` (no countries, maybe no poster) when its record did not load in time; those
  * are re-requested a few times and filled in by TMDB id, and whatever is still pending after the
- * last retry is delivered as settled. A failed request counts as no recommendations. Stops as
- * soon as `isCurrent` turns false.
+ * last retry is delivered as settled. A failed request counts as no recommendations, and
+ * `failed` reports when every request of the first fetch failed. Stops as soon as `isCurrent`
+ * turns false.
  */
 export async function fetchRecommendationsSettled(
 	seedSets: Seed[][],
 	exclude: number[],
-	update: (sets: Recommendation[][]) => void,
+	update: (sets: Recommendation[][], failed: boolean) => void,
 	isCurrent: () => boolean
 ): Promise<void> {
+	let rejected = 0;
 	const fetchAll = () =>
-		Promise.all(seedSets.map((seeds) => fetchRecommendations(seeds, exclude).catch(() => [])));
+		Promise.all(
+			seedSets.map((seeds) =>
+				fetchRecommendations(seeds, exclude).catch(() => {
+					rejected += 1;
+					return [];
+				})
+			)
+		);
 	let sets = await fetchAll();
 	if (!isCurrent()) return;
-	update(sets);
+	update(sets, seedSets.length > 0 && rejected === seedSets.length);
 	for (const wait of RETRY_DELAYS_MS) {
 		if (!hasPending(sets)) return;
 		await new Promise((resolve) => setTimeout(resolve, wait));
@@ -44,8 +53,11 @@ export async function fetchRecommendationsSettled(
 		if (!isCurrent()) return;
 		const resolved = new Map(fresh.filter((r) => !r.pending).map((r) => [r.tmdbId, r]));
 		sets = sets.map((set) => set.map((r) => (r.pending ? (resolved.get(r.tmdbId) ?? r) : r)));
-		update(sets);
+		update(sets, false);
 	}
 	if (!hasPending(sets)) return;
-	update(sets.map((set) => set.map((r) => (r.pending ? { ...r, pending: false } : r))));
+	update(
+		sets.map((set) => set.map((r) => (r.pending ? { ...r, pending: false } : r))),
+		false
+	);
 }

@@ -83,6 +83,25 @@ describe('fetchRecommendationsSettled', () => {
 		expect(updates).toEqual([[[], []]]);
 	});
 
+	it('reports failed only when every first request rejects', async () => {
+		const flags: boolean[] = [];
+		fetchRecommendations.mockRejectedValue(new Error('down'));
+		await fetchRecommendationsSettled(
+			[[], []],
+			[],
+			(_, failed) => flags.push(failed),
+			() => true
+		);
+		fetchRecommendations.mockResolvedValue([rec(5)]);
+		await fetchRecommendationsSettled(
+			[[], []],
+			[],
+			(_, failed) => flags.push(failed),
+			() => true
+		);
+		expect(flags).toEqual([true, false]);
+	});
+
 	it('stops delivering once a newer run has started', async () => {
 		fetchRecommendations.mockResolvedValue([rec(4)]);
 		const update = vi.fn();

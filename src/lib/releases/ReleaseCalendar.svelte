@@ -78,6 +78,9 @@
 	<div class="controls">
 		<RegionSelect label="Release dates for" />
 		<KindPicker legend="Release types" bind:kinds />
+	</div>
+
+	<div class="recommend">
 		<RecommendControls {films} {watchlist} {region} onresult={(r) => (recommendation = r)} />
 	</div>
 
@@ -87,7 +90,7 @@
 			<span data-numeric>{lookup.progress.total}</span>
 		{:else if upcoming.length === 0}
 			{#if watchlist.length > 0}
-				Nothing on your watchlist has a release of the picked types coming up.
+				Nothing on your watchlist has a release of the picked types after today.
 			{/if}
 		{:else}
 			<span data-numeric>{upcoming.length}</span>
@@ -136,6 +139,15 @@
 		gap: 12px 24px;
 		align-items: end;
 		margin-bottom: 16px;
+	}
+	.recommend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px 24px;
+		align-items: end;
+		margin-bottom: 16px;
+		padding-top: 12px;
+		border-top: 1px solid var(--border);
 	}
 	.count {
 		font-family: var(--font-mono);

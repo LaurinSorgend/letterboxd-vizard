@@ -240,7 +240,7 @@
 			class="play"
 			onclick={() => (playing = !playing)}
 			aria-pressed={playing}
-			disabled={last || reduced}
+			disabled={last}
 		>
 			{playing ? 'Pause' : 'Play'}
 		</button>

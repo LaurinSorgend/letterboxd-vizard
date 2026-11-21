@@ -84,5 +84,6 @@
 <style>
 	.summary {
 		margin: 0;
+		flex-basis: 100%;
 	}
 </style>

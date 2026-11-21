@@ -15,9 +15,13 @@
 	let general: Recommendation[] = $state([]);
 	let genreRows: { genre: string; recommendations: Recommendation[] }[] = $state([]);
 
+	let failed = $state(false);
+	let attempt = $state(0);
+
 	const guard = runGuard();
 
 	$effect(() => {
+		attempt;
 		const films = library.films;
 		const exclude = library.recommendExclude;
 		const genres = favoriteGenres(films, GENRE_ROWS);
@@ -28,7 +32,8 @@
 		void fetchRecommendationsSettled(
 			seedSets,
 			exclude,
-			([main, ...perGenre]) => {
+			([main, ...perGenre], didFail) => {
+				failed = didFail;
 				general = main;
 				const seen = new Set(main.map((r) => r.tmdbId));
 				genreRows = genres.flatMap((genre, i) => {
@@ -72,8 +77,22 @@
 	{/if}
 {/snippet}
 
-{#if general.length > 0 || genreRows.length > 0}
+{#if general.length > 0 || genreRows.length > 0 || failed}
 	<Section id="recommendations" title="You might like" actions={watchlistToggle}>
+		{#if failed && general.length === 0 && genreRows.length === 0}
+			<p class="failed">
+				Recommendations could not be loaded.
+				<button
+					type="button"
+					onclick={() => {
+						failed = false;
+						attempt += 1;
+					}}
+				>
+					Try again
+				</button>
+			</p>
+		{/if}
 		{#if general.length > 0}
 			{@render posterGrid(general)}
 		{/if}
@@ -152,6 +171,25 @@
 		gap: 8px;
 		font-size: var(--text-sm);
 		color: var(--fg-secondary);
+	}
+	.failed {
+		color: var(--fg-secondary);
+	}
+	.failed button {
+		font: inherit;
+		margin-left: 8px;
+		padding: 2px 8px;
+		color: var(--fg);
+		background: var(--bg-secondary);
+		border: 1px solid var(--border-strong);
+		cursor: pointer;
+	}
+	.failed button:hover {
+		background: var(--surface);
+	}
+	.failed button:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
 	}
 	.toggle input {
 		accent-color: var(--accent);
