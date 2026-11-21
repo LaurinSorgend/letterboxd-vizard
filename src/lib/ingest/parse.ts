@@ -22,7 +22,12 @@ function toYear(value: string | undefined): number | null {
  * Handles zips with the CSVs at the root as well as inside a single top-level folder.
  */
 export function parseExport(zipBytes: Uint8Array): LetterboxdData {
-	const entries = unzipSync(zipBytes);
+	let entries: ReturnType<typeof unzipSync>;
+	try {
+		entries = unzipSync(zipBytes);
+	} catch {
+		throw new Error('This file is not a zip archive');
+	}
 	const paths = Object.keys(entries);
 	const root = paths[0]?.split('/')[0];
 	const prefix = root && paths.every((p) => p.startsWith(root + '/')) ? root + '/' : '';

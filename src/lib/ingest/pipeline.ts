@@ -52,29 +52,31 @@ export async function loadFeed(username: string): Promise<LetterboxdData> {
 
 async function ratingsFor(
 	films: { tmdb: EnrichedFilm['tmdb'] }[],
-	report: (progress: Progress) => void
+	report: (progress: Progress) => void,
+	signal?: AbortSignal
 ): Promise<Map<string, OmdbRatings | null>> {
 	const imdbIds = [...new Set(films.map((f) => f.tmdb?.imdbId).filter((id): id is string => !!id))];
 	report({ stage: 'ratings', done: 0, total: imdbIds.length });
 	if (imdbIds.length === 0) return new Map();
-	return enrichOmdb(imdbIds, (done, total) => report({ stage: 'ratings', done, total }));
+	return enrichOmdb(imdbIds, (done, total) => report({ stage: 'ratings', done, total }), signal);
 }
 
 /** Joins films (and the watchlist) with TMDB records, then OMDb ratings for every IMDb match. */
 export async function enrichLibrary(
 	films: Film[],
 	watchlist: WatchlistEntry[],
-	report: (progress: Progress) => void
+	report: (progress: Progress) => void,
+	signal?: AbortSignal
 ): Promise<{ films: EnrichedFilm[]; watchlist: WatchlistFilm[] }> {
 	const total = films.length + watchlist.length;
 	const done = { films: 0, watchlist: 0 };
 	const tick = () => report({ stage: 'films', done: done.films + done.watchlist, total });
 	tick();
 	const [watched, enrichedWatchlist] = await Promise.all([
-		enrichFilms(films, (n) => ((done.films = n), tick())),
-		enrichWatchlist(watchlist, (n) => ((done.watchlist = n), tick()))
+		enrichFilms(films, (n) => ((done.films = n), tick()), signal),
+		enrichWatchlist(watchlist, (n) => ((done.watchlist = n), tick()), signal)
 	]);
-	const omdb = await ratingsFor(watched, report);
+	const omdb = await ratingsFor(watched, report, signal);
 	return {
 		films: watched.map((f) => ({
 			...f,
@@ -93,9 +95,10 @@ const WATCHLIST_CAST = 5;
  */
 async function enrichWatchlist(
 	watchlist: WatchlistEntry[],
-	onProgress: (done: number) => void
+	onProgress: (done: number) => void,
+	signal?: AbortSignal
 ): Promise<WatchlistFilm[]> {
-	const enriched = await enrichFilms(watchlist, onProgress);
+	const enriched = await enrichFilms(watchlist, onProgress, signal);
 	return enriched.map((film) => ({
 		...film,
 		tmdb: film.tmdb

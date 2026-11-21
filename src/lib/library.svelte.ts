@@ -24,6 +24,9 @@ type Phase = 'idle' | 'working' | 'ready';
 
 const FEED_ONLY_NOTE = `Only your ${FEED_FILM_LIMIT} latest diary entries.`;
 
+/** Share of unmatched films above which the TMDB lookup counts as failed. */
+export const LOOKUP_FAILURE_SHARE = 0.5;
+
 /**
  * The library this visit works on: how it was loaded, the analysed films and watchlist, and
  * whether it is remembered on this device. A load or a feed top-up sets the films through
@@ -47,7 +50,20 @@ export class Library {
 	feedGap = $state(false);
 	/** Whether recommendations may suggest films already on the watchlist. */
 	includeWatchlist = $state(false);
+	/** Where the running load comes from, so its progress can be worded to match. */
+	loadingSource = $state<LibrarySource>('export');
+	/** The username typed on the start screen; kept when a load fails. */
+	usernameDraft = $state('');
+	#controller: AbortController | null = null;
+	#cancelTo: Phase = 'idle';
 
+	/** Whether TMDB could not match more than `LOOKUP_FAILURE_SHARE` of the films. */
+	readonly lookupFailed = $derived(
+		this.films.length > 0 &&
+			this.films.filter((f) => !f.tmdb).length / this.films.length > LOOKUP_FAILURE_SHARE
+	);
+	/** Whether a loaded library is there to go back to. */
+	readonly canResume = $derived(this.films.length > 0);
 	/** TMDB ids recommendations must leave out. */
 	readonly recommendExclude = $derived(excludedIds(this, this.includeWatchlist));
 	/** A feed-only library, or one with a gap the feed cannot fill, is completed by an export. */
@@ -61,6 +77,7 @@ export class Library {
 	}
 
 	loadUsername(username: string): Promise<void> {
+		this.usernameDraft = username;
 		return this.#analyse('feed', () => loadFeed(username));
 	}
 
@@ -117,26 +134,100 @@ export class Library {
 		return this.source === 'feed' ? `${added} ${FEED_ONLY_NOTE}` : added;
 	}
 
-	/** Loads a library, enriches it, and shows it; any failure lands back on the start screen. */
-	async #analyse(source: LibrarySource, load: () => Promise<LetterboxdData>): Promise<void> {
+	/** Stops the running load or lookup and returns to where it started. */
+	cancel(): void {
+		this.#controller?.abort();
+		this.#controller = null;
+		this.phase = this.#cancelTo;
+		this.progress = { stage: 'films', done: 0, total: 0 };
+	}
+
+	/** Back to the loaded library from the start screen. */
+	resume(): void {
+		if (this.films.length > 0) this.phase = 'ready';
+	}
+
+	/** Looks up the films and watchlist entries TMDB did not match again, keeping their order. */
+	async retryLookup(): Promise<void> {
+		const missing = this.films.filter((f) => !f.tmdb);
+		const missingWatch = this.watchlist.filter((f) => !f.tmdb);
+		const controller = this.#begin('ready');
 		this.error = null;
-		this.feedNote = null;
+		await this.#mergeLookup(controller, missing, missingWatch).catch(() => {});
+		if (controller !== this.#controller) return;
+		this.phase = 'ready';
+		this.#controller = null;
+	}
+
+	/** Enriches the unmatched entries and swaps each one for its new lookup. */
+	async #mergeLookup(
+		controller: AbortController,
+		missing: EnrichedFilm[],
+		missingWatch: WatchlistFilm[]
+	): Promise<void> {
+		const found = await enrichLibrary(
+			missing,
+			missingWatch,
+			this.#reporter(controller),
+			controller.signal
+		);
+		if (controller !== this.#controller) return;
+		const filmMap = new Map(missing.map((f, i) => [f, found.films[i]]));
+		const watchMap = new Map(missingWatch.map((f, i) => [f, found.watchlist[i]]));
+		this.watchlist = this.watchlist.map((f) => watchMap.get(f) ?? f);
+		await this.#setFilms(
+			this.films.map((f) => filmMap.get(f) ?? f),
+			this.collections
+		);
+	}
+
+	/** Starts a cancellable run that `cancel` returns from to `cancelTo`. */
+	#begin(cancelTo: Phase): AbortController {
+		this.#controller?.abort();
+		const controller = new AbortController();
+		this.#controller = controller;
+		this.#cancelTo = cancelTo;
 		this.phase = 'working';
 		this.progress = { stage: 'films', done: 0, total: 0 };
+		return controller;
+	}
+
+	/** Progress updates that stop once the run is cancelled or superseded. */
+	#reporter(controller: AbortController): (next: Progress) => void {
+		return (next) => {
+			if (controller === this.#controller) this.progress = next;
+		};
+	}
+
+	/** Loads a library, enriches it, and shows it; any failure lands back on the start screen. */
+	async #analyse(source: LibrarySource, load: () => Promise<LetterboxdData>): Promise<void> {
+		const controller = this.#begin('idle');
+		this.loadingSource = source;
+		this.error = null;
+		this.feedNote = null;
 		try {
 			const parsed = await load();
+			if (controller !== this.#controller) return;
+			const library = await enrichLibrary(
+				parsed.films,
+				parsed.watchlist,
+				this.#reporter(controller),
+				controller.signal
+			);
+			if (controller !== this.#controller) return;
 			this.source = source;
 			this.profile = parsed.profile;
-			const library = await enrichLibrary(parsed.films, parsed.watchlist, (next) => {
-				this.progress = next;
-			});
 			this.watchlist = library.watchlist;
 			await this.#setFilms(library.films);
+			if (controller !== this.#controller) return;
 			if (source === 'feed') this.feedNote = FEED_ONLY_NOTE;
 			this.phase = 'ready';
+			this.#controller = null;
 		} catch (cause) {
+			if (controller !== this.#controller) return;
 			this.error = cause instanceof Error ? cause.message : String(cause);
 			this.phase = 'idle';
+			this.#controller = null;
 		}
 	}
 

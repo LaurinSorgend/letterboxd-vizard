@@ -20,7 +20,8 @@ import { getJson, postJson } from './http';
 /** Resolves name+year items against /api/enrich in batches, reporting progress after each batch. */
 export async function enrichFilms<T extends EnrichRequestItem>(
 	items: T[],
-	onProgress: (done: number, total: number) => void
+	onProgress: (done: number, total: number) => void,
+	signal?: AbortSignal
 ): Promise<(T & { tmdb: TmdbMovie | null })[]> {
 	const tmdb: (TmdbMovie | null)[] = new Array(items.length).fill(null);
 
@@ -30,12 +31,14 @@ export async function enrichFilms<T extends EnrichRequestItem>(
 			postJson<BatchAnswer<TmdbMovie>>(
 				'/api/enrich',
 				{ items: batch.map((f) => ({ name: f.name, year: f.year })) },
-				'Enrichment'
+				'Enrichment',
+				signal
 			),
 		keep: (index, movie) => {
 			tmdb[index] = movie;
 		},
-		onProgress
+		onProgress,
+		signal
 	});
 
 	return items.map((item, i) => ({ ...item, tmdb: tmdb[i] }));
