@@ -34,11 +34,22 @@
 		<h2>{title}</h2>
 	{/if}
 	{@render children()}
+	<p class="to-top"><a href="#top">Back to top</a></p>
 </section>
 
 <style>
 	section {
 		margin: 32px 0;
+		scroll-margin-top: 4rem;
+	}
+	.to-top {
+		margin: 16px 0 0;
+		font-size: var(--text-sm);
+	}
+	@media (min-width: 1440px) {
+		.to-top {
+			display: none;
+		}
 	}
 	section:first-of-type {
 		margin-top: 24px;

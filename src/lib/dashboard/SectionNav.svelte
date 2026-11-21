@@ -29,6 +29,11 @@
 	$effect(() => {
 		if (!sections.some((entry) => entry.id === currentId)) currentId = sections[0]?.id ?? null;
 	});
+
+	function jump(id: string) {
+		document.getElementById(id)?.scrollIntoView({ block: 'start' });
+		currentId = id;
+	}
 </script>
 
 {#if sections.length > 1}
@@ -43,6 +48,14 @@
 			{/each}
 		</ul>
 	</nav>
+	<label class="jump">
+		Jump to section
+		<select value={currentId} onchange={(e) => jump(e.currentTarget.value)}>
+			{#each sections as section (section.id)}
+				<option value={section.id}>{section.label}</option>
+			{/each}
+		</select>
+	</label>
 {/if}
 
 <style>
@@ -91,5 +104,37 @@
 		border-left-color: var(--accent);
 		color: var(--fg);
 		-webkit-text-stroke: 0.35px currentColor;
+	}
+	.jump {
+		display: none;
+	}
+	@media (max-width: 1439.98px) {
+		.jump {
+			position: sticky;
+			top: 0;
+			z-index: 2;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 8px 0;
+			background: var(--bg);
+			border-bottom: 1px solid var(--border);
+			font-size: var(--text-sm);
+			color: var(--fg-secondary);
+		}
+	}
+	.jump select {
+		flex: 1;
+		min-width: 0;
+		max-width: 20rem;
+		background: var(--surface);
+		color: var(--fg);
+		border: 1px solid var(--border);
+		padding: 4px 8px;
+		font: inherit;
+	}
+	.jump select:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
 	}
 </style>
