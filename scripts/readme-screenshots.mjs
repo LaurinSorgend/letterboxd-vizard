@@ -6,7 +6,7 @@
  * Usage: pnpm screenshots   (BASE_URL defaults to http://localhost:5173)
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,21 +35,21 @@ const BROWSERS = [
  * plain viewport so the fixed side nav shows.
  */
 const SHOTS = [
-	{ file: '1.jpg', bounds: `viewportBounds()`, fullPage: false },
+	{ file: '1.webp', bounds: `viewportBounds()`, fullPage: false },
 	{
-		file: '2.jpg',
+		file: '2.webp',
 		bounds: `unionBounds('#when h3', '#when section[aria-label]:nth-of-type(2)')`,
 		fullPage: true
 	},
-	{ file: '3.jpg', bounds: `unionBounds('#people')`, fullPage: true },
+	{ file: '3.webp', bounds: `unionBounds('#people')`, fullPage: true },
 	{
-		file: '4.jpg',
+		file: '4.webp',
 		prepare: `showKeywordCloud()`,
 		bounds: `unionBounds('#keywords')`,
 		fullPage: true
 	},
 	{
-		file: '5.jpg',
+		file: '5.webp',
 		prepare: `sortPostersByColour()`,
 		bounds: `unionBounds('#mosaic')`,
 		fullPage: true
@@ -195,8 +195,8 @@ async function capture(send, { file, prepare, bounds: expression, fullPage }) {
 	if (!bounds) throw new Error(`Nothing to capture for ${file}.`);
 	await settle(send, bounds);
 	const { data } = await send('Page.captureScreenshot', {
-		format: 'jpeg',
-		quality: 90,
+		format: 'webp',
+		quality: 84,
 		captureBeyondViewport: fullPage,
 		clip: { ...bounds, scale: 1 }
 	});
@@ -207,6 +207,7 @@ async function capture(send, { file, prepare, bounds: expression, fullPage }) {
 }
 
 async function main() {
+	mkdirSync(OUT, { recursive: true });
 	const profile = mkdtempSync(join(tmpdir(), 'vizard-shots-'));
 	const page = await openPage(profile);
 	try {
