@@ -1,33 +1,49 @@
 <script lang="ts">
 	import { USERNAME_PATTERN } from '$lib/types';
+	import { normalizeUsername } from '$lib/username';
 
-	let { onsubmit }: { onsubmit: (username: string) => void } = $props();
-	let username = $state('');
+	let {
+		value = $bindable(''),
+		onsubmit
+	}: { value?: string; onsubmit: (username: string) => void } = $props();
+	let invalid = $state(false);
+
+	function submit(e: SubmitEvent) {
+		e.preventDefault();
+		const name = normalizeUsername(value);
+		if (!USERNAME_PATTERN.test(name)) {
+			invalid = true;
+			return;
+		}
+		invalid = false;
+		value = name;
+		onsubmit(name);
+	}
 </script>
 
-<form
-	class="username"
-	onsubmit={(e) => {
-		e.preventDefault();
-		const name = username.trim();
-		if (name) onsubmit(name);
-	}}
->
-	<label for="lb-username">No export? Use your Letterboxd username</label>
+<form class="username" onsubmit={submit}>
+	<label for="lb-username">No export? Use your Letterboxd username or profile link</label>
 	<div class="row">
 		<input
 			id="lb-username"
 			type="text"
-			bind:value={username}
+			bind:value
+			oninput={() => (invalid = false)}
 			autocomplete="username"
 			autocapitalize="none"
 			spellcheck="false"
-			pattern={USERNAME_PATTERN.source.slice(1, -1)}
 			placeholder="username"
+			aria-invalid={invalid ? 'true' : undefined}
+			aria-describedby={invalid ? 'lb-username-error' : undefined}
 			required
 		/>
 		<button type="submit">Load</button>
 	</div>
+	{#if invalid}
+		<p id="lb-username-error" class="field-error">
+			Enter a Letterboxd username like filmfan99, or paste your profile link.
+		</p>
+	{/if}
 </form>
 
 <style>
@@ -68,5 +84,10 @@
 	button:focus-visible {
 		outline: 2px solid var(--focus);
 		outline-offset: 2px;
+	}
+	.field-error {
+		margin: 0;
+		color: var(--error);
+		font-size: var(--text-sm);
 	}
 </style>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { dev } from '$app/environment';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import FileDrop from '$lib/FileDrop.svelte';
 	import RememberToggle from '$lib/RememberToggle.svelte';
@@ -42,11 +43,19 @@
 	const library = setLibrary(new Library());
 	setSections(new SectionRegistry());
 
-	const requestedView = page.url.searchParams.get('view');
-	let view: 'stats' | 'watchlist' | 'releases' = $state(
-		requestedView === 'watchlist' || requestedView === 'releases' ? requestedView : 'stats'
-	);
+	type View = 'stats' | 'watchlist' | 'releases';
+	const view: View = $derived.by(() => {
+		const v = page.url.searchParams.get('view');
+		return v === 'watchlist' || v === 'releases' ? v : 'stats';
+	});
 	const { stage, done, total } = $derived(library.progress);
+
+	function showView(next: View) {
+		const url = new URL(page.url);
+		if (next === 'stats') url.searchParams.delete('view');
+		else url.searchParams.set('view', next);
+		void goto(url, { noScroll: true, keepFocus: true });
+	}
 
 	onMount(async () => {
 		if (dev && page.url.searchParams.has('demo')) {
@@ -63,7 +72,7 @@
 </svelte:head>
 
 <main>
-	<header>
+	<header id="top">
 		<div>
 			<div class="title">
 				<img class="logo" src="/vizard-icon.svg" alt="" width="40" height="40" />
@@ -95,15 +104,25 @@
 	</header>
 
 	{#if library.phase === 'idle'}
+		{#if library.canResume}
+			<button type="button" class="small-button back" onclick={() => library.resume()}>
+				Back to your stats
+			</button>
+		{/if}
 		{#if library.error}
 			<p class="error" role="alert">{library.error}</p>
 		{/if}
 		<FileDrop onfile={(file) => library.loadFile(file)} />
-		<UsernameForm onsubmit={(username) => library.loadUsername(username)} />
+		<UsernameForm
+			bind:value={library.usernameDraft}
+			onsubmit={(username) => library.loadUsername(username)}
+		/>
 	{:else if library.phase === 'working'}
 		<div class="progress" role="status">
 			{#if total === 0}
-				<p>Reading your export…</p>
+				<p>
+					{library.loadingSource === 'feed' ? 'Reading your diary feed…' : 'Reading your export…'}
+				</p>
 			{:else if stage === 'ratings'}
 				<p>Looking up ratings… {done} / {total}</p>
 				<progress value={done} max={total} aria-label="Ratings lookup progress"></progress>
@@ -111,6 +130,9 @@
 				<p>Looking up film data… {done} / {total}</p>
 				<progress value={done} max={total} aria-label="Film lookup progress"></progress>
 			{/if}
+			<button type="button" class="small-button cancel" onclick={() => library.cancel()}>
+				Cancel
+			</button>
 		</div>
 	{:else}
 		<WrappedEntry
@@ -120,17 +142,35 @@
 			viewer={library.displayName}
 		/>
 
-		<RememberToggle
-			checked={library.remember}
-			error={library.saveError}
-			onchange={(on) => library.setRemember(on)}
-		/>
+		{#if library.lookupFailed}
+			<div class="lookup-failed" role="alert">
+				<p>
+					Film data could not be loaded for most of your films, so the numbers below are incomplete.
+				</p>
+				<button type="button" class="small-button" onclick={() => library.retryLookup()}>
+					Try again
+				</button>
+			</div>
+		{/if}
+
+		<div class="library-actions">
+			<RememberToggle
+				checked={library.remember}
+				error={library.saveError}
+				onchange={(on) => library.setRemember(on)}
+			/>
+			<button type="button" class="small-button" onclick={() => library.startOver()}>
+				Load another library
+			</button>
+		</div>
 
 		{#if library.feedNote}
 			<p class="feed-note" role="status">
 				{library.feedNote}
 				{#if library.offersExport}
-					<button type="button" onclick={() => library.startOver()}>Upload an export</button>
+					<button type="button" class="small-button" onclick={() => library.startOver()}>
+						Upload an export
+					</button>
 				{/if}
 			</p>
 		{/if}
@@ -143,7 +183,7 @@
 				{ value: 'watchlist', label: `Your watchlist (${library.watchlist.length})` },
 				{ value: 'releases', label: 'Release calendar' }
 			]}
-			bind:value={view}
+			bind:value={() => view, showView}
 		/>
 
 		{#if view !== 'stats'}
@@ -271,22 +311,58 @@
 		padding: 24px 0;
 		color: var(--fg-secondary);
 	}
-	.feed-note button {
+	.small-button {
 		font: inherit;
-		margin-left: 8px;
 		padding: 2px 8px;
 		color: var(--fg);
 		background: var(--bg-secondary);
 		border: 1px solid var(--border-strong);
 		cursor: pointer;
 	}
-	.feed-note button:hover {
+	.small-button:hover {
 		background: var(--surface);
+	}
+	.small-button:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
+	.feed-note button {
+		margin-left: 8px;
+	}
+	.back {
+		display: block;
+		margin-bottom: 16px;
+	}
+	.cancel {
+		margin-top: 16px;
+	}
+	.library-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 24px;
+		margin: 8px 0 24px;
+	}
+	.library-actions :global(.remember) {
+		margin: 0;
 	}
 	.error {
 		padding: 8px 12px;
 		background: color-mix(in srgb, var(--error) 12%, transparent);
 		color: var(--error);
+	}
+	.lookup-failed {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 16px;
+		margin-bottom: 16px;
+		padding: 8px 12px;
+		background: color-mix(in srgb, var(--error) 12%, transparent);
+		color: var(--error);
+	}
+	.lookup-failed p {
+		margin: 0;
 	}
 	.progress {
 		text-align: center;
